@@ -254,7 +254,8 @@ class ToolProbeEndstopWrapper:
 
     def get_position_endstop(self):
         if not self.active_probe:
-            logging.warning("Getting tool probe endstop position before active tool is determined.")
+            # This will get picked up by the endstop, and is static
+            # Report 0 and fix up in the homing sequence
             return 0.0
         return self.active_probe.get_position_endstop()
 
