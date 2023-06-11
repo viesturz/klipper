@@ -192,6 +192,7 @@ class ToolProbeEndstop:
         status['name'] = self.name
         status['active_tool_probe']  = self.active_probe.name
         status['active_tool_number']  = self.active_tool_number
+        status['active_tool_probe_z_offset']  = self.active_probe.z_offset
         status['last_tools_query']  = self.last_query
         return status
     cmd_PROBE_ACCURACY_help = "Probe Z-height accuracy at current XY position"
