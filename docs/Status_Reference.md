@@ -478,6 +478,34 @@ objects (eg, `[tmc2208 stepper_x]`):
 - `run_current`: The currently set run current.
 - `hold_current`: The currently set hold current.
 
+## tool
+
+The following information is available in the `tool` object:
+ - `name`: The tool name, eg 'tool T0'.
+ - `tool_number`: The assigned tool number or -1 if not assigned.
+ - `toolchanger`: The name of the toolchanger this tool is attached to. 
+ - `extruder`: Name of the extruder used for this tool.
+ - `fan`: Name of the part fan used for this tool.
+ - `active`: If this tool is currently the selected tool.
+ - `mounted`: If this tool is currently mounted, the tool may be mounted but
+   not selected. Some reasons for that can be that a child tool is selected, or
+   lazy unmounting is configured.  
+ - `mounted_child`: The child tool which is currently mounted, or empty.
+ - `params_*`: Set of values specified using params_*.
+ - `gcode_x_offset`: current X offset.
+ - `gcode_y_offset`: current Y offset.
+ - `gcode_z_offset`: current Z offset.
+
+## toolchanger
+
+The following information is available in the `toolchanger` object:
+ - `status`: One of 'uninitialized', 'ready', 'changing', 'error'.
+ - `tool`: Name of currently selected/changed tool, or empty.
+ - `tool_number`: Number of the currently selected tool, or -1.
+ - `tool_numbers`: List of assigned tool numbers, eg [0,1,2].
+ - `tool_names`: List of tool names corresponding the assigned numbers.
+ - `saved_tool`: Saved name of last successfully selected tool.
+
 ## toolhead
 
 The following information is available in the `toolhead` object

@@ -86,7 +86,7 @@ class GCodeMove:
         self.move_with_transform = transform.move
         self.position_with_transform = transform.get_position
         return old_transform
-    def _get_gcode_position(self):
+    def get_gcode_position(self):
         p = [lp - bp for lp, bp in zip(self.last_position, self.base_position)]
         p[3] /= self.extrude_factor
         return p
@@ -95,7 +95,7 @@ class GCodeMove:
     def _get_gcode_speed_override(self):
         return self.speed_factor * 60.
     def get_status(self, eventtime=None):
-        move_position = self._get_gcode_position()
+        move_position = self.get_gcode_position()
         return {
             'speed_factor': self._get_gcode_speed_override(),
             'speed': self._get_gcode_speed(),
@@ -172,7 +172,7 @@ class GCodeMove:
             self.base_position = list(self.last_position)
     def cmd_M114(self, gcmd):
         # Get Current Position
-        p = self._get_gcode_position()
+        p = self.get_gcode_position()
         gcmd.respond_raw("X:%.3f Y:%.3f Z:%.3f E:%.3f" % tuple(p))
     def cmd_M220(self, gcmd):
         # Set speed factor override percentage

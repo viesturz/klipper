@@ -279,10 +279,17 @@ class PrinterExtruder:
         temp = gcmd.get_float('S', 0.)
         index = gcmd.get_int('T', None, minval=0)
         if index is not None:
-            section = 'extruder'
-            if index:
-                section = 'extruder%d' % (index,)
-            extruder = self.printer.lookup_object(section, None)
+            extruder = None
+            toolchanger = self.printer.lookup_object('toolchanger', None)
+            if toolchanger:
+                tool = toolchanger.lookup_tool(index)
+                if tool:
+                    extruder = tool.extruder
+            else:
+                section = 'extruder'
+                if index:
+                    section = 'extruder%d' % (index,)
+                extruder = self.printer.lookup_object(section, None)
             if extruder is None:
                 if temp <= 0.:
                     return
@@ -331,6 +338,6 @@ def add_printer_objects(config):
         if i:
             section = 'extruder%d' % (i,)
         if not config.has_section(section):
-            break
+            continue
         pe = PrinterExtruder(config.getsection(section), i)
         printer.add_object(section, pe)
