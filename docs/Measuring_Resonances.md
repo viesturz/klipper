@@ -157,7 +157,7 @@ Recommended connection scheme for I2C (i2c0a) on the RP2040:
 
 | MPU-9250 pin | RP2040 pin | RP2040 pin name |
 |:--:|:--:|:--:|
-| VCC | 39 | 3v3 |
+| VCC | 36 | 3v3 |
 | GND | 38 | Ground |
 | SDA | 01 | GP0 (I2C0 SDA) |
 | SCL | 02 | GP1 (I2C0 SCL) |
@@ -219,11 +219,12 @@ of time, up to 10-20 minutes. Be patient and wait for the completion of
 the installation. On some occasions, if the board has too little RAM
 the installation may fail and you will need to enable swap.
 
-Afterwards, check and follow the instructions in the
-[RPi Microcontroller document](RPi_microcontroller.md) to setup the
-"linux mcu" on the Raspberry Pi.
-
 #### Configure ADXL345 With RPi
+
+First, check and follow the instructions in the
+[RPi Microcontroller document](RPi_microcontroller.md) to setup the
+"linux mcu" on the Raspberry Pi. This will configure a second Klipper
+instance that runs on your Pi.
 
 Make sure the Linux SPI driver is enabled by running `sudo
 raspi-config` and enabling SPI under the "Interfacing options" menu.
@@ -343,7 +344,7 @@ probe_points:
     100, 100, 20  # an example
 
 [static_digital_output pico_3V3pwm] # Improve power stability
-pin: pico:gpio23
+pins: pico:gpio23
 ```
 
 #### Configure MPU-9520 Compatibles with AVR
