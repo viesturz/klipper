@@ -2695,6 +2695,15 @@ pin:
 #   the fan.
 ```
 
+
+### [multi_fan first_fan]
+
+Multiple print cooling fans, controlled by M106/M107 gcodes.
+One may define any number of sections with a
+"multi_fan" prefix.
+ACTIVATE_FAN [gcode command](G-Codes.md#fan) can be used
+which fan is used for cooling.
+
 ### [heater_fan]
 
 Heater cooling fans (one may define any number of sections with a
@@ -2857,6 +2866,111 @@ with the SET_FAN_SPEED [gcode command](G-Codes.md#fan_generic).
 #tachometer_poll_interval:
 #enable_pin:
 #   See the "fan" section for a description of the above parameters.
+```
+
+## Tool changes
+
+### [`toolchanger]
+
+Configures common tool changing parameters. 
+More than one toolchanger can be configured, with arbitrary names.
+The unnamed toolchanger is always considered the main one and others can be 
+connected to a tool in the main toolchanger.
+
+Any parameter that can be set on a tool, can be set on the toolchanger as well
+and will provide a default value for all of its tools.
+
+```
+[toolchanger]
+# save_current_tool: false
+  #  If set, saves currently selected tool and makes it available for 
+  # initialize gcode.
+# clear_gcode_offset_for_toolchange: true
+  # If true, toolchange GCode is run with gcode offset set to 0,0,0     
+# initialize_gcode: 
+  #  Gcode to run on initialize. Typically used for homing any motors, or 
+  #  reselecting saved tool.
+# initialize_on: first-use
+  # When this toolchanger gets initialized.
+  #  - manual: only when INITIALIZE_TOOLCHANGER is called.
+  #  - home: when homing the printer.
+  #  - first-use: on first toolchange command.
+# params_*: 
+  # Extra params to pass to pickup/dropoff gcode. Accessible in the gcode via
+  # `toolchanger.params_name`.
+  # Also will be copied to any tools for this toolchanger with local
+  # values overriding. 
+# before_change_gcode:
+  # Common gcode to run before any tool change
+  # has `dropoff_tool` and `pickup_tool` names available to access their
+  # config. 
+  # See [tool status](Status_Reference.md#tool) for how to use them.   
+# after_change_gcode:
+  # Common gcode to run after any tool change.
+  # EG: To set custom input shaping, accelerations, etc.  
+# parent_tool:
+  # Name of a parent tool. Marks this toolchanger as a child, meaning the parent tool
+  # will be selected in order to select any tool attached to this.
+  # Can be used for chaining multiple filament/tool changing techniques,
+  # like IDEX plus an MMU attached to one of the hotends.
+# parent_mounting_mode: parent-first 
+  # How to mount parent when the tool is selected:
+  # - parent-first - mount parent and then child
+  # - child-first - mount child before parent can be mounted
+# parent_unmounting_mode: lazy 
+  # How to unmount parent when the tool is deselected:
+  # - child-first - unmount child and then parent
+  # - parent-first - unmount parent and then child
+  # - lazy - no dot unmount the child unless a needed to mount a sibling   
+```
+
+### [tool]
+
+Defines a tool that can be selected.
+Normally a tool has an assigned extruder, fans and associated printer config,
+like pressure advance. But can be purely virtual, like slot in a MMU unit.
+See [command reference](G-Codes.md#toolchanger) for how to control tools.
+
+```
+[tool tool_name]
+# toolchanger: toolchanger
+  # Which toolchanger this tool belongs to.
+# extruder:
+  # Name of the extruder to activate when this tool is selected.
+  # If not specified, will use parent's extruder.
+# extruder_stepper: 
+  # Name of extruder stepper to use for filament motion.
+  # When set the main extruder is only used for temperature control.
+  # Useful for Y type multi extruder hotends.  
+# fan: 
+  # Name of the fan to use as print cooling fan when this tool is selected.
+  # If not set, uses parent fan or does nothing.
+# tool_number: 
+  # Tool number to register this tool as.
+  # When set, creates the T<n> macro and changes M104/M109 T<n> to target this tool.
+  # Can be overwritten in runtime using [ASSIGN_TOOL](G-Codes.md#ASSIGN_TOOL) command.
+# pickup_gcode:
+  # Gcode to run to pick up this tool, if empty, there is no pickup code.
+  # The gocode can use `tool` and `toolchanger` variables to access
+  # [their status](Status_Reference.md#tool).
+# dropoff_gcode:
+  # Gcode to run to drop off this tool, if empty, there is no dropoff code.
+# gcode_x_offset: 0
+# gcode_y_offset: 0
+# gcode_z_offset: 0
+  # The XYZ gcode offset of the toolhead. If set, overrides offset defined 
+  # by the parent. If set, even to 0, indicates the offset on that axis is 
+  # relevant for this tool and any adjustments will be attributed to this tool.  
+# params_*: 
+  # Extra params to pass to pickup/dropoff gcode. Accessible in the gcode via
+  # `tool.params_name`.
+  # Some example params:
+  #  params_dock_x: 10.0
+  #  params_dock_y: 50.0
+  #  params_input_shaper_freq_x: 100
+  #  params_retract_mm: 8 
+# t_command_restore_axis: XYZ
+   # Which axis to restore with the T<n> command, see SELECT_TOOL for command for more info.    
 ```
 
 ## LEDs

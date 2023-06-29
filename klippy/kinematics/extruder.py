@@ -70,15 +70,11 @@ class ExtruderStepper:
         self.stepper.set_trapq(extruder.get_trapq())
         self.motion_queue = extruder_name
     def _set_pressure_advance(self, pressure_advance, smooth_time):
-        old_smooth_time = self.pressure_advance_smooth_time
-        if not self.pressure_advance:
-            old_smooth_time = 0.
         new_smooth_time = smooth_time
         if not pressure_advance:
             new_smooth_time = 0.
         toolhead = self.printer.lookup_object("toolhead")
-        toolhead.note_step_generation_scan_time(new_smooth_time * .5,
-                                                old_delay=old_smooth_time * .5)
+        toolhead.note_step_generation_scan_time(self, new_smooth_time * .5)
         ffi_main, ffi_lib = chelper.get_ffi()
         espa = ffi_lib.extruder_set_pressure_advance
         espa(self.sk_extruder, pressure_advance, new_smooth_time)
@@ -283,10 +279,17 @@ class PrinterExtruder:
         temp = gcmd.get_float('S', 0.)
         index = gcmd.get_int('T', None, minval=0)
         if index is not None:
-            section = 'extruder'
-            if index:
-                section = 'extruder%d' % (index,)
-            extruder = self.printer.lookup_object(section, None)
+            extruder = None
+            toolchanger = self.printer.lookup_object('toolchanger', None)
+            if toolchanger:
+                tool = toolchanger.lookup_tool(index)
+                if tool:
+                    extruder = tool.extruder
+            else:
+                section = 'extruder'
+                if index:
+                    section = 'extruder%d' % (index,)
+                extruder = self.printer.lookup_object(section, None)
             if extruder is None:
                 if temp <= 0.:
                     return
@@ -335,6 +338,6 @@ def add_printer_objects(config):
         if i:
             section = 'extruder%d' % (i,)
         if not config.has_section(section):
-            break
+            continue
         pe = PrinterExtruder(config.getsection(section), i)
         printer.add_object(section, pe)
