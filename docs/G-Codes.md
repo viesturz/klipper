@@ -1338,6 +1338,9 @@ remaining tool change steps and put the toolchanger starting the selection in
 Performs only the first part of select tool, leaving the printer with no tool 
 selected.
 
+### SET_TOOL_TEMPERATURE
+`SET_TOOL_TEMPERATURE [TOOL=<name>] [T=<number>]  TARGET=<temp> [WAIT=0]`: Set tool temperature.
+
 ### [toolhead]
 
 The toolhead module is automatically loaded.

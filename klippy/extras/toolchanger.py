@@ -51,6 +51,9 @@ class Toolchanger:
         self.gcode.register_command("INITIALIZE_TOOLCHANGER",
                                     self.cmd_INITIALIZE_TOOLCHANGER,
                                     desc=self.cmd_INITIALIZE_TOOLCHANGER_help)
+        self.gcode.register_command("SET_TOOL_TEMPERATURE",
+                                    self.cmd_SET_TOOL_TEMPERATURE,
+                                    desc=self.cmd_SET_TOOL_TEMPERATURE_help)
         self.gcode.register_command("SELECT_TOOL",
                                    self.cmd_SELECT_TOOL,
                                    desc=self.cmd_SELECT_TOOL_help)
@@ -115,6 +118,28 @@ class Toolchanger:
             self.select_tool(gcmd, tool, restore_axis)
             return
         raise gcmd.error("Select tool: Either TOOL or T needs to be specified")
+
+    cmd_SET_TOOL_TEMPERATURE_help = 'Set temperature for tool'
+    def cmd_SET_TOOL_TEMPERATURE(self, gcmd):
+        temp = gcmd.get_int('TARGET', 0)
+        wait = gcmd.get_int('WAIT', 0) == 1
+        tool_name = gcmd.get('TOOL', None)
+        tool_nr = gcmd.get_int('T', None)
+        tool = None
+        if tool_name:
+            tool = self.printer.lookup_object(tool_name)
+        elif tool_nr is not None:
+            tool = self.lookup_tool(tool_nr)
+            if not tool:
+                raise gcmd.error("SET_TOOL_TEMPERATURE: T%d not found" % (tool_nr))
+        else:
+            tool = self.active_tool
+            if not tool:
+                raise gcmd.error("SET_TOOL_TEMPERATURE: No tool specified and no active tool")
+        if not tool.extruder:
+            raise gcmd.error("SET_TOOL_TEMPERATURE: No extruder specified for tool %s" % (tool.name))
+        heaters = self.printer.lookup_object('heaters')
+        heaters.set_temperature(tool.extruder.get_heater(), temp, wait)
 
     cmd_SELECT_TOOL_ERROR_help = "Abort tool change and mark the active toolchanger as failed"
     def cmd_SELECT_TOOL_ERROR(self, gcmd):
