@@ -257,10 +257,13 @@ class GCodeDispatch:
         r'(?P<args>[^#*;]*?)'
         r'\s*(?:[#*;].*)?$')
     def _get_extended_params(self, gcmd):
-        m = self.extended_r.match(gcmd.get_commandline())
+        cmdline = gcmd.get_commandline()
+        if not cmdline:
+            # There are no params, nothing to parse.
+            return gcmd
+        m = self.extended_r.match(cmdline)
         if m is None:
-            raise self.error("Malformed command '%s'"
-                             % (gcmd.get_commandline(),))
+            raise self.error("Malformed command '%s'"% (cmdline,))
         eargs = m.group('args')
         try:
             eparams = [earg.split('=', 1) for earg in shlex.split(eargs)]
@@ -269,8 +272,7 @@ class GCodeDispatch:
             gcmd._params.update(eparams)
             return gcmd
         except ValueError as e:
-            raise self.error("Malformed command '%s'"
-                             % (gcmd.get_commandline(),))
+            raise self.error("Malformed command '%s'" % (cmdline,))
     # G-Code special command handlers
     def cmd_default(self, gcmd):
         cmd = gcmd.get_command()

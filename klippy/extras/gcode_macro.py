@@ -3,9 +3,10 @@
 # Copyright (C) 2018-2021  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import traceback, logging, ast, copy, json
+import traceback, logging, ast, copy, json, re
 import jinja2
 
+NONSPACECRE = re.compile(r"\S")
 
 ######################################################################
 # Template handling
@@ -13,10 +14,14 @@ import jinja2
 
 # Wrapper for access to printer object get_status() methods
 class GetStatusWrapper:
-    def __init__(self, printer, eventtime=None):
+    def __init__(self, printer, eventtime=None, cache = True):
         self.printer = printer
         self.eventtime = eventtime
         self.cache = {}
+        self.do_cache = cache
+
+    def __getattr__(self, val):
+        return self.__getitem__(val)
     def __getitem__(self, val):
         sval = str(val).strip()
         if sval in self.cache:
@@ -26,7 +31,10 @@ class GetStatusWrapper:
             raise KeyError(val)
         if self.eventtime is None:
             self.eventtime = self.printer.get_reactor().monotonic()
-        self.cache[sval] = res = copy.deepcopy(po.get_status(self.eventtime))
+
+        res = copy.deepcopy(po.get_status(self.eventtime))
+        if self.do_cache:
+            self.cache[sval] = res
         return res
     def __contains__(self, val):
         try:
@@ -67,6 +75,84 @@ class TemplateWrapper:
     def run_gcode_from_command(self, context=None):
         self.gcode.run_script_from_command(self.render(context))
 
+# Wrapper around a Python template
+class PythonTemplateWrapper:
+    def __init__(self, printer, name, script):
+        self.printer = printer
+        self.name = name
+        self.gcode = self.printer.lookup_object('gcode')
+        gcode_macro = self.printer.lookup_object('gcode_macro')
+        self.create_template_context = gcode_macro.create_python_template_context
+        try:
+            self.code = compile(self._fix_indents(script), name, 'exec')
+        except Exception as e:
+            msg = "Error loading template '%s': %s" % (
+                 name, traceback.format_exception_only(type(e), e)[-1])
+            logging.exception(msg)
+            raise printer.config_error(msg)
+
+    def _fix_indents(self, script: str) -> str:
+        lines = script.split('\n')
+        to_trim = len(script)
+        for l in lines:
+            if l == "": continue
+            match = NONSPACECRE.search(l)
+            indent = match.start() if match else 0
+            to_trim = min(to_trim, indent)
+        if to_trim == 0:
+            return script
+        lines = [l[to_trim:] for l in lines]
+        return '\n'.join(lines)
+
+    def run_gcode_from_command(self, context=None):
+        if context is None:
+            context = self.create_template_context()
+        try:
+            exec(self.code, context, context)
+        except Exception as e:
+            msg = "Error evaluating '%s': %s" % (
+                self.name, traceback.format_exception_only(type(e), e)[-1])
+            logging.exception(msg)
+            raise self.gcode.error(msg)
+
+# Makes a dict behave like an object
+class ObjectWrapper:
+    __dict = None
+    def __init__(self, dict):
+        self.__dict = dict
+    def __getitem__(self, name):
+        return self.__dict.get(name, None)
+    def __setitem__(self, name, value):
+        self.__dict[name] = value
+    def __getattr__(self, name):
+        # This falls back to object attributes automatically
+        return self.__dict.get(name, None)
+    def __setattr__(self, name, value):
+        # This overrides everything, so special case to still access __dict.
+        if not name.startswith('_'):
+            self.__dict[name] = value
+        else:
+            super().__setattr__(name, value)
+    def __iter__(self):
+        return self.__dict.__iter__()
+    def __contains__(self, name):
+        return self.__dict.__contains__(name)
+
+# Runs gcode commands
+class GcodeWrapper:
+    def __init__(self, printer):
+        self._gcode = printer.lookup_object('gcode')
+
+    def __getattr__(self, name):
+        handler = self._gcode.gcode_handlers.get(name, None)
+        if not handler:
+            raise self._gcode.error("Gcode %s does not exist" % (name,))
+        return lambda *args, **kwargs: handler(self._make_gcmd(name, args, kwargs))
+
+    def _make_gcmd(self, name, args, kwargs):
+        rawparams = " ".join([str(v) for v in args])
+        return self._gcode.create_gcode_command(name, rawparams, kwargs)
+
 # Main gcode macro template tracking
 class PrinterGCodeMacro:
     def __init__(self, config):
@@ -79,6 +165,13 @@ class PrinterGCodeMacro:
         else:
             script = config.get(option, default)
         return TemplateWrapper(self.printer, self.env, name, script)
+    def load_python_template(self, config, option, default=None):
+        name = "%s:%s" % (config.get_name(), option)
+        if default is None:
+            script = config.get(option)
+        else:
+            script = config.get(option, default)
+        return PythonTemplateWrapper(self.printer, name, script)
     def _action_emergency_stop(self, msg="action_emergency_stop"):
         self.printer.invoke_shutdown("Shutdown due to %s" % (msg,))
         return ""
@@ -102,10 +195,18 @@ class PrinterGCodeMacro:
             'action_raise_error': self._action_raise_error,
             'action_call_remote_method': self._action_call_remote_method,
         }
+    def create_python_template_context(self, eventtime=None):
+        return {
+            'printer': GetStatusWrapper(self.printer, eventtime, cache=False),
+            'gcode': GcodeWrapper(self.printer),
+            'action_emergency_stop': self._action_emergency_stop,
+            'action_respond_info': self._action_respond_info,
+            'action_raise_error': self._action_raise_error,
+            'action_call_remote_method': self._action_call_remote_method,
+        }
 
 def load_config(config):
     return PrinterGCodeMacro(config)
-
 
 ######################################################################
 # GCode macro
@@ -121,7 +222,14 @@ class GCodeMacro:
         self.alias = name.upper()
         self.printer = printer = config.get_printer()
         gcode_macro = printer.load_object(config, 'gcode_macro')
-        self.template = gcode_macro.load_template(config, 'gcode')
+        self.template = None
+        self.pytemplate = None
+        if config.get('gcode', None) is not None:
+            self.template = gcode_macro.load_template(config, 'gcode')
+        elif config.get('python', None) is not None:
+            self.pytemplate = gcode_macro.load_python_template(config, 'python')
+        else:
+            raise config.error("Macro %s: Either gcode or python must be specified" % (config.get_name()))
         self.gcode = printer.lookup_object('gcode')
         self.rename_existing = config.get("rename_existing", None)
         self.cmd_desc = config.get("description", "G-Code macro")
@@ -180,13 +288,20 @@ class GCodeMacro:
     def cmd(self, gcmd):
         if self.in_script:
             raise gcmd.error("Macro %s called recursively" % (self.alias,))
-        kwparams = dict(self.variables)
-        kwparams.update(self.template.create_template_context())
-        kwparams['params'] = gcmd.get_command_parameters()
-        kwparams['rawparams'] = gcmd.get_raw_command_parameters()
         self.in_script = True
+        kwparams = {
+            'params': gcmd.get_command_parameters(),
+            'rawparams': gcmd.get_raw_command_parameters(),
+            }
         try:
-            self.template.run_gcode_from_command(kwparams)
+            if self.template:
+                kwparams.update(self.variables)
+                kwparams.update(self.template.create_template_context())
+                self.template.run_gcode_from_command(kwparams)
+            if self.pytemplate:
+                kwparams['variables'] = ObjectWrapper(self.variables)
+                kwparams.update(self.pytemplate.create_template_context())
+                self.pytemplate.run_gcode_from_command(kwparams)
         finally:
             self.in_script = False
 

@@ -78,6 +78,10 @@ speed (via the `F` parameter) on the first `G1` command.
 
 ## Template expansion
 
+Gcode macro provides two options for writing the macros.
+
+### Gcode
+
 The gcode_macro `gcode:` config section is evaluated using the Jinja2
 template language. One can evaluate expressions at run-time by
 wrapping them in `{ }` characters or use conditional statements
@@ -101,6 +105,26 @@ gcode:
   RESTORE_GCODE_STATE NAME=clean_nozzle_state
 ```
 
+
+### Python
+
+The gcode_macro `python:` config section is evaluated as Python code.
+A special "gcode" object is available to execute gcode commands.
+
+An equal example of the above 
+```
+[gcode_macro clean_nozzle]
+python:
+  wipe_count = 8
+  gcode.SAVE_GCODE_STATE(NAME='clean_nozzle_state')
+  gcode.G90()
+  gcode.G0(Z=15, F=300)
+  for wipe in range(wipe_count):
+    for coordinate in [(275, 4),(235, 4)]:
+      gcode.G0( X=coordinate[0], Y = coordinate[1] + 0.25 * wipe, Z=Z9.7, F=12000)
+  gcode.RESTORE_GCODE_STATE(NAME='clean_nozzle_state')
+```
+
 ### Macro parameters
 
 It is often useful to inspect parameters passed to the macro when
@@ -111,6 +135,8 @@ pseudo-variable. For example, if the macro:
 [gcode_macro SET_PERCENT]
 gcode:
   M117 Now at { params.VALUE|float * 100 }%
+python:
+  gocde.M117( f"Now at {float(params.VALUE) * 100 }")
 ```
 
 were invoked as `SET_PERCENT VALUE=.2` it would evaluate to `M117 Now
@@ -126,6 +152,9 @@ parameter and assign the result to a local name. For example:
 gcode:
   {% set bed_temp = params.TEMPERATURE|default(40)|float %}
   M140 S{bed_temp}
+python:
+  bed_temp = float(params.get('TEMPERATURE', 40))
+  gcode.M140(S=bed_temp)
 ```
 
 ### The "rawparams" variable
@@ -147,18 +176,21 @@ via the `printer` pseudo-variable. For example:
 [gcode_macro slow_fan]
 gcode:
   M106 S{ printer.fan.speed * 0.9 * 255}
+python:
+  gcode.M106(S=printer.fan.speed * 0.9 * 255)
 ```
 
 Available fields are defined in the
 [Status Reference](Status_Reference.md) document.
 
-Important! Macros are first evaluated in entirety and only then are
+Important! Gcode Macros are first evaluated in entirety and only then are
 the resulting commands executed. If a macro issues a command that
 alters the state of the printer, the results of that state change will
 not be visible during the evaluation of the macro. This can also
 result in subtle behavior when a macro generates commands that call
 other macros, as the called macro is evaluated when it is invoked
 (which is after the entire evaluation of the calling macro).
+This does not apply to Python Macros that are evaluated one command at a time.
 
 By convention, the name immediately following `printer` is the name of
 a config section. So, for example, `printer.fan` refers to the fan
@@ -176,6 +208,9 @@ and reduce typing. For example:
 gcode:
     {% set sensor = printer["htu21d my_sensor"] %}
     M117 Temp:{sensor.temperature} Humidity:{sensor.humidity}
+python:
+    sensor = printer["htu21d my_sensor"]
+    gcode.M117(f"Temp:{sensor.temperature} Humidity:{sensor.humidity}")
 ```
 
 ## Actions
@@ -206,6 +241,10 @@ Available "action" commands:
 
 The SET_GCODE_VARIABLE command may be useful for saving state between
 macro calls. Variable names may not contain any upper case characters.
+
+In `python` macros, a `variables.name` syntax can be used to read/write 
+variables. 
+
 For example:
 
 ```
@@ -221,10 +260,23 @@ gcode:
   # Call finish_probe macro at completion of probe
   finish_probe
 
+python:  
+  # Save target temperature to bed_temp variable
+  variables.bed_temp = printer.heater_bed.target
+  # Disable bed heater
+  gcode.M140()
+  # Perform probe
+  gcode.PROBE()
+  # Call finish_probe macro at completion of probe
+  gcode.finish_probe()
+
 [gcode_macro finish_probe]
 gcode:
   # Restore temperature
   M140 S{printer["gcode_macro start_probe"].bed_temp}
+
+python:
+  gcode.M140(S=printer.["gcode_macro start_probe"].bed_temp)
 ```
 
 Be sure to take the timing of macro evaluation and command execution
@@ -268,7 +320,7 @@ gcode:
   M117 Welcome!
 ```
 
-Its possible for a delayed gcode to repeat by updating itself in
+It's possible for a delayed gcode to repeat by updating itself in
 the gcode option:
 
 ```

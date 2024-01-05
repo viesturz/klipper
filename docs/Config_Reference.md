@@ -1374,6 +1374,9 @@ G-Code macros (one may define any number of sections with a
 #   A list of G-Code commands to execute in place of "my_cmd". See
 #   docs/Command_Templates.md for G-Code format. This parameter must
 #   be provided.
+#python:
+#   Python code that generates the G-code commands. Alternative way of defining
+#   more complex macros. See docs/Command_Templates.md for G-Code format. 
 #variable_<name>:
 #   One may specify any number of options with a "variable_" prefix.
 #   The given variable name will be assigned the given value (parsed
