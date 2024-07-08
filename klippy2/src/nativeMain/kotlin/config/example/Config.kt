@@ -1,14 +1,18 @@
 package config.example
 import config.*
 
-val mcu = BigtreetchM8P(serial="/dev/foobar")
-val fan = Fan(
-    name = "fan",
+val mcu = SkrMiniE3V2(serial="/dev/serial/by-id/usb-Klipper_stm32f103xe_31FFD7053030473538690543-if00")
+val fan0 = Fan(
+    name = "fan0",
+    pin = mcu.fan0,
+)
+val fan1 = Fan(
+    name = "fan1",
     pin = mcu.fan1,
 )
 
 val machine = MachineConfig(
-    parts = listOf(fan),
+    parts = listOf(fan0, fan1),
 )
 
 //

@@ -1,24 +1,31 @@
-package mcu.impl
+package mcu.connection
 
+import chelper.serialqueue_alloc
+import chelper.serialqueue_free
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.readBytes
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.newSingleThreadContext
-import kotlinx.coroutines.runBlocking
+import mcu.McuClock
+import mcu.impl.Commands
+import mcu.impl.GcWrapper
+import mcu.impl.FirmwareConfig
+import mcu.impl.McuObjectResponse
+import mcu.impl.McuResponse
+import mcu.impl.ObjectId
+import mcu.impl.ResponseParser
 import platform.posix.close
-import platform.posix.log
 import kotlin.concurrent.AtomicLong
-import kotlin.coroutines.coroutineContext
-import kotlin.reflect.KClass
+
+private val logger = KotlinLogging.logger("McuConnection")
 
 /** Connection to MCU, primarily handles dispatch of messages received from MCU. */
 @Suppress("OPT_IN_USAGE")
@@ -28,14 +35,14 @@ class McuConnection(val fd: Int) {
     private val responseHandlers = HashMap<Pair<String, ObjectId>, (message: McuResponse) -> Unit>()
     private val pendingAcks = HashMap<ULong, () -> Unit>()
     private var lastNotifyId = AtomicLong(0)
-    var parser = CommandParser()
+    var commands = Commands(FirmwareConfig.DEFAULT_IDENTIFY)
     val serial = GcWrapper(
-        chelper.serialqueue_alloc(
+        serialqueue_alloc(
             serial_fd = fd,
             serial_fd_type = 'u'.code.toByte(),
             client_id = 0
         )
-    ) { chelper.serialqueue_free(it) }
+    ) { serialqueue_free(it) }
 
     init {
         // TODO: printer scope
@@ -50,38 +57,38 @@ class McuConnection(val fd: Int) {
                 chelper.serialqueue_pull(serial.ptr, message.ptr)
                 if (message.len < 0) break
                 val data = message.msg.readBytes(message.len)
-                println("Received len ${message.len} message ${data.toHexString()}, notify=${message.notify_id}, ")
-                val parsed = parser.decode(data)
-                if (parsed != null) {
-                    val key = Pair(parsed::class.qualifiedName?:parsed::class.hashCode().toString(), parsed.id)
-                    val handler = responseHandlers.get(key)
-                    //TODO: schedule
+                val parseResult = commands.parse(data, message.sent_time, message.receive_time)
+                if (parseResult != null) {
+                    val (signature, parsed) = parseResult
+                    logger.trace { "Received $parsed" }
+                    val id = if (parsed is McuObjectResponse) parsed.id else 0u
+                    val key = Pair(signature, id)
+                    val handler = responseHandlers[key]
                     handler?.let { it(parsed) }
                     val handler2 = responseHandlersOneshot.remove(key)
-                    //TODO: schedule
                     handler2?.complete(parsed)
-                    }
+                } else {
+                    logger.trace { "Received notify ack for ${message.notify_id}"}
+                }
                 // Acks after handlers - to allow handlers populate data before acks.
                 val ack = pendingAcks.remove(message.notify_id)
-                // TODO: Scheulde
                 ack?.let { it() }
             }
         }
     }
 
     @OptIn(ExperimentalStdlibApi::class)
-    suspend fun identify(chunkSize:UByte = 40u) {
-        println("Identify")
-        val queue = CommandQueue(this)
-        val command = CommandBuilder(parser)
+    suspend fun identify(chunkSize:UByte = 40u): Commands {
+        logger.debug { "Identify" }
+        val queue = CommandQueue(this, "Identify")
         var offset = 0
         val data = buildList<Byte> {
             while (true) {
                 val response = queue.sendWithResponse(
-                    command.identify(offset.toUInt(), chunkSize),
-                    ResponseIdentify::class,
-                    0u
-                )
+                    commands.build("identify offset=%u count=%c") {
+                        addU(offset.toUInt()); addC(chunkSize)
+                    },
+                    responseIdentifyParser)
                 if (response.offset.toInt() == offset) {
                     addAll(response.data.toList())
                     if (response.data.size < chunkSize.toInt()) {
@@ -91,8 +98,13 @@ class McuConnection(val fd: Int) {
                 }
             }
         }.toByteArray()
-        println("Identify done, read ${data.size} bytes")
-        parser = CommandParser(data)
+        logger.debug { "Identify done, read ${data.size} bytes" }
+        commands = Commands(FirmwareConfig.parse(data))
+        return commands
+    }
+
+    fun setClockEstimate(frequency: Double, convTime: Double, convClock: McuClock, lastClock: McuClock) {
+        chelper.serialqueue_set_clock_est(this.serial.ptr, frequency, convTime, convClock, lastClock)
     }
 
     fun disconnect() {
@@ -108,23 +120,37 @@ class McuConnection(val fd: Int) {
     }
 
     @Suppress("UNCHECKED_CAST")
-    fun <ResponseType: McuResponse> setResponseHandler(type :KClass<ResponseType>, id: ObjectId, handler: ((message: ResponseType) -> Unit)? ) {
-        val key = Pair(type.qualifiedName?:type.hashCode().toString(), id)
+    fun <ResponseType: McuResponse> setResponseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: ((message: ResponseType) -> Unit)? ) {
+        val key = Pair(parser.signature, id)
         when {
             handler == null -> responseHandlers.remove(key)
             responseHandlers.containsKey(key) -> throw IllegalArgumentException("Duplicate message handler for $key")
-            else -> responseHandlers[key] = handler as ((message: McuResponse) -> Unit)
+            else -> {
+                commands.registerParser(parser)
+                responseHandlers[key] = handler as ((message: McuResponse) -> Unit)
+            }
         }
     }
 
     @Suppress("UNCHECKED_CAST")
-    fun <ResponseType: McuResponse> setResponseHandlerOnce(type :KClass<ResponseType>, id: ObjectId): CompletableDeferred<ResponseType> {
-        val key = Pair(type.qualifiedName?:type.hashCode().toString(), id)
+    fun <ResponseType: McuResponse> setResponseHandlerOnce(parser: ResponseParser<ResponseType>, id: ObjectId): CompletableDeferred<ResponseType> {
+        val key = Pair(parser.signature, id)
         val result = CompletableDeferred<ResponseType>()
         when {
             responseHandlersOneshot.containsKey(key) -> throw IllegalArgumentException("Duplicate message handler for $key")
-            else -> responseHandlersOneshot[key] = result as CompletableDeferred<McuResponse>
+            else -> {
+                commands.registerParser(parser)
+                responseHandlersOneshot[key] = result as CompletableDeferred<McuResponse>
+            }
         }
         return result
     }
+
+    suspend fun restartMcu() {
+        // TODO
+    }
 }
+
+data class ResponseIdentify(val offset: UInt, val data: ByteArray) : McuResponse
+val responseIdentifyParser = ResponseParser("identify_response offset=%u data=%.*s",
+    {ResponseIdentify(parseU(),parseBytes())})

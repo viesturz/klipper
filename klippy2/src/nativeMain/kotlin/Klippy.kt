@@ -1,36 +1,49 @@
+import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
+import io.github.oshai.kotlinlogging.Level
+import io.github.oshai.kotlinlogging.isLoggingEnabled
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import mcu.impl.CommandBuilder
-import mcu.impl.CommandParser
-import mcu.impl.CommandQueue
-import mcu.impl.McuConnection
-import mcu.impl.ResponseIdentify
-import mcu.impl.connectPipe
-import mcu.impl.connectSerial
+import logging.LogFormatter
+import machine.MachineState
+import machine.impl.MachineImpl
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
 fun main(args: Array<String>) = runBlocking {
     println("Klippy 2!")
-    val path = "/dev/serial/by-id/usb-Klipper_stm32f103xe_31FFD7053030473538690543-if00"
-    println("Connecting")
-    val commands = CommandBuilder(CommandParser())
-    val serial = McuConnection(connectSerial(path))
-    println("Serial started, running identify")
-    serial.identify()
-    println("Identify done, starting config")
-    val queue = CommandQueue(serial)
 
-    println("Queue setup,")
-    serial.disconnect()
-    println("Closing")
-//    val config = config.example.machine
-//    println("Config = ${ config }")
-//    val machine = MachineImpl(config)
-//    machine.setup()
-//    println("Machine setup ${ machine.status }")
-//    launch(newSingleThreadContext("machine")) { machine.run() }
-//    machine.runGcode("SET_FAN_SPEED SPEED=0.7")
-//    machine.shutdown("main")
-//    println("Machine done ${ machine.status }")
+    KotlinLoggingConfiguration.logLevel = Level.INFO
+    KotlinLoggingConfiguration.formatter = LogFormatter()
+
+    val config = config.example.machine
+    println("Config = $config")
+
+    while (true) {
+        val machine = MachineImpl(config)
+        println("Machine setup ${machine.status}")
+        GlobalScope.launch(Dispatchers.IO) { machine.run() }
+        // Wait until running
+        machine.state.first { it == MachineState.RUNNING }
+
+        machine.runGcode("SET_FAN_SPEED FAN=fan0 SPEED=1.0")
+        delay(2.seconds)
+        machine.runGcode("SET_FAN_SPEED FAN=fan1 SPEED=1.0")
+        machine.runGcode("SET_FAN_SPEED FAN=fan0 SPEED=0")
+        delay(5.seconds)
+        machine.runGcode("SET_FAN_SPEED FAN=fan1 SPEED=0.5")
+        machine.runGcode("SET_FAN_SPEED FAN=fan0 SPEED=0.5")
+
+        // Wait until shutdown.
+        machine.state.first { it == MachineState.SHUTDOWN }
+        println("Shutdown detected, reason ${machine.shutdownReason}")
+        break
+    }
 }

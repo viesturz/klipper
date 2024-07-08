@@ -1,4 +1,4 @@
-package mcu.impl
+package mcu.connection
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
@@ -20,19 +20,19 @@ fun connectPipe(path: String): Int {
 }
 
 @OptIn(ExperimentalForeignApi::class)
-fun connectSerial(path: String): Int {
+fun connectSerial(path: String, baud: Int): Int {
     println("Connecting to serial $path")
     val fd = open(path, O_RDWR)
     if (fd == -1) {
         val error = errno
         throw RuntimeException("Failed to open $path, status:$error")
     }
-    configureSerial(fd, baud = 250000u)
+    configureSerial(fd, baud)
     return fd
 }
 
 @OptIn(ExperimentalForeignApi::class)
-fun configureSerial(fd: Int, baud: UInt, dataBits: Int = CS8, rts: Boolean = true) {
+fun configureSerial(fd: Int, baud: Int, dataBits: Int = CS8, rts: Boolean = true) {
     // taken from https://blog.mbedded.ninja/programming/operating-systems/linux/linux-serial-ports-using-c-cpp/#reading-and-writing
     memScoped {
         val tty: termios = alloc<termios>()
@@ -74,8 +74,8 @@ fun configureSerial(fd: Int, baud: UInt, dataBits: Int = CS8, rts: Boolean = tru
             0.toUByte()  // never block endlessly. If Renogy spuriously doesn't send a response, the program would essentially stop working.
 
         // Set in/out baud rate
-        cfsetispeed(tty.ptr, baud)
-        cfsetospeed(tty.ptr, baud)
+        cfsetispeed(tty.ptr, baud.toUInt())
+        cfsetospeed(tty.ptr, baud.toUInt())
         tcsetattr(fd, TCSANOW, tty.ptr)
     }
 }
