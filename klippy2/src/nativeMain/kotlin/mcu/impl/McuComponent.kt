@@ -1,0 +1,46 @@
+package mcu.impl
+
+import machine.impl.MachineTime
+import machine.impl.Reactor
+import mcu.McuClock
+import mcu.connection.CommandQueue
+
+/** McuComponent controls a specific hardware feature in the MCU
+ * It's tightly coupled with the MCU code and provides provides an API to the low level
+ * communication protocol.
+ *  */
+interface McuComponent {
+    /** Run to configure the part, with basic MCU identification data available. */
+    fun configure(configure: McuConfigure){}
+    /** Run when MCU is configured and time synchronized, can send initial commands. */
+    fun start(runtime: McuRuntime){}
+    fun shutdown(){}
+}
+
+/** MCU component configuration interface.
+ * Available in the constructor and Configure call.
+ */
+interface McuConfigure {
+    /** MCU self identification data. */
+    val identify: FirmwareConfig
+    /** Allocate new object ID. */
+    fun makeOid(): ObjectId
+    /** Create a new command queue, separate from the default one.
+     * Can only be used after start. */
+    fun makeCommandQueue(name:String): CommandQueue
+    /** Add a configuration command for the MCU */
+    fun configCommand(signature: String, block: CommandBuilder.()->Unit)
+    /** Add a initialization command to be run right after configuration is done */
+    fun initCommand(signature: String, block: CommandBuilder.()->Unit)
+    fun restartCommand(signature: String, block: CommandBuilder.()->Unit)
+    /** Add a handler for an event sent by the MCU. */
+    fun <ResponseType: McuResponse> responseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: ((message: ResponseType) -> Unit))
+}
+
+interface McuRuntime {
+    val reactor: Reactor
+    val defaultQueue: CommandQueue
+
+    fun durationToClock(durationSeconds: Float): McuClock32
+    fun timeToClock(time: MachineTime): McuClock
+}

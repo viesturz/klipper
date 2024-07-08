@@ -44,6 +44,7 @@ kotlin {
 
         commonMain.dependencies {
             implementation("com.squareup.okio:okio:3.9.0")
+            implementation("io.github.oshai:kotlin-logging:5.1.4")
         }
 
         nativeMain.dependencies {

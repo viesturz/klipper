@@ -1,20 +1,25 @@
 package machine.impl
 
+import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.delay
-import kotlin.time.TimeSource
-import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.seconds
 
-typealias ReactorTime = TimeSource.Monotonic.ValueTimeMark
+/** Machine time in seconds. Counted from primary MCU boot time. */
+typealias MachineTime = Double
 
 // TODO: All methods here are thread safe
 class Reactor {
-    data class Event(val time: ReactorTime, val block: (event: Event) -> ReactorTime?)
-    val TIME_SHUTDOWN = curTime - 1.days
+    data class Event(val time: MachineTime, val block: suspend (event: Event) -> MachineTime?)
+    private val TIME_SHUTDOWN = -1.0
 
     private val pendingEvents = ArrayList<Event>()
 
-    fun schedule(time: ReactorTime, block: (event:Event) -> ReactorTime?): Event {
+    fun runNow(block: suspend () -> Unit) = schedule(now) {
+        block()
+        null
+    }
+
+    fun schedule(time: Double, block: suspend (event:Event) -> MachineTime?): Event {
         val event = Event(time, block)
         val index = pendingEvents.indexOfFirst { it.time > time }
         if (index == -1) {
@@ -25,8 +30,9 @@ class Reactor {
         return event
     }
 
-    val curTime
-        get() = TimeSource.Monotonic.markNow()
+    @OptIn(ExperimentalForeignApi::class)
+    val now: MachineTime
+        get() = chelper.get_monotonic()
 
     fun cancel(event: Event) {
         pendingEvents.remove(event)
@@ -46,7 +52,7 @@ class Reactor {
                     nextEvent.time == TIME_SHUTDOWN -> {
                         break@runloop
                     }
-                    nextEvent.time > curTime -> {
+                    nextEvent.time > now -> {
                         break
                     }
                     pendingEvents.remove(nextEvent) -> {
@@ -59,14 +65,14 @@ class Reactor {
                 }
                 nextEvent = null
             }
-            var delayTime = 1.seconds
+            var delayTime = 1.0
             if (nextEvent != null) {
-                val nextDelay = -nextEvent.time.elapsedNow()
+                val nextDelay = nextEvent.time-now
                 if (nextDelay < delayTime) {
                     delayTime = nextDelay
                 }
             }
-            delay(delayTime)
+            delay(delayTime.seconds)
         }
         println("Reactor shut down")
     }

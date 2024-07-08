@@ -1,97 +1,96 @@
 package mcu.impl
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.cinterop.ExperimentalForeignApi
-
-// import platform.zlib.uncompress
+import machine.impl.MachineTime
+import mcu.ConfigurationException
 
 typealias ObjectId = UByte
+typealias MoveQueueId = UShort
 typealias McuClock32 = UInt
-typealias McuClock64 = ULong
 
-sealed interface McuResponse{ val id: ObjectId}
-data class ResponseIdentify(val offset: UInt, val data: ByteArray, override val id: ObjectId = 0u) : McuResponse
-data class ResponseTrsyncState(override val id: ObjectId, val canTrigger: UByte,val  triggerReason:UByte, val clock: McuClock32): McuResponse
+private val logger = KotlinLogging.logger("Commands")
 
-class CommandParser(compressedIdentify: ByteArray? = null){
-    val identify = Identify.parse(compressedIdentify)
-    val responses = buildMap { for (e in identify.responses.entries) put(e.value, e.key) }
-    val commands = identify.commands
+interface McuResponse
+interface McuObjectResponse: McuResponse{
+    val id: ObjectId
+}
+data class ResponseParser<Type: McuResponse>(val signature: String, val block : ParserContext.()->Type)
+
+class Commands(val identify: FirmwareConfig){
+    private val responses = buildMap { for (e in identify.responses.entries) put(e.value, e.key) }
 
     @OptIn(ExperimentalForeignApi::class)
-    fun decode(data: ByteArray): McuResponse? {
+    fun parse(data: ByteArray, sentTime: MachineTime, receiveTime: MachineTime): Pair<String, McuResponse>? {
         if (data.size <= chelper.MESSAGE_HEADER_SIZE + chelper.MESSAGE_TRAILER_SIZE) return null
-        val buffer = ParseBuffer(data, chelper.MESSAGE_HEADER_SIZE)
+        val buffer = ParserContext(data, chelper.MESSAGE_HEADER_SIZE, sentTime, receiveTime)
         val name = responses.get(buffer.parseU()) ?: return null
-        val result = when (name) {
-            "identify_response offset=%u data=%.*s" -> ResponseIdentify(
-                buffer.parseU(),
-                buffer.parseBytes(),
-            )
-
-            else -> throw RuntimeException("Unknown message ${name}")
+        val parser = RESPONSES_MAP[name]
+        if (parser == null) {
+            logger.info { "Message with no handler $name" }
+            return null
         }
+        val result = buffer.run { parser() }
         if (data.size != buffer.pos + chelper.MESSAGE_TRAILER_SIZE) {
             throw RuntimeException("Parsed incorrect number of bytes, parsed ${buffer.pos}, end at ${data.size - chelper.MESSAGE_TRAILER_SIZE}")
         }
-        return result
+        return Pair(name, result)
+    }
+
+    inline fun build(signature: String, block: CommandBuilder.()->Unit): UByteArray {
+        val builder = CommandBuilder(this)
+        builder.addU(identify.commands.getValue(signature))
+        builder.block()
+        return builder.bytes.toUByteArray()
+    }
+
+    fun registerParser(parser: ResponseParser<*>) {
+        RESPONSES_MAP[parser.signature] = parser.block
+    }
+
+    fun hasCommand(signature: String) = identify.commands.containsKey(signature)
+}
+
+class CommandBuilder(private val parser: Commands) {
+    val bytes = ArrayList<UByte>()
+    fun addC(v: Boolean) = addVLQ(if (v) 1 else 0)
+    fun addC(v: UByte) = addVLQ(v.toLong())
+    fun addId(v: ObjectId) = addVLQ(v.toLong())
+    fun addU(v: UInt) = addVLQ(v.toLong())
+    fun addHU(v: UShort) = addVLQ(v.toLong())
+    fun addH(v: Short) = addVLQ(v.toLong())
+    fun addI(v: Int) = addVLQ(v.toLong())
+
+    fun addStr(v: String) {
+        bytes.add(v.length.toUByte())
+        bytes.addAll(v.encodeToByteArray().toList().map { it.toUByte() })
+    }
+    fun addEnum(name: String, value: String) {
+        val values = parser.identify.enumerationValueToId(name)
+        val id = values[value]
+        if (id == null) {
+            logger.error { "Enum $name value $value not found, available values $values" }
+            throw ConfigurationException("$name $value not present for MCU type ${parser.identify.mcuName}")
+        }
+        addI(id)
+    }
+    private fun addVLQ(v: Long) {
+        if (v >= 0xc000000 || v < -0x4000000) bytes.add((((v shr 28) and 0x7f) or 0x80).toUByte())
+        if (v >= 0x180000 || v < -0x80000) bytes.add((((v shr 21) and 0x7f) or 0x80).toUByte())
+        if (v >= 0x3000 || v < -0x1000) bytes.add((((v shr 14) and 0x7f) or 0x80).toUByte())
+        if (v >= 0x60 || v < -0x20) bytes.add((((v shr 7) and 0x7f) or 0x80).toUByte())
+        bytes.add((v and 0x7f).toUByte())
     }
 }
 
-class CommandBuilder(private val parser: CommandParser) {
-    fun identify(offset: UInt, count: UByte) = buildList {
-        addU(parser.commands.getValue("identify offset=%u count=%c"))
-        addU(offset);addC(count)
-    }.toUByteArray()
-
-    fun getConfig()= buildList {
-        addU(parser.commands.getValue("get_config"))
-    }
-
-    fun allocateOids(count: UByte)= buildList {
-        addU(parser.commands.getValue("allocate_oids count=%c"))
-        addC(count)
-    }
-
-    fun configDigitalOut(
-        oid: ObjectId,
-        pin: UInt,
-        value: UByte,
-        defaultValue: UByte,
-        maxDuration: UInt
-    ) = buildList {
-        addU(parser.commands.getValue("config_digital_out oid=%c pin=%u value=%c default_value=%c max_duration=%u"))
-        addC(oid);addU(pin);addC(value);addC(defaultValue);addU(maxDuration)
-    }
-
-    fun finalizeConfig(crc: UInt) = buildList {
-        addU(parser.commands.getValue("finalize_config crc=%u"))
-        addU(crc)
-    }
-
-    // "config_trsync oid=%c"
-    // "trsync_start oid=%c report_clock=%u report_ticks=%u expire_reason=%c"
-    // "stepper_stop_on_trigger oid=%c trsync_oid=%c"
-
-    fun trsyncTrigger(id: ObjectId, reason: UByte) = buildList {
-        addU(parser.commands.getValue("trsync_trigger oid=%c reason=%c"))
-        addC(id);addC(reason);
-    }.toUByteArray()
-
-    fun trsyncSetTimeout(id: ObjectId, clock: McuClock32) = buildList {
-        addU(parser.commands.getValue("trsync_set_timeout oid=%c clock=%u"))
-        addC(id);addU(clock)
-    }
-
-    fun setDigitalOut(pin: UInt, value: UByte) = buildList {
-        addU(parser.commands.getValue("set_digital_out pin=%u value=%c"))
-        addU(pin);addC(value)
-    }.toUByteArray()
-}
-
-data class ParseBuffer(val array: ByteArray, var pos: Int = 0) {
+data class ParserContext(val array: ByteArray, var pos: Int = 0, val sentTime: MachineTime, val receiveTime: MachineTime) {
     fun parseU() = parseVLQ(false).toUInt()
     fun parseI() = parseVLQ(false).toInt()
     fun parseC() = parseVLQ(false).toUByte()
+    fun parseHU() = parseVLQ(false).toUShort()
+    fun parseH() = parseVLQ(false).toShort()
+    fun parseStr() = parseBytes().decodeToString()
+    fun parseB() = parseVLQ(false) > 0
 
     fun parseVLQ(signed: Boolean): Long {
         var c = array[pos].toLong()
@@ -113,30 +112,7 @@ data class ParseBuffer(val array: ByteArray, var pos: Int = 0) {
         pos += len
         return result
     }
-    fun parseStr() = parseBytes().decodeToString()
 }
 
-fun MutableList<UByte>.addVLQ(v: Long) {
-    if (v >= 0xc000000 || v < -0x4000000) add((((v shr 28) and 0x7f) or 0x80).toUByte())
-    if (v >= 0x180000 || v < -0x80000) add((((v shr 21) and 0x7f) or 0x80).toUByte())
-    if (v >= 0x3000 || v < -0x1000) add((((v shr 14) and 0x7f) or 0x80).toUByte())
-    if (v >= 0x60 || v < -0x20) add((((v shr 7) and 0x7f) or 0x80).toUByte())
-    add((v and 0x7f).toUByte())
-}
-
-fun MutableList<UByte>.addC(v: UByte) {
-    addVLQ(v.toLong())
-}
-
-fun MutableList<UByte>.addU(v: UInt) {
-    addVLQ(v.toLong())
-}
-
-fun MutableList<UByte>.addI(v: Int) {
-    addVLQ(v.toLong())
-}
-
-fun MutableList<UByte>.addStr(v: String) {
-    add(v.length.toUByte())
-    addAll(v.encodeToByteArray().toList().map { it.toUByte() })
-}
+/** A global map of parsers, populated using commands.registerParser. */
+private val RESPONSES_MAP = HashMap<String, ParserContext.()->McuResponse>()

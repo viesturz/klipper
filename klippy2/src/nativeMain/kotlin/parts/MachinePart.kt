@@ -4,21 +4,33 @@ import config.McuConfig
 import config.PartConfig
 import mcu.Mcu
 import machine.impl.Gcode
-import machine.impl.ReactorTime
+import machine.impl.GcodeParams
+import machine.impl.MachineTime
 import machine.impl.Reactor
 
-interface MachinePart {
-    val partConfig: PartConfig
+interface MachinePart<ConfigType: PartConfig> {
+    val config: ConfigType
 
-    fun status(time: ReactorTime): Map<String, Any> = mapOf()
+    fun status(time: MachineTime): Map<String, Any> = mapOf()
+
+    // Called when all MCUs are configured and parts components initialized.
+    suspend fun onStart(runtime: MachineRuntime){}
 
     // Called when printer session is over and it enters idle state.
     fun onSessionEnd(){}
-    fun onShutdown(){}
+    fun shutdown(){}
 }
 
-data class MachineRuntime (
-    val reactor: Reactor,
-    val gcode: Gcode,
-    val mcus: HashMap<McuConfig, Mcu>,
-)
+interface MachineSetup {
+    /** Creates or retrieves an MCU from the config. */
+    fun acquireMcu(config: McuConfig): Mcu
+    /** Creates or retrieves another part from it's config. */
+    fun acquirePart(config: PartConfig): MachinePart<PartConfig>
+    fun registerCommand(command: String, handler: (params: GcodeParams) -> Unit)
+    fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: (params: GcodeParams) -> Unit)
+}
+
+interface MachineRuntime {
+    val reactor: Reactor
+    val gcode: Gcode
+}

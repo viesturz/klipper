@@ -1,36 +1,53 @@
 package mcu
 
+import kotlinx.coroutines.flow.StateFlow
+import machine.impl.MachineTime
+import machine.impl.Reactor
+
 typealias McuClock = ULong
 typealias McuDuration = Long
 
 interface Mcu {
     val config: config.McuConfig
+    val state: StateFlow<McuState>
+    val stateReason: String
+
     fun addButton(pin: config.DigitalInPin): Button
     fun addPulseCounter(pin: config.DigitalInPin): PulseCounter
     fun addDigitalOutPin(config: config.DigitalOutPin): DigitalOutPin
-    fun addPwmPin(config: config.PwmPin): PwmPin
+    fun addPwmPin(config: config.DigitalOutPin): PwmPin
     fun addI2C(config: config.I2CPins): I2CBus
     fun addSpi(config: config.SpiPins): SPIBus
     fun addNeopixel(config: config.DigitalOutPin): Neopixel
     fun addStepperMotor(config: config.StepperPins): StepperMotor
     fun addEndstop(pin: config.DigitalInPin, motors: List<StepperMotor>): Endstop
 
-    fun start()
-    fun abort()
+    suspend fun start(reactor: Reactor)
+    fun shutdown(reason: String)
 }
 
+enum class McuState {
+    STARTING,
+    RUNNING,
+    ERROR,
+    SHUTDOWN,
+}
+
+class NeedsRestartException(msg: String): RuntimeException(msg)
+class ConfigurationException(msg: String): RuntimeException(msg)
+
 // Inputs
+typealias ButtonListener = suspend (b: Button) -> Unit
 interface Button {
     val mcu: Mcu
-    fun lastValue(): Boolean
-    fun addListener(listener: Any, handler: (b:Button) -> Unit)
-    fun removeListener(listener: Any)
+    val pressed: Boolean
+    fun setListener(handler: ButtonListener?)
 }
 
 // Outputs
 interface DigitalOutPin {
     val mcu: Mcu
-    fun setValue(value: Boolean)
+    var value: Boolean
 }
 interface PulseCounter {
     val mcu: Mcu
@@ -38,7 +55,9 @@ interface PulseCounter {
 }
 interface PwmPin{
     val mcu: Mcu
-    fun setValue(value: Float)
+    val dutyCycle: Float
+    val cycleTime: Float
+    fun set(time: MachineTime, dutyCycle: Float, cycleTime: Float? = null)
 }
 interface Neopixel{
     val mcu: Mcu
