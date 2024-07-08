@@ -1,0 +1,5 @@
+headers = serialqueue.h pyhelper.h
+headerFilter = *.h
+
+compilerOpts.linux = -I../klippy/chelper/
+linkerOpts.linux =  --allow-shlib-undefined -L/usr/lib/x86_64-linux-gnu -L../klippy/chelper/ -l:c_helper.so -pthread

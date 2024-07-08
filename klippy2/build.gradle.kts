@@ -29,6 +29,14 @@ kotlin {
                 entryPoint = "main"
             }
         }
+        compilations.getByName("main") {
+            cinterops {
+                val libchelper by creating {
+                    definitionFile.set(project.file("src/nativeInterop/libchelper.def"))
+                    packageName("chelper")
+                }
+            }
+        }
     }
     sourceSets {
         val nativeMain by getting
@@ -41,6 +49,7 @@ kotlin {
         nativeMain.dependencies {
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0-RC")
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.7.1")
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
         }
     }
 }
