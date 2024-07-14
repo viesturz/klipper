@@ -34,6 +34,7 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
     internal val restartCommands = ArrayList<UByteArray>()
     internal val responseHandlers = HashMap<Pair<ResponseParser<McuResponse>, ObjectId>, (message: McuResponse) -> Unit>()
     internal val commandQueues = ArrayList<CommandQueue>()
+    val components = ArrayList<McuComponent>()
     override val identify: FirmwareConfig
         get() = cmd.identify
 
@@ -60,10 +61,9 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
     }
 }
 
-class McuImpl(override val config: McuConfig, val connection: McuConnection): Mcu {
+class McuImpl(override val config: McuConfig, val connection: McuConnection, val configuration: McuConfigureImpl): Mcu {
     private val defaultQueue = CommandQueue(connection, "MCU ${config.name} DefaultQueue")
-    private var configuration = McuConfigureImpl(connection.commands)
-    private val components = ArrayList<McuComponent>()
+    override val components: List<McuComponent> = configuration.components
     private val clocksync = ClockSync(connection)
     private val _state = MutableStateFlow(McuState.STARTING)
     private var _stateReason = ""
@@ -73,11 +73,7 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection): Mc
     override val stateReason: String
         get() = _stateReason
 
-    init {
-        addComponent(McuBasics(this, configuration))
-    }
-
-    override suspend fun start(reactor: Reactor) {
+    suspend fun start(reactor: Reactor) {
         logger.info { "Starting" }
         logger.info { "Syncing clock" }
         clocksync.start(reactor)
@@ -145,44 +141,6 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection): Mc
             defaultQueue.send("reset")
             delay(15.milliseconds)
         }
-    }
-
-    override fun addButton(pin: DigitalInPin) = addComponent(McuButton(this, pin, configuration))
-    override fun addPwmPin(config: DigitalOutPin): PwmPin =
-        if (config.hardwarePwm) addComponent(McuHwPwmPin(this, config, configuration))
-        else addComponent(McuPwmPin(this, config, configuration))
-
-    override fun addPulseCounter(pin: DigitalInPin): PulseCounter {
-        TODO("Not yet implemented")
-    }
-
-    override fun addDigitalOutPin(config: DigitalOutPin): mcu.DigitalOutPin {
-        TODO("Not yet implemented")
-    }
-
-    override fun addI2C(config: I2CPins): I2CBus {
-        TODO("Not yet implemented")
-    }
-
-    override fun addSpi(config: SpiPins): SPIBus {
-        TODO("Not yet implemented")
-    }
-
-    override fun addNeopixel(config: DigitalOutPin): Neopixel {
-        TODO("Not yet implemented")
-    }
-
-    override fun addStepperMotor(config: StepperPins): StepperMotor {
-        TODO("Not yet implemented")
-    }
-
-    override fun addEndstop(pin: DigitalInPin, motors: List<StepperMotor>): Endstop {
-        TODO("Not yet implemented")
-    }
-
-    private inline fun <reified Type: McuComponent> addComponent(component: Type): Type {
-        components.add(component)
-        return component
     }
 
 }
