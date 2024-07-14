@@ -11,9 +11,10 @@ import kotlinx.coroutines.runBlocking
 import machine.Machine
 import machine.MachineState
 import mcu.Mcu
+import mcu.McuSetup
 import mcu.connection.McuConnection
-import mcu.impl.McuImpl
 import mcu.connection.connectSerial
+import mcu.impl.McuSetupImpl
 import parts.MachinePart
 import parts.MachineRuntime
 import parts.MachineSetup
@@ -33,15 +34,15 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
     val partsList = ArrayList<MachinePart<PartConfig>>()
     val parts = HashMap<PartConfig, MachinePart<PartConfig>>()
     val mcuList = ArrayList<Mcu>()
-    val mcus = HashMap<McuConfig, Mcu>()
+    val mcuSetups = HashMap<McuConfig, McuSetup>()
     override val gcode = Gcode()
 
     override suspend fun run() {
         _state.value = MachineState.CONFIGURING
         for (p in config.parts) acquirePart(p)
-        for (mcu in mcus.values){
+        for (mcu in mcuSetups.values){
             println("Initializing MCU: ${mcu.config.name}")
-            mcu.start(reactor)
+            mcuList.add(mcu.start(reactor))
             println("Initializing MCU: ${mcu.config.name} done")
         }
 
@@ -64,6 +65,7 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
     override fun shutdown(reason: String) {
         println("Machine Shutting down")
         partsList.reversed().forEach { it.shutdown() }
+        mcuList.reversed().forEach { it.shutdown(reason) }
         reactor.shutdown()
         println("Shutdown method done, will continue cleanup in the run.")
     }
@@ -78,14 +80,14 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
             }
         }
 
-    override fun acquireMcu(config: McuConfig): Mcu {
-        val existing = mcus[config]
+    override fun acquireMcu(config: McuConfig): McuSetup {
+        val existing = mcuSetups[config]
         if (existing != null) {
             return existing
         }
         logger.info { "Acquire mcu $config" }
-        val mcu = McuImpl(config, connection = acquireConnection(config.connection))
-        mcus[config] = mcu
+        val mcu = McuSetupImpl(config, connection = acquireConnection(config.connection))
+        mcuSetups[config] = mcu
         return mcu
     }
 

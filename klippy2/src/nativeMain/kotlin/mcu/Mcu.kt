@@ -3,14 +3,13 @@ package mcu
 import kotlinx.coroutines.flow.StateFlow
 import machine.impl.MachineTime
 import machine.impl.Reactor
+import mcu.impl.McuComponent
 
 typealias McuClock = ULong
 typealias McuDuration = Long
 
-interface Mcu {
+interface McuSetup {
     val config: config.McuConfig
-    val state: StateFlow<McuState>
-    val stateReason: String
 
     fun addButton(pin: config.DigitalInPin): Button
     fun addPulseCounter(pin: config.DigitalInPin): PulseCounter
@@ -22,7 +21,14 @@ interface Mcu {
     fun addStepperMotor(config: config.StepperPins): StepperMotor
     fun addEndstop(pin: config.DigitalInPin, motors: List<StepperMotor>): Endstop
 
-    suspend fun start(reactor: Reactor)
+    suspend fun start(reactor: Reactor): Mcu
+}
+
+interface Mcu {
+    val config: config.McuConfig
+    val state: StateFlow<McuState>
+    val components: List<McuComponent>
+    val stateReason: String
     fun shutdown(reason: String)
 }
 

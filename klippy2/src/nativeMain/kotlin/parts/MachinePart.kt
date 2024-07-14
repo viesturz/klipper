@@ -7,6 +7,7 @@ import machine.impl.Gcode
 import machine.impl.GcodeParams
 import machine.impl.MachineTime
 import machine.impl.Reactor
+import mcu.McuSetup
 
 interface MachinePart<ConfigType: PartConfig> {
     val config: ConfigType
@@ -23,7 +24,7 @@ interface MachinePart<ConfigType: PartConfig> {
 
 interface MachineSetup {
     /** Creates or retrieves an MCU from the config. */
-    fun acquireMcu(config: McuConfig): Mcu
+    fun acquireMcu(config: McuConfig): McuSetup
     /** Creates or retrieves another part from it's config. */
     fun acquirePart(config: PartConfig): MachinePart<PartConfig>
     fun registerCommand(command: String, handler: (params: GcodeParams) -> Unit)
