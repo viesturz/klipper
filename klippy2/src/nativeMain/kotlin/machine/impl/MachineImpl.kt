@@ -9,12 +9,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runBlocking
 import machine.Machine
-import machine.MachineState
+import machine.Machine.State
+import machine.QueueManager
 import mcu.Mcu
 import mcu.McuSetup
 import mcu.connection.McuConnection
 import mcu.connection.connectSerial
 import mcu.impl.McuSetupImpl
+import parts.GCodeHandler
 import parts.MachinePart
 import parts.MachineRuntime
 import parts.MachineSetup
@@ -23,11 +25,13 @@ import parts.buildPart
 private val logger = KotlinLogging.logger("MachineImpl")
 
 class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineSetup {
-    private var _state = MutableStateFlow(MachineState.NEW)
-    override val state: StateFlow<MachineState>
+    private var _state = MutableStateFlow(State.NEW)
+    override val state: StateFlow<State>
         get() = _state
 
     override val reactor = Reactor()
+    override val gCode = GCode()
+    override val queueManager: QueueManager = QueueManagerImpl(reactor)
     var _shutdownReason = ""
     override val shutdownReason: String
         get() = _shutdownReason
@@ -35,10 +39,9 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
     val parts = HashMap<PartConfig, MachinePart<PartConfig>>()
     val mcuList = ArrayList<Mcu>()
     val mcuSetups = HashMap<McuConfig, McuSetup>()
-    override val gcode = Gcode()
 
     override suspend fun run() {
-        _state.value = MachineState.CONFIGURING
+        _state.value = State.CONFIGURING
         for (p in config.parts) acquirePart(p)
         for (mcu in mcuSetups.values){
             println("Initializing MCU: ${mcu.config.name}")
@@ -52,14 +55,14 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
         reactor.runEventLoop()
         println("Event loop done, shutting down")
         mcuList.reversed().forEach { it.shutdown("machine shutting down") }
-        _state.value = MachineState.SHUTDOWN
+        _state.value = State.SHUTDOWN
     }
 
     suspend fun runPartsSetup() {
-        _state.value = MachineState.STARTING
+        _state.value = State.STARTING
         // Start in inverse order so smaller, rested parts are started first.
         partsList.reversed().forEach { it.onStart(this) }
-        _state.value = MachineState.RUNNING
+        _state.value = State.RUNNING
     }
 
     override fun shutdown(reason: String) {
@@ -69,8 +72,6 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
         reactor.shutdown()
         println("Shutdown method done, will continue cleanup in the run.")
     }
-
-    override fun runGcode(cmd: String) = gcode.run(cmd)
 
     override val status: Map<String, String>
         get() = buildMap {
@@ -99,11 +100,11 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
         p
     }
 
-    override fun registerCommand(command: String, handler: (params: GcodeParams) -> Unit) {
-        gcode.registerCommand(command, handler)
+    override fun registerCommand(command: String, handler: GCodeHandler) {
+        gCode.registerCommand(command, handler)
     }
-    override fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: (params: GcodeParams) -> Unit) {
-        gcode.registerMuxCommand(command, muxParam, muxValue, handler)
+    override fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler) {
+        gCode.registerMuxCommand(command, muxParam, muxValue, handler)
     }
 
     private fun acquireConnection(config: config.Connection): McuConnection {

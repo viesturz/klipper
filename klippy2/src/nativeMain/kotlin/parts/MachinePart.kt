@@ -2,13 +2,17 @@ package parts
 
 import config.McuConfig
 import config.PartConfig
-import mcu.Mcu
-import machine.impl.Gcode
+import machine.CommandQueue
+import machine.QueueManager
+import machine.impl.GCode
 import machine.impl.GcodeParams
 import machine.impl.MachineTime
 import machine.impl.Reactor
 import mcu.McuSetup
 
+typealias GCodeHandler = (queue: CommandQueue, params: GcodeParams) -> Unit
+
+/** A part of the machine, can anything. */
 interface MachinePart<ConfigType: PartConfig> {
     val config: ConfigType
 
@@ -22,16 +26,19 @@ interface MachinePart<ConfigType: PartConfig> {
     fun shutdown(){}
 }
 
+/** API available at the setup time. */
 interface MachineSetup {
     /** Creates or retrieves an MCU from the config. */
     fun acquireMcu(config: McuConfig): McuSetup
     /** Creates or retrieves another part from it's config. */
     fun acquirePart(config: PartConfig): MachinePart<PartConfig>
-    fun registerCommand(command: String, handler: (params: GcodeParams) -> Unit)
-    fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: (params: GcodeParams) -> Unit)
+    fun registerCommand(command: String, handler: GCodeHandler)
+    fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler)
 }
 
+/** API available at the run time.  */
 interface MachineRuntime {
     val reactor: Reactor
-    val gcode: Gcode
+    val gCode: GCode
+    val queueManager: QueueManager
 }

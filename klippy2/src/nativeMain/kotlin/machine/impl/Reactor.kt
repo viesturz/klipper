@@ -6,6 +6,7 @@ import kotlin.time.Duration.Companion.seconds
 
 /** Machine time in seconds. Counted from primary MCU boot time. */
 typealias MachineTime = Double
+typealias MachineDuration = Double
 
 // TODO: All methods here are thread safe
 class Reactor {

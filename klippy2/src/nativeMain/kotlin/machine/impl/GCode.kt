@@ -1,30 +1,28 @@
 package machine.impl
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import machine.CommandQueue
 import mcu.ConfigurationException
-import platform.posix.log
 
 class InvalidGcodeException(cmd: String) : RuntimeException(cmd)
 class MissingRequiredParameterException(cmd: String) : RuntimeException(cmd)
 class FailedToParseParamsException(cmd: String) : RuntimeException(cmd)
 
-
+typealias GCodeHandler = (queue: CommandQueue, params: GcodeParams) -> Unit
 private val logger = KotlinLogging.logger("Gcode")
 
-class Gcode {
-    data class CommandHandler(val name: String, val impl: (params: GcodeParams) -> Unit)
-
-    private val stringGcmds = listOf("M117", "M118")
+class GCode {
+    data class CommandHandler(val name: String, val impl: GCodeHandler)
     val commands = HashMap<String, CommandHandler>()
     val muxCommands = HashMap<String, MuxCommandHandler>()
 
-    fun registerCommand(name: String, code: (params: GcodeParams) -> Unit) {
+    fun registerCommand(name: String, code: GCodeHandler) {
         if (commands.containsKey(name)) {
             throw ConfigurationException("Command $name already registered")
         }
         commands[name] = CommandHandler(name, code)
     }
-    fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: (params: GcodeParams) -> Unit) {
+    fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler) {
         var muxer = muxCommands[command]
         if (muxer == null) {
             muxer = MuxCommandHandler(muxParam)
@@ -38,6 +36,11 @@ class Gcode {
         }
         muxer.handlers[muxValue] = handler
     }
+}
+
+
+class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode) {
+    private val stringGcmds = listOf("M117", "M118")
 
     fun run(cmd: String) {
         logger.info { cmd }
@@ -56,16 +59,16 @@ class Gcode {
             else -> parseBasic(cmd, args)
         }
         val params = GcodeParams(command, name, map)
-        val muxer = muxCommands[name]
+        val muxer = gCode.muxCommands[name]
         if (muxer != null && params.params.containsKey(muxer.key)) {
             val handler = muxer.handlers[params.params[muxer.key]]
             if (handler == null) {
                 throw InvalidGcodeException("No handler registered for ${params.name} ${muxer.key}=${params.params[muxer.key]}")
             }
-            handler(params)
+            handler(commandQueue, params)
             return
         }
-        val handler = commands[name]
+        val handler = gCode.commands[name]
         if (handler == null) {
             if (muxer != null) {
                 throw InvalidGcodeException("Gcode $cmd requires parameter ${muxer.key}")
@@ -73,9 +76,8 @@ class Gcode {
                 throw InvalidGcodeException("Unknown gcode $cmd")
             }
         }
-        handler.impl(params)
+        handler.impl(commandQueue, params)
     }
-
     // Parses X10 Y20.5
     private fun parseBasic(cmd: String,parts: List<String>) = buildMap {
         parts.filter { it.isNotBlank() }.forEach {
@@ -95,8 +97,7 @@ class Gcode {
 }
 
 class MuxCommandHandler(val key: String) {
-    val handlers = HashMap<String, (params: GcodeParams) -> Unit>()
-
+    val handlers = HashMap<String, GCodeHandler>()
 }
 
 class GcodeParams(val raw: String, val name: String, val params: Map<String, String>) {
