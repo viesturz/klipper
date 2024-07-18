@@ -14,6 +14,9 @@ import kotlin.time.Duration.Companion.milliseconds
 
 private val logger = KotlinLogging.logger("ClockSync")
 
+// How many seconds in the future are we estimating before new sync is needed.
+private val ESTIMATE_DURATION = 2.0
+
 /** Converts MCU clock ticks into system time and back.
  *  clock = (time - timeOffset) * frequency
  *  time = clock/frequency + timeOffset
@@ -22,7 +25,9 @@ private val logger = KotlinLogging.logger("ClockSync")
 data class ClockEstimate(
     val frequency: Double, // Estimated frequency for time to clock conversion
     val timeOffset: Double, // Offset from system time.
-    val lastClock: McuClock) {
+    val lastClock: McuClock, // Last clock seen from MCU, to disambiguate 32 to 64 bit,
+    val validUntil: MachineTime, // Time until this estimate is valid. No motions to be queued beyond this.
+    ) {
 
     fun timeToClock(machineTime: MachineTime) = ((machineTime - timeOffset) * frequency).toULong()
     fun clockToTime(clock: McuClock) = (clock.toDouble() / frequency) + timeOffset
@@ -36,7 +41,7 @@ data class ClockEstimate(
 }
 
 internal class ClockSync(val connection: McuConnection) {
-    var estimate = ClockEstimate(0.0, 0.0, 0U)
+    var estimate = ClockEstimate(0.0, 0.0, 0U, 0.0)
     private val commands = CommandQueue(connection, "ClockSync")
     private val roundtrip = RoundtripEstimator()
     private var lastClock: McuClock = 0u
@@ -58,7 +63,8 @@ internal class ClockSync(val connection: McuConnection) {
         estimate = ClockEstimate(
             frequency = mcuFrequency,
             timeOffset = timeAverage - clockAverage/mcuFrequency,
-            lastClock =  lastClock)
+            lastClock =  lastClock,
+            validUntil = reactor.now)
 
         // Initial synchronization
         repeat (8) {
@@ -116,12 +122,13 @@ internal class ClockSync(val connection: McuConnection) {
             frequency = estMcuFrequency,
             timeOffset = estMcuTime - estMcuClock / estMcuFrequency,
             lastClock = newClock,
+            validUntil = response.sentTime + ESTIMATE_DURATION,
         )
         val predStdev = sqrt(predictionVariance)
         connection.setClockEstimate(
             frequency = newEstimate.frequency,
             convTime = newEstimate.timeOffset + TRANSMIT_EXTRA,
-            convClock = 0u, //( - 3 * predStdev).toULong(),
+            convClock = ( - 3 * predStdev).toULong(),
             lastClock = newClock)
     }
 
