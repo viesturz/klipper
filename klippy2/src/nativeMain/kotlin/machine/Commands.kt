@@ -45,7 +45,7 @@ interface CommandQueue {
     val manager: QueueManager
 
     /** Add a command into this queue. */
-    fun addCommand(cmd: Command)
+    fun add(cmd: Command)
     /** Create another queue starting from the time of last move in this queue. */
     fun fork(): CommandQueue
     /** Close the other queue and insert a wait until the other queue is done. */
@@ -60,7 +60,7 @@ interface CommandQueue {
 }
 
 fun CommandQueue.addBasicCommand(origin: Any, generate: (time: MachineTime) -> Unit)
-    = addCommand(object: Command(origin) {
+    = add(object: Command(origin) {
 
     override fun measureMin() = 0.0
     override fun measureActual(followupCommands: List<Command>) = 0.0
@@ -73,3 +73,33 @@ fun CommandQueue.addBasicCommand(origin: Any, generate: (time: MachineTime) -> U
         generate(startTime)
     }
 })
+
+
+/** A command to wait until specific machine time. Or until the command is resolved. */
+class WaitForTimeCommand(origin: Any, time: MachineTime = TIME_WAIT) : Command(origin) {
+    init {
+        minTime = time
+    }
+    /** Sets the time to resume and attempt to resume. */
+    fun setTime(time: MachineTime) {
+        this.minTime = time
+        this.queue?.tryGenerate()
+    }
+    override fun measureActual(followupCommands: List<Command>) = 0.0
+    override fun generate(
+        startTime: MachineTime,
+        duration: MachineDuration,
+        followupCommands: List<Command>
+    ) {}
+}
+
+/** A command to wait for a duration. */
+class DelayCommand(val duration: MachineDuration) : Command(Unit) {
+    override fun measureMin() = duration
+    override fun measureActual(followupCommands: List<Command>) = duration
+    override fun generate(
+        startTime: MachineTime,
+        duration: MachineDuration,
+        followupCommands: List<Command>
+    ) {}
+}

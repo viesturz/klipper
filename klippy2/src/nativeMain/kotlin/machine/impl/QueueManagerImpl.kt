@@ -6,12 +6,14 @@ import machine.CommandQueue
 import machine.QueueManager
 import machine.TIME_EAGER_START
 import machine.TIME_WAIT
+import machine.WaitForTimeCommand
 import machine.addBasicCommand
 import kotlin.math.max
 
 
 /** Time it takes for a queue to start */
 private val QUEUE_START_TIME = 0.2
+private val QUEUE_CHECK_TIMEOUT = 1.0
 
 class QueueManagerImpl(val reactor: Reactor): QueueManager {
     val queues = ArrayList<QueueImpl>()
@@ -76,8 +78,9 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
     private val logger = KotlinLogging.logger("QueueImpl")
     private var closed = false
     override fun isClosed() = closed
+    var timer: Reactor.Event? = null
 
-    override fun addCommand(cmd: Command) {
+    override fun add(cmd: Command) {
         require(!closed) { "Adding command to close queue" }
         manager.partQueue(cmd.origin).addCommand(cmd)
         cmd.queue = this
@@ -90,7 +93,11 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
         !commands.isEmpty() &&
         commands.first().minTime != TIME_WAIT &&
         commands.first().partQueue?.canGenerate(commands.first()) ?: false &&
-        nextCommandTime < manager.reactor.now + generationWindow
+        !needToWaitForNextCommand()
+
+    private fun needToWaitForNextCommand()  =
+        !commands.isEmpty() &&
+        manager.reactor.now + generationWindow < nextCommandTime
 
     override fun tryGenerate() {
         while (canGenerate()) {
@@ -101,13 +108,29 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
                 nextCommandTime = manager.reactor.now + QUEUE_START_TIME
             }
             val cmdTime = max(nextCommandTime, cmd.minTime)
-            logger.atInfo { "Generating command $cmd at $nextCommandTime" }
+            logger.info { "Generating command $cmd at $nextCommandTime" }
             cmd.generate(cmdTime, actualDuration, partQueue.commands)
             nextCommandTime = cmdTime + actualDuration
             // Remove the command
             partQueue.pop(cmd, nextCommandTime)
             commands.remove(cmd)
             cmd.queue = null
+        }
+        // Schedule next generation
+        maybeSchedulePolling()
+    }
+
+    private fun maybeSchedulePolling() {
+        if (needToWaitForNextCommand() && !commands.isEmpty() && timer == null) {
+            timer = manager.reactor.schedule(manager.reactor.now + QUEUE_CHECK_TIMEOUT) { event ->
+                tryGenerate()
+                if (needToWaitForNextCommand()) {
+                    return@schedule event.time + QUEUE_CHECK_TIMEOUT
+                } else {
+                    timer = null
+                    return@schedule null
+                }
+            }
         }
     }
 
@@ -125,7 +148,7 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
     override fun join(other: CommandQueue) {
         // Block this queue until joined
         val join = WaitForTimeCommand(other)
-        addCommand(join)
+        add(join)
         other.addBasicCommand(this, join::setTime)
         other.close()
     }
@@ -139,22 +162,4 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
         commands.clear()
         close()
     }
-}
-
-/** A command to wait until specific machine time. Or until the command is resolved. */
-class WaitForTimeCommand(origin: Any, time: MachineTime = TIME_WAIT) : Command(origin) {
-    init {
-        minTime = time
-    }
-    /** Sets the time to resume and attempt to resume. */
-    fun setTime(time: MachineTime) {
-        this.minTime = time
-        this.queue?.tryGenerate()
-    }
-    override fun measureActual(followupCommands: List<Command>) = 0.0
-    override fun generate(
-        startTime: MachineTime,
-        duration: MachineDuration,
-        followupCommands: List<Command>
-    ) {}
 }
