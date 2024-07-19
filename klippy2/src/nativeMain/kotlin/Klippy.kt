@@ -1,20 +1,17 @@
-import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
 import io.github.oshai.kotlinlogging.Level
-import io.github.oshai.kotlinlogging.isLoggingEnabled
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.IO
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import logging.LogFormatter
-import machine.MachineState
+import machine.DelayCommand
+import machine.Machine
 import machine.impl.MachineImpl
-import kotlin.time.Duration.Companion.seconds
 
 @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
 fun main(args: Array<String>) = runBlocking {
@@ -31,18 +28,24 @@ fun main(args: Array<String>) = runBlocking {
         println("Machine setup ${machine.status}")
         GlobalScope.launch(Dispatchers.IO) { machine.run() }
         // Wait until running
-        machine.state.first { it == MachineState.RUNNING }
+        machine.state.first { it == Machine.State.RUNNING }
 
-        machine.runGcode("SET_FAN_SPEED FAN=fan0 SPEED=1.0")
-        delay(2.seconds)
-        machine.runGcode("SET_FAN_SPEED FAN=fan1 SPEED=1.0")
-        machine.runGcode("SET_FAN_SPEED FAN=fan0 SPEED=0")
-        delay(5.seconds)
-        machine.runGcode("SET_FAN_SPEED FAN=fan1 SPEED=0.5")
-        machine.runGcode("SET_FAN_SPEED FAN=fan0 SPEED=0.5")
+        val queue = machine.queueManager.newQueue()
+        val gcode = machine.gCode.runner(queue)
+
+        repeat(10) {
+            gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=0")
+            gcode.run("SET_FAN_SPEED FAN=fan0 SPEED=1.0")
+            queue.add(DelayCommand(2.0))
+            gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=1.0")
+            gcode.run("SET_FAN_SPEED FAN=fan0 SPEED=0")
+            queue.add(DelayCommand(2.0))
+        }
+        gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=0.5")
+        gcode.run("SET_FAN_SPEED FAN=fan0 SPEED=0.5")
 
         // Wait until shutdown.
-        machine.state.first { it == MachineState.SHUTDOWN }
+        machine.state.first { it == Machine.State.SHUTDOWN }
         println("Shutdown detected, reason ${machine.shutdownReason}")
         break
     }

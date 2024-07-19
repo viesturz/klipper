@@ -13,8 +13,8 @@ private val logger = KotlinLogging.logger("Gcode")
 
 class GCode {
     data class CommandHandler(val name: String, val impl: GCodeHandler)
-    val commands = HashMap<String, CommandHandler>()
-    val muxCommands = HashMap<String, MuxCommandHandler>()
+    internal val commands = HashMap<String, CommandHandler>()
+    internal val muxCommands = HashMap<String, MuxCommandHandler>()
 
     fun registerCommand(name: String, code: GCodeHandler) {
         if (commands.containsKey(name)) {
@@ -36,8 +36,9 @@ class GCode {
         }
         muxer.handlers[muxValue] = handler
     }
-}
 
+    fun runner(commandQueue: CommandQueue) = GCodeRunner(commandQueue, this)
+}
 
 class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode) {
     private val stringGcmds = listOf("M117", "M118")

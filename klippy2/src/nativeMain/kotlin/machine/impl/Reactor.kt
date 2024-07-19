@@ -10,7 +10,7 @@ typealias MachineDuration = Double
 
 // TODO: All methods here are thread safe
 class Reactor {
-    data class Event(val time: MachineTime, val block: suspend (event: Event) -> MachineTime?)
+    data class Event(var time: MachineTime, val block: suspend (event: Event) -> MachineTime?)
     private val TIME_SHUTDOWN = -1.0
 
     private val pendingEvents = ArrayList<Event>()
@@ -20,7 +20,7 @@ class Reactor {
         null
     }
 
-    fun schedule(time: Double, block: suspend (event:Event) -> MachineTime?): Event {
+    fun schedule(time: MachineTime, block: suspend (event:Event) -> MachineTime?): Event {
         val event = Event(time, block)
         val index = pendingEvents.indexOfFirst { it.time > time }
         if (index == -1) {
@@ -29,6 +29,17 @@ class Reactor {
             pendingEvents.add(index, event)
         }
         return event
+    }
+
+    fun reschedule(event: Event, time: MachineTime) {
+        pendingEvents.remove(event)
+        event.time = time
+        val index = pendingEvents.indexOfFirst { it.time > time }
+        if (index == -1) {
+            pendingEvents.add(event)
+        } else {
+            pendingEvents.add(index, event)
+        }
     }
 
     @OptIn(ExperimentalForeignApi::class)
@@ -57,9 +68,9 @@ class Reactor {
                         break
                     }
                     pendingEvents.remove(nextEvent) -> {
-                        val next = nextEvent.block(nextEvent)
-                        if (next != null) {
-                            schedule(next, nextEvent.block)
+                        val nextTime = nextEvent.block(nextEvent)
+                        if (nextTime != null) {
+                            reschedule(nextEvent, nextTime)
                         }
                     }
                     else -> {}
