@@ -141,6 +141,20 @@ command_set_digital_out_pwm_cycle(uint32_t *args)
 DECL_COMMAND(command_set_digital_out_pwm_cycle,
              "set_digital_out_pwm_cycle oid=%c cycle_ticks=%u");
 
+
+void
+command_set_digital_out_pwm(uint32_t *args)
+{
+    struct digital_out_s *d = oid_lookup(args[0], command_config_digital_out);
+    irq_disable();
+    if (!move_queue_empty(&d->mq))
+        shutdown("Can not set soft pwm cycle on_ticks while updates pending");
+    d->on_duration = args[1];
+    irq_enable();
+}
+DECL_COMMAND(command_set_digital_out_pwm,
+             "set_digital_out_pwm oid=%c on_ticks=%u");
+
 void
 command_queue_digital_out(uint32_t *args)
 {
