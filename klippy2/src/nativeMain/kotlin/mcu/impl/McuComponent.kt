@@ -30,11 +30,15 @@ interface McuConfigure {
     fun makeCommandQueue(name:String): CommandQueue
     /** Add a configuration command for the MCU */
     fun configCommand(signature: String, block: CommandBuilder.()->Unit)
+    /** On soft restart, restart commands are used instead of configuration. */
+    fun restartCommand(signature: String, block: CommandBuilder.()->Unit)
     /** Add a initialization command to be run right after configuration is done */
     fun initCommand(signature: String, block: CommandBuilder.()->Unit)
-    fun restartCommand(signature: String, block: CommandBuilder.()->Unit)
+    /** Add a query command, run after all initialization commands to start querying sensors. */
+    fun queryCommand(signature: String, block: CommandBuilder.(clock: McuClock32)->Unit)
     /** Add a handler for an event sent by the MCU. */
     fun <ResponseType: McuResponse> responseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: ((message: ResponseType) -> Unit))
+    fun durationToTicks(durationSeconds: Float) = identify.durationToTicks(durationSeconds)
 }
 
 interface McuRuntime {
@@ -43,4 +47,5 @@ interface McuRuntime {
 
     fun durationToClock(durationSeconds: Float): McuClock32
     fun timeToClock(time: MachineTime): McuClock
+    fun clockToTime(clock: McuClock32): MachineTime
 }

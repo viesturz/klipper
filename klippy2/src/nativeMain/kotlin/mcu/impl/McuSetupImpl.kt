@@ -1,5 +1,6 @@
 package mcu.impl
 
+import config.AnalogInPin
 import config.DigitalInPin
 import config.DigitalOutPin
 import config.I2CPins
@@ -35,6 +36,7 @@ class McuSetupImpl(override val config: McuConfig, val connection: McuConnection
     override fun addPwmPin(config: DigitalOutPin): PwmPin =
         if (config.hardwarePwm) addComponent(McuHwPwmPin(mcu, config, configuration))
         else addComponent(McuPwmPin(mcu, config, configuration))
+    override fun addAnalogPin(pin: AnalogInPin) = addComponent(McuAnalogPin(mcu, pin, configuration))
 
     override fun addPulseCounter(pin: DigitalInPin): PulseCounter {
         TODO("Not yet implemented")

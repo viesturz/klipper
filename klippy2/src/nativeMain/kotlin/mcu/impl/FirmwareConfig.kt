@@ -30,6 +30,8 @@ data class FirmwareConfig @OptIn(ExperimentalSerializationApi::class) constructo
         get() = configString("MCU")
     val clockFreq: Long
         get() = configLong("CLOCK_FREQ")
+    val adcMax: Float
+        get() = configLong("ADC_MAX").toFloat()
 
     fun configLong(name: String, default: Long? = null): Long =
         config[name]?.long ?: default ?: throw RuntimeException("Missing MCU config $name")

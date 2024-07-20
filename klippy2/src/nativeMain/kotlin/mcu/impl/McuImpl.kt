@@ -1,27 +1,15 @@
 package mcu.impl
 
-import config.DigitalInPin
-import config.DigitalOutPin
-import config.I2CPins
 import config.McuConfig
-import config.SpiPins
-import config.StepperPins
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import machine.impl.MachineTime
 import machine.impl.Reactor
-import mcu.Endstop
-import mcu.I2CBus
 import mcu.Mcu
 import mcu.McuState
 import mcu.NeedsRestartException
-import mcu.Neopixel
-import mcu.PulseCounter
-import mcu.PwmPin
-import mcu.SPIBus
-import mcu.StepperMotor
 import mcu.connection.CommandQueue
 import mcu.connection.McuConnection
 import kotlin.time.Duration.Companion.milliseconds
@@ -31,6 +19,7 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
     internal var numMoves: Int = 0
     internal val configCommands = ArrayList<UByteArray>()
     internal val initCommands = ArrayList<UByteArray>()
+    internal val queryCommands = ArrayList<QueryCommand>()
     internal val restartCommands = ArrayList<UByteArray>()
     internal val responseHandlers = HashMap<Pair<ResponseParser<McuResponse>, ObjectId>, (message: McuResponse) -> Unit>()
     internal val commandQueues = ArrayList<CommandQueue>()
@@ -52,6 +41,7 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
 
     override fun configCommand(signature: String, block: CommandBuilder.()->Unit) { configCommands.add(cmd.build(signature, block)) }
     override fun initCommand(signature: String, block: CommandBuilder.()->Unit) { initCommands.add(cmd.build(signature, block)) }
+    override fun queryCommand(signature: String, block: CommandBuilder.(clock: McuClock32)->Unit) { queryCommands.add(QueryCommand(signature, block)) }
     override fun restartCommand(signature: String, block: CommandBuilder.()->Unit) { restartCommands.add(cmd.build(signature, block))}
 
     @Suppress("UNCHECKED_CAST")
@@ -60,6 +50,8 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
         responseHandlers[key] = handler as ((message: McuResponse) -> Unit)
     }
 }
+
+data class QueryCommand(val signature: String, val block: CommandBuilder.(clock: McuClock32)->Unit)
 
 class McuImpl(override val config: McuConfig, val connection: McuConnection, val configuration: McuConfigureImpl): Mcu {
     private val defaultQueue = CommandQueue(connection, "MCU ${config.name} DefaultQueue")
@@ -79,7 +71,7 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         clocksync.start(reactor)
         logger.info { "Configuring ${components.size} components" }
         components.forEach { it.configure(configuration) }
-        configure()
+        configure(reactor)
         // Unlock the command queues.
         configuration.commandQueues.forEach { it.connection = this.connection }
         logger.info { "Starting components" }
@@ -96,8 +88,8 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
             get() = this@McuImpl.defaultQueue
         override fun durationToClock(durationSeconds: Float) =
             clocksync.estimate.durationToClock(durationSeconds)
-        override fun timeToClock(time: MachineTime) =
-            clocksync.estimate.timeToClock(time)
+        override fun timeToClock(time: MachineTime) = clocksync.estimate.timeToClock(time)
+        override fun clockToTime(clock: McuClock32) = clocksync.estimate.clockToTime(clock)
     }
 
     override fun shutdown(reason: String) {
@@ -107,7 +99,7 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         _state.value = McuState.ERROR
     }
 
-    private suspend fun configure() {
+    private suspend fun configure(reactor: Reactor) {
         logger.info { "Configuring MCU, oids=${configuration.numIds}, queues=${configuration.commandQueues.size}" }
         val config = defaultQueue.sendWithResponse("get_config", responseConfigParser)
         if (config.isShutdown)
@@ -127,13 +119,22 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
                 logger.info { "Configure - config changed, restart needed" }
                 throw NeedsRestartException("Configuration changed")
             }
-            logger.info { "Configure - reusing exsiting config" }
+            logger.info { "Configure - reusing existing config" }
             configuration.restartCommands.forEach { defaultQueue.send(it) }
         } else {
             configCommands.forEach { defaultQueue.send(it) }
             defaultQueue.send("finalize_config crc=%u"){addU(checksum)}
         }
         configuration.initCommands.forEach { defaultQueue.send(it) }
+        val configureStartOffset = 0.5
+        configuration.queryCommands.forEach { builder ->
+            val clock = clocksync.estimate.timeToClock(reactor.now + configureStartOffset).toUInt()
+            val cmd = defaultQueue.build(builder.signature) {
+                builder.block(this, clock)
+            }
+            // Wait for acks to throttle the query commands.
+            defaultQueue.sendWaitAck(cmd)
+        }
     }
 
     private suspend fun restartFirmware() {
