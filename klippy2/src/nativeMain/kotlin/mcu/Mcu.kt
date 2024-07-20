@@ -64,6 +64,7 @@ interface PwmPin{
     val dutyCycle: Float
     val cycleTime: Float
     fun set(time: MachineTime, dutyCycle: Float, cycleTime: Float? = null)
+    fun setNow(dutyCycle: Float, cycleTime: Float? = null)
 }
 interface Neopixel{
     val mcu: Mcu
