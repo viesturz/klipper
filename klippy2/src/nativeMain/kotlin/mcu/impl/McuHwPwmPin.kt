@@ -6,7 +6,7 @@ import mcu.PwmPin
 
 private val logger = KotlinLogging.logger("McuHwPwmPin")
 
-class McuHwPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, configure: McuConfigure) : PwmPin,
+class McuHwPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, val configure: McuConfigure) : PwmPin,
     McuComponent {
     val id = configure.makeOid()
     private val pwmMax = configure.identify.configLong("PWM_MAX", 255)
@@ -56,6 +56,22 @@ class McuHwPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, confi
                         addId(id);addU(clock.toUInt());addHU(dutyToValue(_dutyCycle))
                     })
             }
+        }
+    }
+
+    override fun setNow(dutyCycle: Float, cycleTime: Float?) {
+        if (_dutyCycle == dutyCycle && cycleTime == _cycleTime) return
+        _dutyCycle = dutyCycle
+        cycleTime?.let { _cycleTime = it }
+        runtime?.let { runtime ->
+            queue.send(
+                minClock = queue.lastClock,
+                reqClock = runtime.timeToClock(runtime.reactor.now),
+                signature = "set_pwm_out pin=%u cycle_ticks=%u value=%hu") {
+                addEnum("pin", config.pin)
+                addU(configure.identify.durationToTicks(_cycleTime))
+                addHU(dutyToValue(_dutyCycle))
+                }
         }
     }
 }

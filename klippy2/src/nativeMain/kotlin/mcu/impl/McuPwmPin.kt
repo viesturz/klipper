@@ -3,6 +3,7 @@ package mcu.impl
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.impl.MachineTime
 import mcu.Mcu
+import mcu.McuClock
 import mcu.PwmPin
 import kotlin.math.max
 
@@ -52,25 +53,12 @@ class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initial
     private fun dutyToTicks(d: Float) = (d * cycleTicks.toDouble() + 0.5f).toUInt()
 
     override fun set(time: MachineTime, dutyCycle: Float, cycleTime: Float?) {
-        var cycleChange = false
         val lastClock = queue.lastClock
-        if (cycleTime != null && _cycleTime != cycleTime) {
-            cycleChange = true
-            _cycleTime = cycleTime
-            runtime?.let { runtime ->
-                cycleTicks = runtime.durationToClock(config.cycleTime)
-                queue.send(
-                    minClock = lastClock,
-                    reqClock = runtime.timeToClock(time),
-                    data = queue.build("set_digital_out_pwm_cycle oid=%c cycle_ticks=%u") {
-                        addId(id);addU(cycleTicks)
-                    })
-            }
-        }
+        var cycleChange = setCycleTime(time, cycleTime)
         if (cycleChange || dutyCycle != _dutyCycle) {
             _dutyCycle = dutyCycle
             runtime?.let { runtime ->
-                val clock = max(runtime.timeToClock(time),lastClock)
+                val clock = max(runtime.timeToClock(time),queue.lastClock)
                 logger.info { "Set value=${dutyCycle}, time=$time, clock=$clock" }
                 queue.send(
                     minClock = lastClock,
@@ -81,4 +69,39 @@ class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initial
             }
         }
     }
+
+    override fun setNow(dutyCycle: Float, cycleTime: Float?) {
+        val lastClock = queue.lastClock
+        val curClock = runtime?.reactor?.now ?: 0.0
+        var cycleChange = setCycleTime(curClock, cycleTime)
+        if (cycleChange || dutyCycle != _dutyCycle) {
+            _dutyCycle = dutyCycle
+            runtime?.let { runtime ->
+                logger.info { "Set value=${dutyCycle}" }
+                queue.send(
+                    minClock = lastClock,
+                    reqClock = runtime.timeToClock(curClock),
+                    data = queue.build("set_digital_out_pwm oid=%c on_ticks=%u") {
+                        addId(id);addU(dutyToTicks(_dutyCycle))
+                    })
+            }
+        }
+    }
+
+    private fun setCycleTime(time: MachineTime, cycleTime: Float?): Boolean {
+        if (cycleTime == null || _cycleTime == cycleTime)  return false
+        val lastClock = queue.lastClock
+        _cycleTime = cycleTime
+        runtime?.let { runtime ->
+            cycleTicks = runtime.durationToClock(config.cycleTime)
+            queue.send(
+                minClock = lastClock,
+                reqClock = runtime.timeToClock(time),
+                data = queue.build("set_digital_out_pwm_cycle oid=%c cycle_ticks=%u") {
+                    addId(id);addU(cycleTicks)
+                })
+        }
+        return true
+    }
+
 }
