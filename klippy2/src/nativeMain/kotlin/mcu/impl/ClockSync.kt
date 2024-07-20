@@ -31,6 +31,7 @@ data class ClockEstimate(
 
     fun timeToClock(machineTime: MachineTime) = ((machineTime - timeOffset) * frequency).toULong()
     fun clockToTime(clock: McuClock) = (clock.toDouble() / frequency) + timeOffset
+    fun clockToTime(clock: McuClock32) = (clock32ToClock64(clock).toDouble() / frequency) + timeOffset
     fun durationToClock(duration: Float): McuClock32 = (duration * frequency).toUInt()
 
     fun clock32ToClock64(clock32: McuClock32): McuClock {

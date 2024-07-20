@@ -12,6 +12,7 @@ interface McuSetup {
     val config: config.McuConfig
 
     fun addButton(pin: config.DigitalInPin): Button
+    fun addAnalogPin(pin: config.AnalogInPin): AnalogInPin
     fun addPulseCounter(pin: config.DigitalInPin): PulseCounter
     fun addDigitalOutPin(config: config.DigitalOutPin): DigitalOutPin
     fun addPwmPin(config: config.DigitalOutPin): PwmPin
@@ -48,6 +49,14 @@ interface Button {
     val mcu: Mcu
     val pressed: Boolean
     fun setListener(handler: ButtonListener?)
+}
+
+interface AnalogInPin {
+    val mcu: Mcu
+    val value: Float
+    fun setListener(handler: suspend (m: Measurement) -> Unit?)
+
+    data class Measurement(val time: MachineTime, val value: Float)
 }
 
 // Outputs

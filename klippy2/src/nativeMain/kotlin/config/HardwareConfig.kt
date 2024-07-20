@@ -25,7 +25,15 @@ data class DigitalOutPin(val mcu: McuConfig,
         require(cycleTime in (0.001f..maxDuration))
     }
 }
-data class AnalogInPin(val mcu: McuConfig, val pin: String)
+data class AnalogInPin(
+    val mcu: McuConfig,
+    val pin: String,
+    val minValue: Float = 0.0f,
+    val maxValue: Float = 1.0f,
+    val reportInterval: Float = 0.300f,
+    val sampleTime: Float = 0.001f,
+    val sampleCount: UInt = 8u,
+    val rangeCheckCount: UByte = 4u)
 data class AnalogOutPin(val mcu: McuConfig, val pin: String)
 
 // Composite 
