@@ -62,7 +62,6 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
             }
             logger.info { "Initializing MCU: ${mcu.config.name} done" }
         }
-        reactor.start()
         _state.value = State.STARTING
         reactor.launch {
             partsList.forEach { it.onStart(this@MachineImpl) }
