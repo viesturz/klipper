@@ -17,6 +17,10 @@ import mcu.PulseCounter
 import mcu.PwmPin
 import mcu.SPIBus
 import mcu.StepperMotor
+import mcu.components.McuAnalogPin
+import mcu.components.McuButton
+import mcu.components.McuHwPwmPin
+import mcu.components.McuPwmPin
 import mcu.connection.McuConnection
 
 class McuSetupImpl(override val config: McuConfig, val connection: McuConnection): McuSetup {

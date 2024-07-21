@@ -1,7 +1,7 @@
 package machine
 
-import machine.impl.MachineDuration
-import machine.impl.MachineTime
+import MachineDuration
+import MachineTime
 import machine.impl.PartQueue
 
 val TIME_EAGER_START = -1.0

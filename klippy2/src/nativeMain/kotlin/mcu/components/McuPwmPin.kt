@@ -1,10 +1,14 @@
-package mcu.impl
+package mcu.components
 
+import MachineDuration
 import io.github.oshai.kotlinlogging.KotlinLogging
-import machine.impl.MachineTime
+import MachineTime
 import mcu.Mcu
-import mcu.McuClock
 import mcu.PwmPin
+import mcu.impl.McuClock32
+import mcu.impl.McuComponent
+import mcu.impl.McuConfigure
+import mcu.impl.McuRuntime
 import kotlin.math.max
 
 class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initialize: McuConfigure) : PwmPin,
@@ -20,7 +24,7 @@ class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initial
 
     override val dutyCycle: Float
         get() = _dutyCycle
-    override val cycleTime: Float
+    override val cycleTime: MachineDuration
         get() = _cycleTime
 
     override fun configure(configure: McuConfigure) {
@@ -52,7 +56,7 @@ class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initial
 
     private fun dutyToTicks(d: Float) = (d * cycleTicks.toDouble() + 0.5f).toUInt()
 
-    override fun set(time: MachineTime, dutyCycle: Float, cycleTime: Float?) {
+    override fun set(time: MachineTime, dutyCycle: Float, cycleTime: MachineDuration?) {
         val lastClock = queue.lastClock
         var cycleChange = setCycleTime(time, cycleTime)
         if (cycleChange || dutyCycle != _dutyCycle) {
@@ -70,7 +74,7 @@ class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initial
         }
     }
 
-    override fun setNow(dutyCycle: Float, cycleTime: Float?) {
+    override fun setNow(dutyCycle: Float, cycleTime: MachineDuration?) {
         val lastClock = queue.lastClock
         val curClock = runtime?.reactor?.now ?: 0.0
         var cycleChange = setCycleTime(curClock, cycleTime)
@@ -88,7 +92,7 @@ class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initial
         }
     }
 
-    private fun setCycleTime(time: MachineTime, cycleTime: Float?): Boolean {
+    private fun setCycleTime(time: MachineTime, cycleTime: MachineDuration?): Boolean {
         if (cycleTime == null || _cycleTime == cycleTime)  return false
         val lastClock = queue.lastClock
         _cycleTime = cycleTime

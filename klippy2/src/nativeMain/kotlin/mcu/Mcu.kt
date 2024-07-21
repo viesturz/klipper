@@ -1,7 +1,10 @@
 package mcu
 
+import MachineDuration
 import kotlinx.coroutines.flow.StateFlow
-import machine.impl.MachineTime
+import MachineTime
+import Resistance
+import Voltage
 import machine.impl.Reactor
 import mcu.impl.McuComponent
 
@@ -53,10 +56,16 @@ interface Button {
 
 interface AnalogInPin {
     val mcu: Mcu
-    val value: Float
-    fun setListener(handler: suspend (m: Measurement) -> Unit?)
+    /** Value in range 0..1 */
+    val value: Measurement
+    fun setListener(handler: suspend (m: Measurement) -> Unit)
 
-    data class Measurement(val time: MachineTime, val value: Float)
+    data class Measurement(val time: MachineTime, val value: Double, val config: config.AnalogInPin) {
+        val voltage: Voltage
+            get() = config.toVoltage(value)
+        val resistance: Resistance
+            get()  = config.toResistance(value)
+    }
 }
 
 // Outputs
@@ -71,9 +80,9 @@ interface PulseCounter {
 interface PwmPin{
     val mcu: Mcu
     val dutyCycle: Float
-    val cycleTime: Float
-    fun set(time: MachineTime, dutyCycle: Float, cycleTime: Float? = null)
-    fun setNow(dutyCycle: Float, cycleTime: Float? = null)
+    val cycleTime: MachineDuration
+    fun set(time: MachineTime, dutyCycle: Float, cycleTime: MachineDuration? = null)
+    fun setNow(dutyCycle: Float, cycleTime: MachineDuration? = null)
 }
 interface Neopixel{
     val mcu: Mcu

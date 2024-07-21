@@ -1,7 +1,7 @@
 package parts
 
 import machine.impl.Reactor
-import machine.impl.MachineTime
+import MachineTime
 
 class Button(override val config: config.Button, setup: MachineSetup): MachinePart<config.Button> {
     private val button = setup.acquireMcu(config.pin.mcu).addButton(config.pin)
@@ -13,7 +13,7 @@ class Button(override val config: config.Button, setup: MachineSetup): MachinePa
             if (button.pressed) {
                 println("Button ${config.name} clicked")
                 reactor?.runNow {
-                    config.onClicked()
+                    config.onClicked(runtime)
                 }
             }
         }

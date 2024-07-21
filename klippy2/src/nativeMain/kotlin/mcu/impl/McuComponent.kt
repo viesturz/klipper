@@ -1,6 +1,7 @@
 package mcu.impl
 
-import machine.impl.MachineTime
+import MachineDuration
+import MachineTime
 import machine.impl.Reactor
 import mcu.McuClock
 import mcu.connection.CommandQueue
@@ -38,14 +39,14 @@ interface McuConfigure {
     fun queryCommand(signature: String, block: CommandBuilder.(clock: McuClock32)->Unit)
     /** Add a handler for an event sent by the MCU. */
     fun <ResponseType: McuResponse> responseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: ((message: ResponseType) -> Unit))
-    fun durationToTicks(durationSeconds: Float) = identify.durationToTicks(durationSeconds)
+    fun durationToTicks(durationSeconds: MachineDuration) = identify.durationToTicks(durationSeconds)
 }
 
 interface McuRuntime {
     val reactor: Reactor
     val defaultQueue: CommandQueue
 
-    fun durationToClock(durationSeconds: Float): McuClock32
+    fun durationToClock(duration: MachineDuration): McuClock32
     fun timeToClock(time: MachineTime): McuClock
     fun clockToTime(clock: McuClock32): MachineTime
 }

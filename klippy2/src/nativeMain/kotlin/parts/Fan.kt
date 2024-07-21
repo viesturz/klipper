@@ -4,7 +4,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
 import machine.addBasicCommand
 import machine.impl.GcodeParams
-import machine.impl.MachineTime
+import MachineTime
 
 class Fan(override val config: config.Fan, setup: MachineSetup): MachinePart<config.Fan> {
     val pin = setup.acquireMcu(config.pin.mcu).addPwmPin(config.pin)

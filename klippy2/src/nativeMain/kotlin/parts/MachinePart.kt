@@ -6,7 +6,7 @@ import machine.CommandQueue
 import machine.QueueManager
 import machine.impl.GCode
 import machine.impl.GcodeParams
-import machine.impl.MachineTime
+import MachineTime
 import machine.impl.Reactor
 import mcu.McuSetup
 
