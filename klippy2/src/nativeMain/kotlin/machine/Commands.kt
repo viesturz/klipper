@@ -93,13 +93,11 @@ fun CommandQueue.addLocalCommand(origin: Any, generate: (time: MachineTime) -> U
         duration: MachineDuration,
         followupCommands: List<Command>
     ) {
-        reactor.scope.launch {
-            waitUntil(startTime)
+        reactor.scheduleOrdered(startTime) {
             generate(startTime)
         }
     }
 })
-
 
 /** A command to wait until specific machine time. Or until the command is resolved. */
 class WaitForTimeCommand(origin: Any, time: MachineTime = TIME_WAIT) : Command(origin) {
