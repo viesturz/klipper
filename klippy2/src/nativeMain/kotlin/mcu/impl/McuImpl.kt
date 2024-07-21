@@ -1,11 +1,12 @@
 package mcu.impl
 
+import MachineDuration
 import config.McuConfig
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import machine.impl.MachineTime
+import MachineTime
 import machine.impl.Reactor
 import mcu.Mcu
 import mcu.McuState
@@ -86,8 +87,8 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
             get() = reactor
         override val defaultQueue: CommandQueue
             get() = this@McuImpl.defaultQueue
-        override fun durationToClock(durationSeconds: Float) =
-            clocksync.estimate.durationToClock(durationSeconds)
+        override fun durationToClock(duration: MachineDuration) =
+            clocksync.estimate.durationToClock(duration)
         override fun timeToClock(time: MachineTime) = clocksync.estimate.timeToClock(time)
         override fun clockToTime(clock: McuClock32) = clocksync.estimate.clockToTime(clock)
     }

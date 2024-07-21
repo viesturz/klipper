@@ -1,8 +1,9 @@
 package mcu.impl
 
+import MachineDuration
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
-import machine.impl.MachineTime
+import MachineTime
 import machine.impl.Reactor
 import mcu.McuClock
 import mcu.connection.CommandQueue
@@ -32,7 +33,7 @@ data class ClockEstimate(
     fun timeToClock(machineTime: MachineTime) = ((machineTime - timeOffset) * frequency).toULong()
     fun clockToTime(clock: McuClock) = (clock.toDouble() / frequency) + timeOffset
     fun clockToTime(clock: McuClock32) = (clock32ToClock64(clock).toDouble() / frequency) + timeOffset
-    fun durationToClock(duration: Float): McuClock32 = (duration * frequency).toUInt()
+    fun durationToClock(duration: MachineDuration): McuClock32 = (duration * frequency).toUInt()
 
     fun clock32ToClock64(clock32: McuClock32): McuClock {
         var clockDiff = (clock32 - lastClock).toUInt()

@@ -1,5 +1,6 @@
 package mcu.impl
 
+import MachineDuration
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -9,6 +10,7 @@ import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.long
+import mcu.McuDuration
 import okio.buffer
 
 /** Configuration retrieved from the MCU firmware. */
@@ -30,14 +32,14 @@ data class FirmwareConfig @OptIn(ExperimentalSerializationApi::class) constructo
         get() = configString("MCU")
     val clockFreq: Long
         get() = configLong("CLOCK_FREQ")
-    val adcMax: Float
-        get() = configLong("ADC_MAX").toFloat()
+    val adcMax: Double
+        get() = configLong("ADC_MAX").toDouble()
 
     fun configLong(name: String, default: Long? = null): Long =
         config[name]?.long ?: default ?: throw RuntimeException("Missing MCU config $name")
     fun configString(name: String, default: String? = null): String =
         config[name]?.content ?: default ?: throw RuntimeException("Missing MCU config $name")
-    fun durationToTicks(duration: Float): McuClock32  = (clockFreq * duration).toUInt()
+    fun durationToTicks(duration: MachineDuration): McuClock32  = (clockFreq * duration).toUInt()
 
     fun enumerationIdToValue(name: String): Map<Int, String> = enumerationsIdToValue.getValue(name)
     fun enumerationValueToId(name: String): Map<String, Int> = enumerationsValueToId.getValue(name)

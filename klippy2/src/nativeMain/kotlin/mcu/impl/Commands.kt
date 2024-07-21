@@ -2,7 +2,7 @@ package mcu.impl
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.cinterop.ExperimentalForeignApi
-import machine.impl.MachineTime
+import MachineTime
 import mcu.ConfigurationException
 
 typealias ObjectId = UByte

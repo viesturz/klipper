@@ -31,17 +31,17 @@ fun main(args: Array<String>) = runBlocking {
 
         val queue = machine.queueManager.newQueue()
         val gcode = machine.gCode.runner(queue)
-
-        repeat(10) {
-            gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=0")
-            gcode.run("SET_FAN_SPEED FAN=fan0 SPEED=1.0")
-            queue.add(DelayCommand(2.0))
-            gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=1.0")
-            gcode.run("SET_FAN_SPEED FAN=fan0 SPEED=0")
-            queue.add(DelayCommand(2.0))
-        }
-        gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=0.5")
-        gcode.run("SET_FAN_SPEED FAN=fan0 SPEED=0.5")
+//
+//        repeat(10) {
+//            gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=0")
+//            gcode.run("SET_FAN_SPEED FAN=fan0 SPEED=1.0")
+//            queue.add(DelayCommand(2.0))
+//            gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=1.0")
+//            gcode.run("SET_FAN_SPEED FAN=fan0 SPEED=0")
+//            queue.add(DelayCommand(2.0))
+//        }
+//        gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=0.5")
+//        gcode.run("SET_FAN_SPEED FAN=fan0 SPEED=0.5")
 
         // Wait until shutdown.
         machine.state.first { it == Machine.State.SHUTDOWN }

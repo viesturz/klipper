@@ -1,12 +1,12 @@
 package machine.impl
 
+import MachineTime
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
-
-/** Machine time in seconds. Counted from primary MCU boot time. */
-typealias MachineTime = Double
-typealias MachineDuration = Double
 
 // TODO: All methods here are thread safe
 class Reactor {
@@ -14,6 +14,7 @@ class Reactor {
     private val TIME_SHUTDOWN = -1.0
 
     private val pendingEvents = ArrayList<Event>()
+    private var poke = CompletableDeferred<Boolean>()
 
     fun runNow(block: suspend () -> Unit) = schedule(now) {
         block()
@@ -22,23 +23,25 @@ class Reactor {
 
     fun schedule(time: MachineTime, block: suspend (event:Event) -> MachineTime?): Event {
         val event = Event(time, block)
-        val index = pendingEvents.indexOfFirst { it.time > time }
-        if (index == -1) {
-            pendingEvents.add(event)
-        } else {
-            pendingEvents.add(index, event)
-        }
+        queueEvent(event)
         return event
     }
 
     fun reschedule(event: Event, time: MachineTime) {
         pendingEvents.remove(event)
         event.time = time
-        val index = pendingEvents.indexOfFirst { it.time > time }
+        queueEvent(event)
+    }
+
+    private fun queueEvent(event: Event) {
+        val index = pendingEvents.indexOfFirst { it.time > event.time }
         if (index == -1) {
             pendingEvents.add(event)
         } else {
             pendingEvents.add(index, event)
+        }
+        if (index == 0) {
+            poke.complete(true)
         }
     }
 
@@ -84,7 +87,14 @@ class Reactor {
                     delayTime = nextDelay
                 }
             }
-            delay(delayTime.seconds)
+            if (delayTime > 0) {
+                poke = CompletableDeferred()
+                try {
+                    withTimeout(delayTime.seconds) {
+                        poke.await()
+                    }
+                } catch (e: TimeoutCancellationException) {}
+            }
         }
         println("Reactor shut down")
     }

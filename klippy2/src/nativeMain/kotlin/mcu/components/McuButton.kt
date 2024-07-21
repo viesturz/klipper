@@ -1,11 +1,18 @@
-package mcu.impl
+package mcu.components
 
 import machine.impl.Reactor
 import mcu.Button
 import mcu.ButtonListener
 import mcu.Mcu
+import mcu.impl.McuComponent
+import mcu.impl.McuConfigure
+import mcu.impl.McuObjectResponse
+import mcu.impl.McuRuntime
+import mcu.impl.ObjectId
+import mcu.impl.ResponseParser
 
-class McuButton(override val mcu: Mcu, val config: config.DigitalInPin, configure: McuConfigure) : Button, McuComponent {
+class McuButton(override val mcu: Mcu, val config: config.DigitalInPin, configure: McuConfigure) : Button,
+    McuComponent {
     private val id = configure.makeOid()
     private var listener: ButtonListener? = null
     private var reactor: Reactor? = null
@@ -40,7 +47,8 @@ class McuButton(override val mcu: Mcu, val config: config.DigitalInPin, configur
     }
 }
 
-data class ResponseButtonsState(override val id: ObjectId, val ackCount:UByte, val state: ByteArray): McuObjectResponse
+data class ResponseButtonsState(override val id: ObjectId, val ackCount:UByte, val state: ByteArray):
+    McuObjectResponse
 val responseButtonsStateParser = ResponseParser("buttons_state oid=%c ack_count=%c state=%*s") {
     ResponseButtonsState(parseC(), parseC(), parseBytes())
 }

@@ -10,9 +10,15 @@ val fan1 = Fan(
     name = "fan1",
     pin = mcu.fan1,
 )
+val tempE0 = AdcTemperatureSensor(
+    name = "extruder temp",
+    pin = mcu.temp0,
+    sensor = NTC100K
+)
 
 val machine = MachineConfig(
-    parts = listOf(fan0, fan1),
+    parts = listOf(tempE0),
+//    parts = listOf(fan0, fan1, tempE0),
 )
 
 //
