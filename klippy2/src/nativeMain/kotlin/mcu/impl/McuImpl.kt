@@ -22,7 +22,7 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
     internal val initCommands = ArrayList<UByteArray>()
     internal val queryCommands = ArrayList<QueryCommand>()
     internal val restartCommands = ArrayList<UByteArray>()
-    internal val responseHandlers = HashMap<Pair<ResponseParser<McuResponse>, ObjectId>, (message: McuResponse) -> Unit>()
+    internal val responseHandlers = HashMap<Pair<ResponseParser<McuResponse>, ObjectId>, suspend (message: McuResponse) -> Unit>()
     internal val commandQueues = ArrayList<CommandQueue>()
     val components = ArrayList<McuComponent>()
     override val identify: FirmwareConfig
@@ -46,9 +46,9 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
     override fun restartCommand(signature: String, block: CommandBuilder.()->Unit) { restartCommands.add(cmd.build(signature, block))}
 
     @Suppress("UNCHECKED_CAST")
-    override fun <ResponseType: McuResponse> responseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: ((message: ResponseType) -> Unit)) {
+    override fun <ResponseType: McuResponse> responseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: suspend (message: ResponseType) -> Unit) {
         val key = Pair(parser, id) as Pair<ResponseParser<McuResponse>, ObjectId>
-        responseHandlers[key] = handler as ((message: McuResponse) -> Unit)
+        responseHandlers[key] = handler as (suspend (message: McuResponse) -> Unit)
     }
 }
 

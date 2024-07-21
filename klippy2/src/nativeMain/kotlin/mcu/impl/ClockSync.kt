@@ -4,6 +4,7 @@ import MachineDuration
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
 import MachineTime
+import kotlinx.coroutines.launch
 import machine.impl.Reactor
 import mcu.McuClock
 import mcu.connection.CommandQueue
@@ -12,6 +13,7 @@ import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.reflect.KMutableProperty0
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 private val logger = KotlinLogging.logger("ClockSync")
 
@@ -78,10 +80,12 @@ internal class ClockSync(val connection: McuConnection) {
         logger.info { "Clock sync initialized: $estimate" }
         // Setup periodic background resync
         connection.setResponseHandler(responseClockParser, 0u, this::handleClock)
-        reactor.schedule(reactor.now) { event ->
-            commands.send("get_clock")
-            queriesPending ++
-            event.time + 0.9839 // Nice uneven delay to avoid resonances wth other periodic events.
+        reactor.scope.launch {
+            while (true) {
+                commands.send("get_clock")
+                queriesPending++
+                delay(0.9839.seconds) // Nice uneven delay to avoid resonances wth other periodic events.
+            }
         }
     }
 

@@ -65,7 +65,7 @@ class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initial
             runtime?.let { runtime ->
                 val clock = max(runtime.timeToClock(time),queue.lastClock)
                 logger.info { "Set value=${dutyCycle}, time=$time, clock=$clock" }
-                runtime.reactor.scope.launch {
+                runtime.reactor.launch {
                     logger.info { "Sending PWM cmd" }
                     queue.sendWaitAck(
                         minClock = lastClock,
