@@ -57,13 +57,12 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
             val mcu = mcu.start(reactor)
             mcuList.add(mcu)
             reactor.scope.launch {
-                mcu.state.first { it == McuState.SHUTDOWN }
+                mcu.state.first { it == McuState.ERROR }
                 shutdown(mcu.stateReason)
             }
             logger.info { "Initializing MCU: ${mcu.config.name} done" }
         }
         reactor.start()
-        // Schedule the setup call - the first one to run when reactor starts.
         _state.value = State.STARTING
         reactor.scope.launch {
             partsList.forEach { it.onStart(this@MachineImpl) }

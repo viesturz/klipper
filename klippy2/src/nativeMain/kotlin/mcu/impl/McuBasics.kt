@@ -2,10 +2,10 @@ package mcu.impl
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 
-private val logger = KotlinLogging.logger("McuBasics")
-
 /** Component handling the basic MCU features. */
 class McuBasics(val mcu: McuImpl, val configure: McuConfigure): McuComponent {
+    private val logger = KotlinLogging.logger("${mcu.config.name} Basics")
+
 
     override fun configure(configure: McuConfigure) {
         configure.responseHandler(responseStatsParser, 0u, this::onStats)
@@ -18,7 +18,7 @@ class McuBasics(val mcu: McuImpl, val configure: McuConfigure): McuComponent {
     fun onShutdown(resp: ResponseShutdown) {
         val reason = configure.identify.enumerationIdToValue("static_string_id")[resp.staticStringId.toInt()]  ?: "unknown Firmware error ${resp.staticStringId}"
         logger.error {  "Shutdown Firmware error: $reason" }
-        mcu.shutdown(reason)
+        mcu.shutdown("MCU ${mcu.config.name}: $reason")
     }
 }
 

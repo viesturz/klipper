@@ -59,5 +59,6 @@ class Heater(
     name: String,
     val pin: DigitalOutPin,
     val sensor: TemperatureSensorPart,
+    val maxPower: Double = 1.0,
     val control: TemperatureControl,
 ): PartConfig(name)
