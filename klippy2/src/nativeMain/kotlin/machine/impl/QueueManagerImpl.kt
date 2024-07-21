@@ -3,6 +3,8 @@ package machine.impl
 import MachineDuration
 import MachineTime
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import machine.Command
 import machine.CommandQueue
 import machine.QueueManager
@@ -11,6 +13,7 @@ import machine.TIME_WAIT
 import machine.WaitForTimeCommand
 import machine.addBasicMcuCommand
 import kotlin.math.max
+import kotlin.time.Duration.Companion.seconds
 
 
 /** Time it takes for a queue to start */
@@ -80,7 +83,7 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
     private val logger = KotlinLogging.logger("QueueImpl")
     private var closed = false
     override fun isClosed() = closed
-    var timer: Reactor.Event? = null
+    var pollingJob: Job? = null
 
     override fun add(cmd: Command) {
         require(!closed) { "Adding command to close queue" }
@@ -123,15 +126,14 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
     }
 
     private fun maybeSchedulePolling() {
-        if (needToWaitForNextCommand() && !commands.isEmpty() && timer == null) {
-            timer = manager.reactor.schedule(manager.reactor.now + QUEUE_CHECK_TIMEOUT) { event ->
-                tryGenerate()
-                if (needToWaitForNextCommand()) {
-                    return@schedule event.time + QUEUE_CHECK_TIMEOUT
-                } else {
-                    timer = null
-                    return@schedule null
+        if (needToWaitForNextCommand() && !commands.isEmpty() && pollingJob == null) {
+            pollingJob = manager.reactor.launch {
+                while (needToWaitForNextCommand())
+                {
+                    delay(QUEUE_CHECK_TIMEOUT.seconds)
+                    tryGenerate()
                 }
+                pollingJob = null
             }
         }
     }
