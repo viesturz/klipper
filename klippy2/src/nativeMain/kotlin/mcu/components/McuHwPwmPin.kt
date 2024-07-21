@@ -19,7 +19,7 @@ class McuHwPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, val c
     var _cycleTime = config.cycleTime
     private var runtime: McuRuntime? = null
 
-    override val dutyCycle: Float
+    override val dutyCycle: Double
         get() = _dutyCycle
     override val cycleTime: MachineDuration
         get() = _cycleTime
@@ -42,9 +42,9 @@ class McuHwPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, val c
         })
     }
 
-    private fun dutyToValue(d: Float) = (d * pwmMax + 0.5f).toUInt().toUShort()
+    private fun dutyToValue(d: Double) = (d * pwmMax + 0.5f).toUInt().toUShort()
 
-    override fun set(time: Double, dutyCycle: Float, cycleTime: MachineDuration?) {
+    override fun set(time: Double, dutyCycle: Double, cycleTime: MachineDuration?) {
         val lastClock = queue.lastClock
         if (cycleTime != null) {
             logger.error { "Hardware PWM does not support cycle time changes" }
@@ -63,7 +63,7 @@ class McuHwPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, val c
         }
     }
 
-    override fun setNow(dutyCycle: Float, cycleTime: MachineDuration?) {
+    override fun setNow(dutyCycle: Double, cycleTime: MachineDuration?) {
         if (_dutyCycle == dutyCycle && cycleTime == _cycleTime) return
         _dutyCycle = dutyCycle
         cycleTime?.let { _cycleTime = it }

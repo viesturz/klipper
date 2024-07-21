@@ -1,27 +1,42 @@
 package machine.impl
 
 import MachineTime
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
 
 // TODO: All methods here are thread safe
 class Reactor {
     data class Event(var time: MachineTime, val block: suspend (event: Event) -> MachineTime?)
-    private val TIME_SHUTDOWN = -1.0
 
     private val pendingEvents = ArrayList<Event>()
     private var poke = CompletableDeferred<Boolean>()
+    private val logger = KotlinLogging.logger("Reactor")
+    @OptIn(ExperimentalCoroutinesApi::class, DelicateCoroutinesApi::class)
+    private val context = newSingleThreadContext("Reactor")
+    val scope = CoroutineScope(context)
 
-    fun runNow(block: suspend () -> Unit) = schedule(now) {
-        block()
-        null
+    /** Deprecated, just use scope.launch{} */
+    fun runNow(block: suspend () -> Unit) {
+        logger.trace { "RunNow" }
+        scope.launch {
+            logger.trace {  "RunNow running" }
+            block()
+        }
     }
 
     fun schedule(time: MachineTime, block: suspend (event:Event) -> MachineTime?): Event {
+        logger.trace { "Scheduling event to $time" }
         val event = Event(time, block)
         queueEvent(event)
         return event
@@ -53,24 +68,35 @@ class Reactor {
         pendingEvents.remove(event)
     }
 
-    fun shutdown() {
-        schedule(TIME_SHUTDOWN) { null }
+    fun start() {
+        scope.launch {
+            try {
+                logger.info { "Reactor started" }
+                schedulingLoop()
+            } catch (e: CancellationException) {
+                logger.warn { "Reactor cancelled" }
+            }
+        }
     }
 
-    suspend fun runEventLoop() {
-        println("Reactor started")
+    fun shutdown() {
+        logger.info { "Stopping reactor" }
+        scope.cancel()
+    }
+
+    /** Event pumping loop for scheduled events. */
+    private suspend fun schedulingLoop() {
         runloop@ while (true) {
             var nextEvent: Event? = null
             while(pendingEvents.isNotEmpty()) {
                 nextEvent = pendingEvents.first()
                 when {
-                    nextEvent.time == TIME_SHUTDOWN -> {
-                        break@runloop
-                    }
                     nextEvent.time > now -> {
                         break
                     }
                     pendingEvents.remove(nextEvent) -> {
+                        val t= nextEvent.time
+                        logger.trace { "Running event at $t" }
                         val nextTime = nextEvent.block(nextEvent)
                         if (nextTime != null) {
                             reschedule(nextEvent, nextTime)
@@ -96,6 +122,5 @@ class Reactor {
                 } catch (e: TimeoutCancellationException) {}
             }
         }
-        println("Reactor shut down")
     }
 }

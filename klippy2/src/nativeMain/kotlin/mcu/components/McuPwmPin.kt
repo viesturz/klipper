@@ -22,7 +22,7 @@ class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initial
 
     private var runtime: McuRuntime? = null
 
-    override val dutyCycle: Float
+    override val dutyCycle: Double
         get() = _dutyCycle
     override val cycleTime: MachineDuration
         get() = _cycleTime
@@ -54,9 +54,9 @@ class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initial
         }
     }
 
-    private fun dutyToTicks(d: Float) = (d * cycleTicks.toDouble() + 0.5f).toUInt()
+    private fun dutyToTicks(d: Double) = (d * cycleTicks.toDouble() + 0.5f).toUInt()
 
-    override fun set(time: MachineTime, dutyCycle: Float, cycleTime: MachineDuration?) {
+    override fun set(time: MachineTime, dutyCycle: Double, cycleTime: MachineDuration?) {
         val lastClock = queue.lastClock
         var cycleChange = setCycleTime(time, cycleTime)
         if (cycleChange || dutyCycle != _dutyCycle) {
@@ -74,7 +74,7 @@ class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initial
         }
     }
 
-    override fun setNow(dutyCycle: Float, cycleTime: MachineDuration?) {
+    override fun setNow(dutyCycle: Double, cycleTime: MachineDuration?) {
         val lastClock = queue.lastClock
         val curClock = runtime?.reactor?.now ?: 0.0
         var cycleChange = setCycleTime(curClock, cycleTime)

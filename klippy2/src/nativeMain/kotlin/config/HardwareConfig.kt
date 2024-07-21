@@ -17,15 +17,15 @@ data class DigitalInPin(val mcu: McuConfig, val pin: String, val invert: Boolean
 data class DigitalOutPin(val mcu: McuConfig,
                          val pin: String,
                          val invert: Boolean = false,
-                         val startValue: Float = 0f,
-                         val shutdownValue: Float = 0f,
+                         val startValue: Double = 0.0,
+                         val shutdownValue: Double = 0.0,
                          val maxDuration: MachineDuration = 2.0,
                          val hardwarePwm: Boolean = false,
                          val cycleTime: MachineDuration = 0.01) {
     init {
         require(startValue in (0f..1f))
         if (!hardwarePwm) {
-            require(shutdownValue == 0f || shutdownValue == 1f)
+            require(shutdownValue == 0.0 || shutdownValue == 1.0)
         }
         require(maxDuration in (0f..5f))
         require(cycleTime in (0.001..maxDuration))

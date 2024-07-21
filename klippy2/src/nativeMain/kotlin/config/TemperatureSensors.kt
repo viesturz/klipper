@@ -10,7 +10,7 @@ import platform.posix.pow
 import platform.posix.sqrt
 import kotlin.math.exp
 
-interface TemperatureSensor {
+interface TemperatureCalibration {
     fun resistanceToTemp(r: Resistance): Temperature
     fun tempToResistance(t: Temperature): Resistance
 }
@@ -22,7 +22,7 @@ infix fun Temperature.to(r:Resistance) = ResistanceCalibration(r=r, t=this)
 // Definition from description of Marlin "thermistor 75"
 val NTC100K = ParametricThermistor.make(25.celsius to 100_000.ohms,beta = 4100.0)
 
-data class ParametricThermistor(val c1: Double, val c2: Double, val c3: Double): TemperatureSensor {
+data class ParametricThermistor(val c1: Double, val c2: Double, val c3: Double): TemperatureCalibration {
     override fun resistanceToTemp(r: Resistance): Temperature {
         val ln_r = ln(r)
         val inv_t = c1 + c2 * ln_r + c3 * pow(ln_r, 3.0)
@@ -89,7 +89,7 @@ fun makeResistanceCalibration(func: (temp: Temperature) -> Resistance)= buildLis
         }
     }.toTypedArray()
 
-object TemperaturePT1000: TemperatureSensor {
+object TemperaturePT1000: TemperatureCalibration {
     override fun resistanceToTemp(v: Resistance): Temperature {
         TODO("Not yet implemented")
     }
