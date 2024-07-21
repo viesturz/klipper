@@ -3,6 +3,7 @@ package mcu.components
 import MachineDuration
 import io.github.oshai.kotlinlogging.KotlinLogging
 import MachineTime
+import kotlinx.coroutines.launch
 import mcu.Mcu
 import mcu.PwmPin
 import mcu.impl.McuClock32
@@ -64,12 +65,16 @@ class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initial
             runtime?.let { runtime ->
                 val clock = max(runtime.timeToClock(time),queue.lastClock)
                 logger.info { "Set value=${dutyCycle}, time=$time, clock=$clock" }
-                queue.send(
-                    minClock = lastClock,
-                    reqClock = clock,
-                    data = queue.build("queue_digital_out oid=%c clock=%u on_ticks=%u") {
-                        addId(id);addU(clock.toUInt());addU(dutyToTicks(_dutyCycle))
-                    })
+                runtime.reactor.scope.launch {
+                    logger.info { "Sending PWM cmd" }
+                    queue.sendWaitAck(
+                        minClock = lastClock,
+                        reqClock = clock,
+                        data = queue.build("queue_digital_out oid=%c clock=%u on_ticks=%u") {
+                            addId(id);addU(clock.toUInt());addU(dutyToTicks(_dutyCycle))
+                        })
+                    logger.info { "Acked PWM cmd" }
+                }
             }
         }
     }

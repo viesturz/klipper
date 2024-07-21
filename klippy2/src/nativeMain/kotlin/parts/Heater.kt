@@ -8,6 +8,7 @@ import kotlinx.coroutines.launch
 import machine.CommandQueue
 import machine.addLocalCommand
 import machine.impl.GcodeParams
+import kotlin.math.min
 
 interface TemperatureControl {
     /** Computes next power value. */
@@ -29,8 +30,9 @@ class Heater(override val config: config.Heater, setup: MachineSetup): MachinePa
     override suspend fun onStart(runtime: MachineRuntime) {
         runtime.scope.launch {
             temperature.value.collect { measurement ->
+                power = min(control.update(measurement.time, measurement.temp, power, activeTarget), config.maxPower)
                 // TODO: use SetNow.
-                heater.set(runtime.reactor.now+0.3, control.update(measurement.time, measurement.temp, power, activeTarget))
+                heater.set(runtime.reactor.now+0.2, power)
             }
         }
     }

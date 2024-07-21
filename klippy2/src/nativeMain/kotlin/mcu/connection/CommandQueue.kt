@@ -39,12 +39,12 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
         lastClock = reqClock
     }
 
-    suspend fun sendWaitAck(data: UByteArray) {
+    suspend fun sendWaitAck(data: UByteArray, minClock: McuClock =0u, reqClock: McuClock = 0u) {
         val connection = this.connection ?:
             throw RuntimeException("Trying to send before setup is finished")
         var acked = CompletableDeferred<Unit>()
         val ackId = connection.registerMessageAckedCallback { acked.complete(Unit) }
-        send(data, ackId=ackId)
+        send(data, minClock, reqClock, ackId=ackId)
         acked.await()
     }
 
