@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.StateFlow
 import machine.impl.GCode
 
 interface Machine {
-    suspend fun run()
+    suspend fun start()
     fun shutdown(reason: String)
 
     val shutdownReason: String

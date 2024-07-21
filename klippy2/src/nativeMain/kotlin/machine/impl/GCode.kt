@@ -85,14 +85,41 @@ class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode) {
             put(it.substring(0, 1).uppercase(), it.substring(1))
         }
     }
-    // Parses X=10 Y=20.5
+    // Parses X=10 Y=20.5 HEATER='foo bar'
     private fun parseWithAssign(cmd: String, parts: List<String>) = buildMap {
-        parts.filter { it.isNotBlank() }.forEach {
+        var key = ""
+        var quote = ' '
+        var quotedPrefix: String? = null
+        parts.forEach {
+            if (quotedPrefix != null) {
+                val v = "$quotedPrefix $it"
+                if (v.endsWith(quote)) {
+                    put(key, v.substring(1, v.length - 1))
+                    quotedPrefix = null
+                } else {
+                    quotedPrefix = v
+                }
+                return@forEach
+            }
+
             val pair = it.split('=')
             if (pair.size != 2) {
                 throw FailedToParseParamsException(cmd)
             }
-            put(pair[0].uppercase(), pair[1].trim())
+            key = pair[0].uppercase()
+            val value: String = pair[1]
+            if (value.startsWith('\'') or value.startsWith('"')) {
+                quote = value[0]
+                if (value.endsWith(quote)) {
+                    put(key,  value.substring(1, value.length-1))
+                    Unit
+                } else {
+                    quotedPrefix = value
+                }
+            } else {
+                put(key, value.trim())
+                Unit
+            }
         }
     }
 }
@@ -108,4 +135,6 @@ class GcodeParams(val raw: String, val name: String, val params: Map<String, Str
         params[name]?.toInt() ?: default ?: throw MissingRequiredParameterException(name)
     fun getFloat(name: String, default: Float? = null) =
         params[name]?.toFloat() ?: default ?: throw MissingRequiredParameterException(name)
+    fun getDouble(name: String, default: Double? = null) =
+        params[name]?.toDouble() ?: default ?: throw MissingRequiredParameterException(name)
 }

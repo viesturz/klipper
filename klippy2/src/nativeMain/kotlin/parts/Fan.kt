@@ -2,15 +2,15 @@ package parts
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
-import machine.addBasicCommand
+import machine.addBasicMcuCommand
 import machine.impl.GcodeParams
 import MachineTime
 
-class Fan(override val config: config.Fan, setup: MachineSetup): MachinePart<config.Fan> {
+class Fan(override val config: config.Fan, setup: MachineSetup): MachinePartLifecycle, MachinePart {
     val pin = setup.acquireMcu(config.pin.mcu).addPwmPin(config.pin)
     var runtime: MachineRuntime? = null
     val logger = KotlinLogging.logger("Fan ${config.name}")
-    var dutyCycle = 0.0f
+    var dutyCycle = 0.0
 
     init {
         setup.registerMuxCommand("SET_FAN_SPEED", "FAN", config.name, this::setSpeedGcode)
@@ -21,14 +21,14 @@ class Fan(override val config: config.Fan, setup: MachineSetup): MachinePart<con
     }
 
     private fun setSpeedGcode(queue: CommandQueue, params: GcodeParams) {
-        val speed = params.getFloat("SPEED")
+        val speed = params.getDouble("SPEED")
         setSpeed(queue, speed)
     }
-    fun setSpeed(queue: CommandQueue, value: Float) {
+    fun setSpeed(queue: CommandQueue, value: Double) {
         require(value in 0f..1f)
         logger.info { "Fan set speed $value" }
         dutyCycle = value
-        queue.addBasicCommand(this) { time ->
+        queue.addBasicMcuCommand(this) { time ->
             pin.set(time, value)
         }
     }

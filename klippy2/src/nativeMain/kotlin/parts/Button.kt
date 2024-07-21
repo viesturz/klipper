@@ -3,7 +3,7 @@ package parts
 import machine.impl.Reactor
 import MachineTime
 
-class Button(override val config: config.Button, setup: MachineSetup): MachinePart<config.Button> {
+class Button(override val config: config.Button, setup: MachineSetup): MachinePartLifecycle, MachinePart {
     private val button = setup.acquireMcu(config.pin.mcu).addButton(config.pin)
     private var reactor: Reactor? = null
 

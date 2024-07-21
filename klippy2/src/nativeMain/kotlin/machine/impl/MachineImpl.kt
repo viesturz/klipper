@@ -4,23 +4,31 @@ import config.MachineConfig
 import config.McuConfig
 import config.PartConfig
 import config.SerialConnection
+import config.TemperatureSensorPart
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import machine.Machine
 import machine.Machine.State
 import machine.QueueManager
 import mcu.Mcu
 import mcu.McuSetup
+import mcu.McuState
 import mcu.connection.McuConnection
 import mcu.connection.connectSerial
 import mcu.impl.McuSetupImpl
 import parts.GCodeHandler
 import parts.MachinePart
+import parts.MachinePartLifecycle
 import parts.MachineRuntime
 import parts.MachineSetup
+import parts.TemperatureSensor
 import parts.buildPart
+import parts.buildTemperatureSensor
 
 private val logger = KotlinLogging.logger("MachineImpl")
 
@@ -30,47 +38,49 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
         get() = _state
 
     override val reactor = Reactor()
+    override val scope = reactor.scope
     override val gCode = GCode()
     override val queueManager: QueueManager = QueueManagerImpl(reactor)
     var _shutdownReason = ""
     override val shutdownReason: String
         get() = _shutdownReason
-    val partsList = ArrayList<MachinePart<PartConfig>>()
-    val parts = HashMap<PartConfig, MachinePart<PartConfig>>()
+    val partsList = ArrayList<MachinePartLifecycle>()
+    val parts = HashMap<PartConfig, MachinePartLifecycle>()
     val mcuList = ArrayList<Mcu>()
     val mcuSetups = HashMap<McuConfig, McuSetup>()
 
-    override suspend fun run() {
+    override suspend fun start() {
         _state.value = State.CONFIGURING
         for (p in config.parts) acquirePart(p)
         for (mcu in mcuSetups.values){
-            println("Initializing MCU: ${mcu.config.name}")
-            mcuList.add(mcu.start(reactor))
-            println("Initializing MCU: ${mcu.config.name} done")
+            logger.info { "Initializing MCU: ${mcu.config.name}" }
+            val mcu = mcu.start(reactor)
+            mcuList.add(mcu)
+            reactor.scope.launch {
+                mcu.state.first { it == McuState.SHUTDOWN }
+                shutdown(mcu.stateReason)
+            }
+            logger.info { "Initializing MCU: ${mcu.config.name} done" }
         }
-
-        println("Starting event loop")
+        reactor.start()
         // Schedule the setup call - the first one to run when reactor starts.
-        reactor.runNow(this::runPartsSetup)
-        reactor.runEventLoop()
-        println("Event loop done, shutting down")
-        mcuList.reversed().forEach { it.shutdown("machine shutting down") }
-        _state.value = State.SHUTDOWN
-    }
-
-    suspend fun runPartsSetup() {
         _state.value = State.STARTING
-        // Start in inverse order so smaller, rested parts are started first.
-        partsList.reversed().forEach { it.onStart(this) }
+        reactor.scope.launch {
+            partsList.forEach { it.onStart(this@MachineImpl) }
+        }
+        if (state.value != State.STARTING) return
         _state.value = State.RUNNING
     }
 
     override fun shutdown(reason: String) {
-        println("Machine Shutting down")
-        partsList.reversed().forEach { it.shutdown() }
-        mcuList.reversed().forEach { it.shutdown(reason) }
-        reactor.shutdown()
-        println("Shutdown method done, will continue cleanup in the run.")
+        if (_state.getAndUpdate { State.SHUTDOWN } != State.RUNNING) return
+        logger.warn { "Shutting down the machine, reason: $reason" }
+        reactor.runNow {
+            partsList.reversed().forEach { it.shutdown() }
+            mcuList.reversed().forEach { it.shutdown("machine shutting down") }
+            logger.warn { "Machine shutdown finished" }
+            reactor.shutdown()
+        }
     }
 
     override val status: Map<String, String>
@@ -95,10 +105,18 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
     override fun acquirePart(config: PartConfig) = parts.getOrElse(config) {
         logger.info { "Acquire part $config" }
         val p = buildPart(config, this)
-        partsList.add(p)
-        parts[config] = p
+        partsList.add(p as MachinePartLifecycle)
+        parts[config] = p as MachinePartLifecycle
         p
-    }
+    } as MachinePart
+
+    override fun acquirePart(config: TemperatureSensorPart) = parts.getOrElse(config) {
+        logger.info { "Acquire part $config" }
+        val p = buildTemperatureSensor(config, this)
+        partsList.add(p as MachinePartLifecycle)
+        parts[config] = p as MachinePartLifecycle
+        p
+    } as TemperatureSensor
 
     override fun registerCommand(command: String, handler: GCodeHandler) {
         gCode.registerCommand(command, handler)

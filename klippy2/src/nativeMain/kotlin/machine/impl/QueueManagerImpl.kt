@@ -1,5 +1,7 @@
 package machine.impl
 
+import MachineDuration
+import MachineTime
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.Command
 import machine.CommandQueue
@@ -7,7 +9,7 @@ import machine.QueueManager
 import machine.TIME_EAGER_START
 import machine.TIME_WAIT
 import machine.WaitForTimeCommand
-import machine.addBasicCommand
+import machine.addBasicMcuCommand
 import kotlin.math.max
 
 
@@ -109,7 +111,7 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
             }
             val cmdTime = max(nextCommandTime, cmd.minTime)
             logger.info { "Generating command $cmd at $nextCommandTime" }
-            cmd.generate(cmdTime, actualDuration, partQueue.commands)
+            cmd.generate(manager.reactor, cmdTime, actualDuration, partQueue.commands)
             nextCommandTime = cmdTime + actualDuration
             // Remove the command
             partQueue.pop(cmd, nextCommandTime)
@@ -137,7 +139,7 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
     override fun fork(): CommandQueue {
         val fork = QueueImpl(manager)
         fork.nextCommandTime = TIME_WAIT
-        addBasicCommand(fork) { time ->
+        addBasicMcuCommand(fork) { time ->
             fork.nextCommandTime = time
             fork.tryGenerate()
         }
@@ -149,7 +151,7 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
         // Block this queue until joined
         val join = WaitForTimeCommand(other)
         add(join)
-        other.addBasicCommand(this, join::setTime)
+        other.addBasicMcuCommand(this, join::setTime)
         other.close()
     }
 

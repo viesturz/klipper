@@ -13,7 +13,7 @@ class McuBasics(val mcu: McuImpl, val configure: McuConfigure): McuComponent {
     }
 
     fun onStats(stats: ResponseStats) {
-        logger.info { "Stats: $stats" }
+        logger.trace { "Stats: $stats" }
     }
     fun onShutdown(resp: ResponseShutdown) {
         val reason = configure.identify.enumerationIdToValue("static_string_id")[resp.staticStringId.toInt()]  ?: "unknown Firmware error ${resp.staticStringId}"

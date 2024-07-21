@@ -3,6 +3,7 @@ package machine
 import MachineDuration
 import MachineTime
 import machine.impl.PartQueue
+import machine.impl.Reactor
 
 val TIME_EAGER_START = -1.0
 val TIME_WAIT = -2.0
@@ -25,7 +26,7 @@ abstract class Command(
     /** Measure the actual time needed for this command. Or null if not enough followup commands in the queue. */
     abstract fun measureActual(followupCommands: List<Command>): MachineDuration?
     /** Generate this command. Will be called upon successful measureActual. Finalizes the processing of a command. */
-    abstract fun generate(startTime: MachineTime, duration: MachineDuration, followupCommands: List<Command>)
+    abstract fun generate(reactor: Reactor, startTime: MachineTime, duration: MachineDuration, followupCommands: List<Command>)
 }
 
 interface QueueManager {
@@ -59,18 +60,41 @@ interface CommandQueue {
     fun tryGenerate()
 }
 
-fun CommandQueue.addBasicCommand(origin: Any, generate: (time: MachineTime) -> Unit)
+/** Add a basic command that needs to be queued to the MCU queue.
+ * IE, a pin value change.
+ * */
+fun CommandQueue.addBasicMcuCommand(origin: Any, generate: (time: MachineTime) -> Unit)
     = add(object: Command(origin) {
 
     override fun measureMin() = 0.0
     override fun measureActual(followupCommands: List<Command>) = 0.0
 
     override fun generate(
+        reactor: Reactor,
         startTime: MachineTime,
         duration: MachineDuration,
         followupCommands: List<Command>
     ) {
         generate(startTime)
+    }
+})
+
+/** Add a command that will be executed locally without sending to the MCU.
+ *  IE, target temperature change, gcode offset change. */
+fun CommandQueue.addLocalCommand(origin: Any, generate: (time: MachineTime) -> Unit)
+        = add(object: Command(origin) {
+    override fun measureMin() = 0.0
+    override fun measureActual(followupCommands: List<Command>) = 0.0
+    override fun generate(
+        reactor: Reactor,
+        startTime: MachineTime,
+        duration: MachineDuration,
+        followupCommands: List<Command>
+    ) {
+        reactor.schedule(startTime) {
+            generate(startTime)
+            return@schedule null
+        }
     }
 })
 
@@ -87,6 +111,7 @@ class WaitForTimeCommand(origin: Any, time: MachineTime = TIME_WAIT) : Command(o
     }
     override fun measureActual(followupCommands: List<Command>) = 0.0
     override fun generate(
+        reactor: Reactor,
         startTime: MachineTime,
         duration: MachineDuration,
         followupCommands: List<Command>
@@ -98,6 +123,7 @@ class DelayCommand(val duration: MachineDuration) : Command(Unit) {
     override fun measureMin() = duration
     override fun measureActual(followupCommands: List<Command>) = duration
     override fun generate(
+        reactor: Reactor,
         startTime: MachineTime,
         duration: MachineDuration,
         followupCommands: List<Command>

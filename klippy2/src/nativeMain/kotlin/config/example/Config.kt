@@ -1,4 +1,5 @@
 package config.example
+import celsius
 import config.*
 
 val mcu = SkrMiniE3V2(serial="/dev/serial/by-id/usb-Klipper_stm32f103xe_31FFD7053030473538690543-if00")
@@ -10,15 +11,22 @@ val fan1 = Fan(
     name = "fan1",
     pin = mcu.fan1,
 )
-val tempE0 = AdcTemperatureSensor(
-    name = "extruder temp",
-    pin = mcu.temp0,
-    sensor = NTC100K
+
+val heaterE0 = Heater(
+    name = "extruder heater",
+    pin = mcu.heaterE0,
+    sensor = AdcTemperatureSensor(
+        name = "extruder temp",
+        pin = mcu.temp0,
+        sensor = NTC100K,
+        minTemp = 0.celsius,
+        maxTemp = 300.celsius,
+    ),
+    control = Watermark()
 )
 
 val machine = MachineConfig(
-    parts = listOf(tempE0),
-//    parts = listOf(fan0, fan1, tempE0),
+    parts = listOf(fan0, fan1, heaterE0),
 )
 
 //

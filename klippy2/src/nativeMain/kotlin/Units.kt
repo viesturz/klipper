@@ -10,9 +10,10 @@ private const val KTOC = -273.15
 
 /** Temperatures are confusing, let's have a class.  */
 value class Temperature(val celsius: Double) {
-    init {
-        require(kelvins >=0.0) {"Temperature below absolute zero"}
-    }
+    operator fun compareTo(other: Temperature) = this.celsius.compareTo(other.celsius)
+    operator fun plus(v: Double) = Temperature(celsius+v)
+    operator fun minus(v: Double) = Temperature(celsius-v)
+
     val kelvins: Double
         get() = celsius - KTOC
 }

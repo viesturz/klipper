@@ -1,5 +1,6 @@
 package config
 
+import MachineDuration
 import Temperature
 import celsius
 import parts.MachineRuntime
@@ -32,17 +33,31 @@ class Button(
     val onClicked: ActionBlock
 ) : PartConfig(name)
 
-abstract class TemperatureSensorPart(name: String): PartConfig(name)
+abstract class TemperatureSensorPart(name: String): PartConfig(name){
+    abstract val minTemp: Temperature
+    abstract val maxTemp: Temperature
+}
+
+sealed interface TemperatureControl
+data class Watermark(val maxDelta: Double = 2.0): TemperatureControl
+data class PID(val P: Double, val I: Double, val D: Double, val timeWindow: MachineDuration): TemperatureControl
 
 class AdcTemperatureSensor(
     name: String,
     pin: AnalogInPin,
-    val sensor: TemperatureSensor,
-    val min: Temperature = 0.celsius,
-    val max: Temperature = 300.celsius,
+    val sensor: TemperatureCalibration,
+    override val minTemp: Temperature = 0.celsius,
+    override val maxTemp: Temperature = 300.celsius,
 ) : TemperatureSensorPart(name) {
     val pin = pin.copy(
-        minValue = min(pin.fromResistance(sensor.tempToResistance(min)), pin.fromResistance(sensor.tempToResistance(max))),
-        maxValue = max(pin.fromResistance(sensor.tempToResistance(min)), pin.fromResistance(sensor.tempToResistance(max))),
+        minValue = min(pin.fromResistance(sensor.tempToResistance(minTemp)), pin.fromResistance(sensor.tempToResistance(maxTemp))),
+        maxValue = max(pin.fromResistance(sensor.tempToResistance(minTemp)), pin.fromResistance(sensor.tempToResistance(maxTemp))),
     )
 }
+
+class Heater(
+    name: String,
+    val pin: DigitalOutPin,
+    val sensor: TemperatureSensorPart,
+    val control: TemperatureControl,
+): PartConfig(name)

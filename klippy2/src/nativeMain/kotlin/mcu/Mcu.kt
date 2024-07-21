@@ -79,10 +79,10 @@ interface PulseCounter {
 }
 interface PwmPin{
     val mcu: Mcu
-    val dutyCycle: Float
+    val dutyCycle: Double
     val cycleTime: MachineDuration
-    fun set(time: MachineTime, dutyCycle: Float, cycleTime: MachineDuration? = null)
-    fun setNow(dutyCycle: Float, cycleTime: MachineDuration? = null)
+    fun set(time: MachineTime, dutyCycle: Double, cycleTime: MachineDuration? = null)
+    fun setNow(dutyCycle: Double, cycleTime: MachineDuration? = null)
 }
 interface Neopixel{
     val mcu: Mcu
