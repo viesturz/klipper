@@ -1,5 +1,6 @@
 package mcu.components
 
+import kotlinx.coroutines.launch
 import machine.impl.Reactor
 import mcu.Button
 import mcu.ButtonListener
@@ -31,11 +32,11 @@ class McuButton(override val mcu: Mcu, val config: config.DigitalInPin, configur
         this.reactor = runtime.reactor
     }
 
-    private fun onButtonState(state: ResponseButtonsState) {
+    private suspend fun onButtonState(state: ResponseButtonsState) {
         println("ButtonsState: $state")
         // TODO: update pressed
         listener?.let { l ->
-            reactor?.runNow{l(this)}
+            l(this@McuButton)
         }
     }
 

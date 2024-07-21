@@ -48,7 +48,6 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
         acked.await()
     }
 
-    @OptIn(ExperimentalStdlibApi::class)
     suspend fun <ResponseType: McuResponse> sendWithResponse(data: UByteArray, parser: ResponseParser<ResponseType>, id: ObjectId = 0u): ResponseType {
         val connection = this.connection ?:
             throw RuntimeException("Trying to send before setup is finished")

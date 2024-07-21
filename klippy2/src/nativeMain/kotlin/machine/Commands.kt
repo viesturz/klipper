@@ -2,8 +2,10 @@ package machine
 
 import MachineDuration
 import MachineTime
+import kotlinx.coroutines.launch
 import machine.impl.PartQueue
 import machine.impl.Reactor
+import machine.impl.waitUntil
 
 val TIME_EAGER_START = -1.0
 val TIME_WAIT = -2.0
@@ -91,9 +93,9 @@ fun CommandQueue.addLocalCommand(origin: Any, generate: (time: MachineTime) -> U
         duration: MachineDuration,
         followupCommands: List<Command>
     ) {
-        reactor.schedule(startTime) {
+        reactor.scope.launch {
+            waitUntil(startTime)
             generate(startTime)
-            return@schedule null
         }
     }
 })

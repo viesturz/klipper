@@ -56,7 +56,7 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
             logger.info { "Initializing MCU: ${mcu.config.name}" }
             val mcu = mcu.start(reactor)
             mcuList.add(mcu)
-            reactor.scope.launch {
+            reactor.launch {
                 mcu.state.first { it == McuState.ERROR }
                 shutdown(mcu.stateReason)
             }
@@ -64,7 +64,7 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
         }
         reactor.start()
         _state.value = State.STARTING
-        reactor.scope.launch {
+        reactor.launch {
             partsList.forEach { it.onStart(this@MachineImpl) }
         }
         if (state.value != State.STARTING) return
@@ -74,7 +74,7 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
     override fun shutdown(reason: String) {
         if (_state.getAndUpdate { State.SHUTDOWN } != State.RUNNING) return
         logger.warn { "Shutting down the machine, reason: $reason" }
-        reactor.runNow {
+        reactor.launch {
             partsList.reversed().forEach { it.shutdown() }
             mcuList.reversed().forEach { it.shutdown("machine shutting down") }
             logger.warn { "Machine shutdown finished" }
@@ -127,7 +127,7 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
     private fun acquireConnection(config: config.Connection): McuConnection {
         logger.debug { "Acquire connection $config" }
         val connection = when (config) {
-            is SerialConnection -> McuConnection(connectSerial(config.file, config.baud))
+            is SerialConnection -> McuConnection(connectSerial(config.file, config.baud), reactor)
             else -> throw RuntimeException("Unsupported connection ${config}")
         }
         logger.debug { "Identifying connection $config" }

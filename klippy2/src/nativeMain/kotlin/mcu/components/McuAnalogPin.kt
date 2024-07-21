@@ -53,12 +53,11 @@ class McuAnalogPin(override val mcu: Mcu, val config: config.AnalogInPin, config
         this.listener = handler
     }
 
-    fun handleAnalogInState(response: ResponseAnalogInState) {
+    suspend fun handleAnalogInState(response: ResponseAnalogInState) {
         val time = runtime.clockToTime(response.nextClock) - nextClockOffset
         _value = AnalogInPin.Measurement(time, response.value.toDouble() * adcInverse, config)
         logger.trace { "adc: ${response.value/config.sampleCount} value: ${_value.value}, voltage=${_value.voltage}, resistance=${_value.resistance}" }
-        listener?.let { l ->
-            runtime.reactor.runNow { l(_value)} }
+        listener?.let { it(_value) }
     }
 }
 

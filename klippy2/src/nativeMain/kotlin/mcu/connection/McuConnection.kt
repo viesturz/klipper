@@ -10,10 +10,9 @@ import kotlinx.cinterop.ptr
 import kotlinx.cinterop.readBytes
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
+import machine.impl.Reactor
 import mcu.McuClock
 import mcu.impl.Commands
 import mcu.impl.GcWrapper
@@ -28,11 +27,10 @@ import kotlin.concurrent.AtomicLong
 private val logger = KotlinLogging.logger("McuConnection")
 
 /** Connection to MCU, primarily handles dispatch of messages received from MCU. */
-@Suppress("OPT_IN_USAGE")
-@OptIn(ExperimentalForeignApi::class, ExperimentalCoroutinesApi::class)
-class McuConnection(val fd: Int) {
+@OptIn(ExperimentalForeignApi::class)
+class McuConnection(val fd: Int, val reactor: Reactor) {
     private val responseHandlersOneshot = HashMap<Pair<String, ObjectId>, CompletableDeferred<McuResponse>>()
-    private val responseHandlers = HashMap<Pair<String, ObjectId>, (message: McuResponse) -> Unit>()
+    private val responseHandlers = HashMap<Pair<String, ObjectId>, suspend (message: McuResponse) -> Unit>()
     private val pendingAcks = HashMap<ULong, () -> Unit>()
     private var lastNotifyId = AtomicLong(0)
     var commands = Commands(FirmwareConfig.DEFAULT_IDENTIFY)
@@ -45,8 +43,7 @@ class McuConnection(val fd: Int) {
     ) { serialqueue_free(it) }
 
     init {
-        // TODO: printer scope
-        GlobalScope.launch(Dispatchers.IO) { pullThread() }
+        reactor.scope.launch(Dispatchers.IO) { pullThread() }
     }
 
     @OptIn(ExperimentalStdlibApi::class)
@@ -64,7 +61,7 @@ class McuConnection(val fd: Int) {
                     val id = if (parsed is McuObjectResponse) parsed.id else 0u
                     val key = Pair(signature, id)
                     val handler = responseHandlers[key]
-                    handler?.let { it(parsed) }
+                    handler?.let { reactor.launch { it(parsed) } }
                     val handler2 = responseHandlersOneshot.remove(key)
                     handler2?.complete(parsed)
                 } else {
@@ -72,7 +69,7 @@ class McuConnection(val fd: Int) {
                 }
                 // Acks after handlers - to allow handlers populate data before acks.
                 val ack = pendingAcks.remove(message.notify_id)
-                ack?.let { it() }
+                ack?.let { reactor.launch{ it() } }
             }
         }
     }
@@ -110,7 +107,6 @@ class McuConnection(val fd: Int) {
     fun disconnect() {
         chelper.serialqueue_exit(serial.ptr) // This will stop the tread as well
         close(fd)
-        // TODO: notify listeners
     }
 
     fun registerMessageAckedCallback(function: (() -> Unit)): ULong {
@@ -120,14 +116,14 @@ class McuConnection(val fd: Int) {
     }
 
     @Suppress("UNCHECKED_CAST")
-    fun <ResponseType: McuResponse> setResponseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: ((message: ResponseType) -> Unit)? ) {
+    fun <ResponseType: McuResponse> setResponseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: (suspend (message: ResponseType) -> Unit)? ) {
         val key = Pair(parser.signature, id)
         when {
             handler == null -> responseHandlers.remove(key)
             responseHandlers.containsKey(key) -> throw IllegalArgumentException("Duplicate message handler for $key")
             else -> {
                 commands.registerParser(parser)
-                responseHandlers[key] = handler as ((message: McuResponse) -> Unit)
+                responseHandlers[key] = handler as (suspend (message: McuResponse) -> Unit)
             }
         }
     }

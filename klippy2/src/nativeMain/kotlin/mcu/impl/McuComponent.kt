@@ -38,7 +38,7 @@ interface McuConfigure {
     /** Add a query command, run after all initialization commands to start querying sensors. */
     fun queryCommand(signature: String, block: CommandBuilder.(clock: McuClock32)->Unit)
     /** Add a handler for an event sent by the MCU. */
-    fun <ResponseType: McuResponse> responseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: ((message: ResponseType) -> Unit))
+    fun <ResponseType: McuResponse> responseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: suspend (message: ResponseType) -> Unit)
     fun durationToTicks(durationSeconds: MachineDuration) = identify.durationToTicks(durationSeconds)
 }
 
