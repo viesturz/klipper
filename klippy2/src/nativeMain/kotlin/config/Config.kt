@@ -1,33 +1,40 @@
-package config.example
+package config
 import celsius
-import config.*
+import config.mcu.SkrMiniE3V2
+import machine.MachineBuilder
+import parts.AdcTemperatureSensor
+import parts.Heater
+import parts.Fan
+import parts.ControlLoop
+import parts.HeaterFan
 
-val mcu = SkrMiniE3V2(serial="/dev/serial/by-id/usb-Klipper_stm32f103xe_31FFD7053030473538690543-if00")
-val fan0 = Fan(
-    name = "fan0",
-    pin = mcu.fan0,
-)
-val fan1 = Fan(
-    name = "fan1",
-    pin = mcu.fan1,
-)
+fun MachineBuilder.buildMachine() {
+    val mcu = SkrMiniE3V2(serial="/dev/serial/by-id/usb-Klipper_stm32f103xe_31FFD7053030473538690543-if00")
+    val fan0 = Fan(
+        name = "fan0",
+        pin = mcu.fan0,
+    )
+    val fan1 = Fan(
+        name = "fan1",
+        pin = mcu.fan1,
+    )
 
-val heaterE0 = Heater(
-    name = "extruder heater",
-    pin = mcu.heaterE0,
-    sensor = AdcTemperatureSensor(
-        name = "extruder temp",
-        pin = mcu.temp0,
-        sensor = NTC100K,
-        minTemp = 0.celsius,
-        maxTemp = 300.celsius,
-    ),
-    control = Watermark()
-)
+    val e0 = Heater(
+        name = "extruder heater",
+        pin = mcu.heaterE0,
+        sensor = AdcTemperatureSensor(
+            name = "extruder temp",
+            pin = mcu.temp0,
+            sensor = NTC100K,
+            minTemp = 0.celsius,
+            maxTemp = 300.celsius,
+        ),
+        control = Watermark()
+    )
+    HeaterFan("extruder fan control", e0, fan1)
+}
 
-val machine = MachineConfig(
-    parts = listOf(fan0, fan1, heaterE0),
-)
+
 
 //
 //val extruder = stepperRail(
