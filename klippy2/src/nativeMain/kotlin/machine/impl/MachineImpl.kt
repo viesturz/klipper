@@ -1,16 +1,17 @@
 package machine.impl
 
-import config.MachineConfig
+import MachineTime
+import machine.MachineBuilder
+import machine.MachinePart
+import machine.MachineRuntime
 import config.McuConfig
-import config.PartConfig
 import config.SerialConnection
-import config.TemperatureSensorPart
+import config.buildMachine
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.getAndUpdate
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import machine.Machine
 import machine.Machine.State
@@ -21,37 +22,37 @@ import mcu.McuState
 import mcu.connection.McuConnection
 import mcu.connection.connectSerial
 import mcu.impl.McuSetupImpl
-import parts.GCodeHandler
-import parts.MachinePart
-import parts.MachinePartLifecycle
-import parts.MachineRuntime
-import parts.MachineSetup
-import parts.TemperatureSensor
-import parts.buildPart
-import parts.buildTemperatureSensor
 
 private val logger = KotlinLogging.logger("MachineImpl")
 
-class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineSetup {
+/** API for part lifecycle management. */
+interface PartLifecycle: MachinePart {
+    fun status(): Map<String, Any> = mapOf()
+    // Called when all MCUs are configured and parts components initialized.
+    suspend fun onStart(runtime: MachineRuntime){}
+    // Called when printer session is over and it enters idle state.
+    fun onSessionEnd(){}
+    fun shutdown(){}
+}
+
+class MachineImpl : Machine, MachineRuntime, MachineBuilder {
     private var _state = MutableStateFlow(State.NEW)
     override val state: StateFlow<State>
         get() = _state
 
     override val reactor = Reactor()
-    override val scope = reactor.scope
     override val gCode = GCode()
     override val queueManager: QueueManager = QueueManagerImpl(reactor)
     var _shutdownReason = ""
     override val shutdownReason: String
         get() = _shutdownReason
-    val partsList = ArrayList<MachinePartLifecycle>()
-    val parts = HashMap<PartConfig, MachinePartLifecycle>()
+    val partsList = ArrayList<PartLifecycle>()
     val mcuList = ArrayList<Mcu>()
     val mcuSetups = HashMap<McuConfig, McuSetup>()
 
     override suspend fun start() {
         _state.value = State.CONFIGURING
-        for (p in config.parts) acquirePart(p)
+        buildMachine()
         for (mcu in mcuSetups.values){
             logger.info { "Initializing MCU: ${mcu.config.name}" }
             val mcu = mcu.start(reactor)
@@ -83,13 +84,12 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
 
     override val status: Map<String, String>
         get() = buildMap {
-            val time = reactor.now
             for (part in partsList) {
-                put(part.config.name, part.status(time).toString())
+                put(part.name, part.status().toString())
             }
         }
 
-    override fun acquireMcu(config: McuConfig): McuSetup {
+    override fun setupMcu(config: McuConfig): McuSetup {
         val existing = mcuSetups[config]
         if (existing != null) {
             return existing
@@ -100,21 +100,9 @@ class MachineImpl(val config: MachineConfig) : Machine, MachineRuntime, MachineS
         return mcu
     }
 
-    override fun acquirePart(config: PartConfig) = parts.getOrElse(config) {
-        logger.info { "Acquire part $config" }
-        val p = buildPart(config, this)
-        partsList.add(p as MachinePartLifecycle)
-        parts[config] = p as MachinePartLifecycle
-        p
-    } as MachinePart
-
-    override fun acquirePart(config: TemperatureSensorPart) = parts.getOrElse(config) {
-        logger.info { "Acquire part $config" }
-        val p = buildTemperatureSensor(config, this)
-        partsList.add(p as MachinePartLifecycle)
-        parts[config] = p as MachinePartLifecycle
-        p
-    } as TemperatureSensor
+    override fun addPart(part: PartLifecycle) {
+        partsList.add(part)
+    }
 
     override fun registerCommand(command: String, handler: GCodeHandler) {
         gCode.registerCommand(command, handler)

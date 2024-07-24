@@ -3,60 +3,95 @@ package parts
 import MachineTime
 import Temperature
 import celsius
+import config.DigitalOutPin
 import kelvins
-import kotlinx.coroutines.launch
 import machine.CommandQueue
+import machine.MachineBuilder
+import machine.MachinePart
+import machine.MachineRuntime
 import machine.addLocalCommand
 import machine.impl.GcodeParams
+import machine.impl.PartLifecycle
+import machine.impl.Reactor
 import kotlin.math.min
+
+fun MachineBuilder.Heater(
+    name: String,
+    pin: DigitalOutPin,
+    sensor: TemperatureSensor,
+    maxPower: Double = 1.0,
+    control: config.TemperatureControl,
+): Heater = HeaterImpl(name, pin, sensor, maxPower, control, this).also { addPart(it) }
+
+interface Heater: MachinePart {
+    val sensor: TemperatureSensor
+    val target: Temperature
+    fun setTarget(queue: CommandQueue, t: Temperature)
+}
+
+class HeaterImpl(
+    override val name: String,
+    pinConfig: DigitalOutPin,
+    override val sensor: TemperatureSensor,
+    maxPower: Double,
+    controlConfig: config.TemperatureControl,
+    setup: MachineBuilder): PartLifecycle, Heater {
+    private val loop = HeaterLoop(sensor, pinConfig, makeControl(controlConfig),  maxPower, setup)
+
+    var _target: Temperature = 0.kelvins
+    override val target: Temperature
+        get() = _target
+    init {
+        setup.registerMuxCommand("SET_HEATER_TEMPERATURE", "HEATER", name, this::setTargetGcode)
+    }
+
+    override suspend fun onStart(runtime: MachineRuntime) {
+        runtime.reactor.launch { loop.runLoop() }
+    }
+
+    private fun setTargetGcode(queue: CommandQueue, params: GcodeParams) {
+        val temperature = params.getDouble("TARGET").celsius
+        setTarget(queue, temperature)
+    }
+
+    override fun setTarget(queue: CommandQueue, t: Temperature) {
+        require(t >= sensor.minTemp)
+        require(t <= sensor.maxTemp)
+        if (t == _target) return
+        _target = t
+        queue.addLocalCommand(this) {
+            loop.target = t
+        }
+    }
+
+    override fun status() = mapOf(
+        "power" to loop.power,
+        "temperature" to loop.sensor.value,
+        "target" to target,
+        )
+}
+
+/** Heater control loop. */
+private class HeaterLoop(val sensor: TemperatureSensor,
+                         pinConfig: DigitalOutPin,
+                         val control: TemperatureControl,
+                         val maxPower: Double, setup: MachineBuilder) {
+    val heater = setup.setupMcu(pinConfig.mcu).addPwmPin(pinConfig)
+    var power = 0.0
+    var target: Temperature = 0.kelvins
+
+    suspend fun runLoop() {
+            sensor.value.collect { measurement ->
+                power = min(control.update(measurement.time, measurement.temp, power, target), maxPower)
+                // TODO: use SetNow.
+                heater.set(Reactor.now+0.2, power)
+            }
+        }
+}
 
 interface TemperatureControl {
     /** Computes next power value. */
     fun update(time: MachineTime, currentTemp: Temperature, currentPower: Double, targetTemp: Temperature): Double
-}
-
-class Heater(override val config: config.Heater, setup: MachineSetup): MachinePartLifecycle, MachinePart {
-    val temperature = setup.acquirePart(config.sensor)
-    val heater = setup.acquireMcu(config.pin.mcu).addPwmPin(config.pin)
-    var control = makeControl(config.control)
-    var power = 0.0
-    var commandedTarget: Temperature = 0.kelvins
-    private var activeTarget: Temperature = 0.kelvins
-
-    init {
-        setup.registerMuxCommand("SET_HEATER_TEMPERATURE", "HEATER", config.name, this::setTemperatureGcode)
-    }
-
-    override suspend fun onStart(runtime: MachineRuntime) {
-        runtime.scope.launch {
-            temperature.value.collect { measurement ->
-                power = min(control.update(measurement.time, measurement.temp, power, activeTarget), config.maxPower)
-                // TODO: use SetNow.
-                heater.set(runtime.reactor.now+0.2, power)
-            }
-        }
-    }
-
-    private fun setTemperatureGcode(queue: CommandQueue, params: GcodeParams) {
-        val temperature = params.getDouble("TARGET").celsius
-        setTemperature(queue, temperature)
-    }
-
-    fun setTemperature(queue: CommandQueue, value: Temperature) {
-        require(value >= config.sensor.minTemp)
-        require(value <= config.sensor.maxTemp)
-        if (value == commandedTarget) return
-        commandedTarget = value
-        queue.addLocalCommand(this) {
-            activeTarget = value
-        }
-    }
-
-    override fun status(time: MachineTime) = mapOf(
-        "power" to power,
-        "temperature" to temperature,
-        "target" to commandedTarget,
-        )
 }
 
 private fun makeControl(config: config.TemperatureControl): TemperatureControl = when(config) {
