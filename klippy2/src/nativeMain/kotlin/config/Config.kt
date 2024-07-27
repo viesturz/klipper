@@ -28,7 +28,10 @@ fun MachineBuilder.buildMachine() {
             minTemp = 0.celsius,
             maxTemp = 300.celsius,
         ),
-        control = Watermark()
+        control = PID(
+            kP = 10.2,
+            kI = 2.0,
+            kD = 100.0,)
     )
     HeaterFan("extruder fan control", e0, fan1)
 

@@ -13,6 +13,7 @@ value class Temperature(val celsius: Double) {
     operator fun compareTo(other: Temperature) = this.celsius.compareTo(other.celsius)
     operator fun plus(v: Double) = Temperature(celsius+v)
     operator fun minus(v: Double) = Temperature(celsius-v)
+    operator fun minus(v: Temperature) = celsius-v.celsius
 
     val kelvins: Double
         get() = celsius - KTOC

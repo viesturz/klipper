@@ -43,7 +43,6 @@ private class AdcTemperatureSensorImpl(
     override val minTemp: Temperature,
     override val maxTemp: Temperature,
     setup: MachineBuilder): PartLifecycle, TemperatureSensor {
-    val logger = KotlinLogging.logger("AdcTemperatureSensor $name")
     val adc = setup.setupMcu(pinConfig.mcu).addAnalogPin(limitPin(pinConfig, sensor, minTemp, maxTemp))
     val _value = MutableStateFlow(TemperatureSensor.Measurement(0.0, 0.kelvins))
     override val value: StateFlow<TemperatureSensor.Measurement>
@@ -52,7 +51,6 @@ private class AdcTemperatureSensorImpl(
     override suspend fun onStart(runtime: MachineRuntime) {
         adc.setListener { m ->
             val measurement = TemperatureSensor.Measurement(m.time, sensor.resistanceToTemp(m.resistance))
-            logger.info { "AdcTemperatureSensor $name = ${measurement.temp.celsius}" }
             _value.value = measurement
         }
     }
