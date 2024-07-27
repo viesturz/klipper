@@ -25,11 +25,11 @@ class McuButton(override val mcu: Mcu, val config: config.DigitalInPin, configur
         configure.configCommand("buttons_add oid=%c pos=%c pin=%u pull_up=%c") {
             addId(id);addC(1u);addEnum("pin", config.pin);addC(config.pullup == 1)
         }
-        configure.responseHandler(responseButtonsStateParser, id, this::onButtonState)
     }
 
     override fun start(runtime: McuRuntime) {
         this.reactor = runtime.reactor
+        runtime.responseHandler(responseButtonsStateParser, id, this::onButtonState)
     }
 
     private suspend fun onButtonState(state: ResponseButtonsState) {

@@ -25,7 +25,7 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
     internal val responseHandlers = HashMap<Pair<ResponseParser<McuResponse>, ObjectId>, suspend (message: McuResponse) -> Unit>()
     internal val commandQueues = ArrayList<CommandQueue>()
     val components = ArrayList<McuComponent>()
-    override val identify: FirmwareConfig
+    override val firmware: FirmwareConfig
         get() = cmd.identify
 
     override fun makeOid(): ObjectId {
@@ -57,7 +57,7 @@ data class QueryCommand(val signature: String, val block: CommandBuilder.(clock:
 class McuImpl(override val config: McuConfig, val connection: McuConnection, val configuration: McuConfigureImpl): Mcu {
     private val defaultQueue = CommandQueue(connection, "MCU ${config.name} DefaultQueue")
     override val components: List<McuComponent> = configuration.components
-    private val clocksync = ClockSync(connection)
+    private val clocksync = ClockSync(this, connection)
     private val _state = MutableStateFlow(McuState.STARTING)
     private var _stateReason = ""
     private val logger = KotlinLogging.logger("McuImpl ${config.name}")
@@ -79,10 +79,12 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         val runtime = makeRuntime(reactor)
         components.forEach { it.start(runtime) }
         logger.info { "Startup done" }
-        _state.value = McuState.RUNNING
+        advanceStateOrAbort(McuState.RUNNING)
     }
 
     private fun makeRuntime(reactor: Reactor) = object :McuRuntime {
+        override val firmware: FirmwareConfig
+            get() = connection.commands.identify
         override val reactor: Reactor
             get() = reactor
         override val defaultQueue: CommandQueue
@@ -91,13 +93,27 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
             clocksync.estimate.durationToClock(duration)
         override fun timeToClock(time: MachineTime) = clocksync.estimate.timeToClock(time)
         override fun clockToTime(clock: McuClock32) = clocksync.estimate.clockToTime(clock)
+        override fun <ResponseType : McuResponse> responseHandler(
+            parser: ResponseParser<ResponseType>,
+            id: ObjectId,
+            handler: suspend (message: ResponseType) -> Unit) = connection.setResponseHandler(parser, id, handler)
     }
 
     override fun shutdown(reason: String) {
+        if (_state.value == McuState.ERROR || _state.value == McuState.SHUTDOWN) return
+        logger.error { "MCU shutdown, $reason" }
+        connection.dumpCmds()
         components.forEach { it.shutdown() }
         connection.disconnect()
         _stateReason = reason
         _state.value = McuState.ERROR
+    }
+
+    private fun advanceStateOrAbort(state: McuState) {
+        if (_state.value == McuState.ERROR) {
+            throw RuntimeException("Mcu error, aborting, $stateReason")
+        }
+        _state.value = state
     }
 
     private suspend fun configure(reactor: Reactor) {
@@ -144,7 +160,6 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
             delay(15.milliseconds)
         }
     }
-
 }
 
 data class ResponseConfig(val isConfig: Boolean, val crc: UInt, val isShutdown: Boolean, val moveCount: MoveQueueId): McuResponse

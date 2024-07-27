@@ -72,12 +72,14 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
     }
 
     override fun shutdown(reason: String) {
-        if (_state.getAndUpdate { State.SHUTDOWN } != State.RUNNING) return
+        if (state.value != State.RUNNING) return
+        _state.value = State.STOPPING
         logger.warn { "Shutting down the machine, reason: $reason" }
         reactor.launch {
             partsList.reversed().forEach { it.shutdown() }
-            mcuList.reversed().forEach { it.shutdown("machine shutting down") }
+            mcuList.reversed().forEach { it.shutdown(reason) }
             logger.warn { "Machine shutdown finished" }
+            _state.value = State.SHUTDOWN
             reactor.shutdown()
         }
     }

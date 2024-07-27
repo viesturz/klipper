@@ -4,6 +4,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.cinterop.ExperimentalForeignApi
 import MachineTime
 import mcu.ConfigurationException
+import kotlin.experimental.and
 
 typealias ObjectId = UByte
 typealias MoveQueueId = UShort
@@ -17,14 +18,15 @@ interface McuObjectResponse: McuResponse{
 }
 data class ResponseParser<Type: McuResponse>(val signature: String, val block : ParserContext.()->Type)
 
+@OptIn(ExperimentalForeignApi::class, ExperimentalStdlibApi::class)
 class Commands(val identify: FirmwareConfig){
     private val responses = buildMap { for (e in identify.responses.entries) put(e.value, e.key) }
+    private val commands = buildMap { for (e in identify.commands.entries) put(e.value, e.key) }
 
-    @OptIn(ExperimentalForeignApi::class)
     fun parse(data: ByteArray, sentTime: MachineTime, receiveTime: MachineTime): Pair<String, McuResponse>? {
         if (data.size <= chelper.MESSAGE_HEADER_SIZE + chelper.MESSAGE_TRAILER_SIZE) return null
         val buffer = ParserContext(data, chelper.MESSAGE_HEADER_SIZE, sentTime, receiveTime)
-        val name = responses.get(buffer.parseU()) ?: return null
+        val name = responses.get(buffer.parseI()) ?: return null
         val parser = RESPONSES_MAP[name]
         if (parser == null) {
             logger.info { "Message with no handler $name" }
@@ -39,7 +41,7 @@ class Commands(val identify: FirmwareConfig){
 
     inline fun build(signature: String, block: CommandBuilder.()->Unit): UByteArray {
         val builder = CommandBuilder(this)
-        builder.addU(identify.commands.getValue(signature))
+        builder.addI(identify.commands.getValue(signature))
         builder.block()
         return builder.bytes.toUByteArray()
     }
@@ -49,6 +51,41 @@ class Commands(val identify: FirmwareConfig){
     }
 
     fun hasCommand(signature: String) = identify.commands.containsKey(signature)
+
+    fun dumpCommand(data: ByteArray) = dumpMessage(data, commands)
+    fun dumpResponse(data: ByteArray) = dumpMessage(data, responses)
+    fun dumpMessage(data: ByteArray, commands: Map<Int, String>): String {
+        val seq = data[chelper.MESSAGE_POS_SEQ]
+        val buffer = ParserContext(data, chelper.MESSAGE_HEADER_SIZE, 0.0, 0.0)
+        return buildString {
+            append("seq: 0x${(seq and 0x0f).toHexString()} ")
+            while (buffer.pos < data.size - chelper.MESSAGE_TRAILER_SIZE) {
+                val id = buffer.parseI()
+                val signature = commands[id] ?: return "${data.toHexString()} Unknown message ID $id"
+                val message = formatMessage(signature, buffer)
+                append("$message; ")
+            }
+        }
+    }
+
+    fun formatMessage(sig: String, parser: ParserContext) = sig.replace("=%(\\S+)\\b".toRegex()) { match: MatchResult ->
+        val value = try {
+            when (match.groups[1]!!.value) {
+                "s" -> parser.parseStr()
+                ".*s", "*s" -> parser.parseBytes().toHexString()
+                "c" -> parser.parseC()
+                "b" -> parser.parseB()
+                "i", "d" -> parser.parseI()
+                "u" -> parser.parseU()
+                "h" -> parser.parseH()
+                "hu" -> parser.parseHU()
+                else -> "???"
+            }.toString()
+        } catch (e: Exception) {
+            "???"
+        }
+        "=$value "
+    }
 }
 
 class CommandBuilder(private val parser: Commands) {

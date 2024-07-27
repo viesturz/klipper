@@ -21,6 +21,7 @@ interface McuSetup {
     fun addPwmPin(config: config.DigitalOutPin): PwmPin
     fun addI2C(config: config.I2CPins): I2CBus
     fun addSpi(config: config.SpiPins): SPIBus
+    fun addUart(config: config.UartPins): UartBus
     fun addNeopixel(config: config.DigitalOutPin): Neopixel
     fun addStepperMotor(config: config.StepperPins): StepperMotor
     fun addEndstop(pin: config.DigitalInPin, motors: List<StepperMotor>): Endstop
@@ -126,6 +127,11 @@ interface I2CBus{
     suspend fun read(): Array<Byte>
 }
 interface SPIBus{
+    val mcu: Mcu
+    fun send(data: Array<Byte>)
+    suspend fun read(): Array<Byte>
+}
+interface UartBus{
     val mcu: Mcu
     fun send(data: Array<Byte>)
     suspend fun read(): Array<Byte>

@@ -5,6 +5,8 @@ import chelper.serialqueue_free
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
+import kotlinx.cinterop.allocArray
+import kotlinx.cinterop.get
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.readBytes
@@ -22,6 +24,7 @@ import mcu.impl.McuResponse
 import mcu.impl.ObjectId
 import mcu.impl.ResponseParser
 import platform.posix.close
+import platform.posix.log
 import kotlin.concurrent.AtomicLong
 
 private val logger = KotlinLogging.logger("McuConnection")
@@ -46,7 +49,6 @@ class McuConnection(val fd: Int, val reactor: Reactor) {
         reactor.scope.launch(Dispatchers.IO) { pullThread() }
     }
 
-    @OptIn(ExperimentalStdlibApi::class)
     fun pullThread() {
         memScoped {
             val message = alloc<chelper.pull_queue_message>()
@@ -74,7 +76,6 @@ class McuConnection(val fd: Int, val reactor: Reactor) {
         }
     }
 
-    @OptIn(ExperimentalStdlibApi::class)
     suspend fun identify(chunkSize:UByte = 40u): Commands {
         logger.debug { "Identify" }
         val queue = CommandQueue(this, "Identify")
@@ -102,6 +103,29 @@ class McuConnection(val fd: Int, val reactor: Reactor) {
 
     fun setClockEstimate(frequency: Double, convTime: Double, convClock: McuClock, lastClock: McuClock) {
         chelper.serialqueue_set_clock_est(this.serial.ptr, frequency, convTime, convClock, lastClock)
+    }
+
+    fun dumpCmds() {
+        memScoped {
+            val sentBuf = allocArray<chelper.pull_queue_message>(1024)
+            val recBuf = allocArray<chelper.pull_queue_message>(1024)
+            val sentCount = chelper.serialqueue_extract_old(serial.ptr, 1, sentBuf, 1024 )
+            val recCount = chelper.serialqueue_extract_old(serial.ptr, 0, recBuf, 1024 )
+
+            val all = buildList {
+                for (i in 0..<sentCount) {
+                    val m = sentBuf[i]
+                    add(m.sent_time to "Sent: ${m.sent_time}, ${commands.dumpCommand(m.msg.readBytes(m.len))}")
+                }
+                for (i in 0..<recCount) {
+                    val m = recBuf[i]
+                    add(m.receive_time to "Received: ${m.sent_time} -> ${m.receive_time}, ${commands.dumpResponse(m.msg.readBytes(m.len))}")
+                }
+            }
+
+            logger.info { "Dumping send/receive history" }
+            all.sortedBy { p -> p.first }.forEach { logger.info { it.second } }
+        }
     }
 
     fun disconnect() {

@@ -5,7 +5,6 @@ import machine.MachineBuilder
 import parts.AdcTemperatureSensor
 import parts.Heater
 import parts.Fan
-import parts.ControlLoop
 import parts.HeaterFan
 
 fun MachineBuilder.buildMachine() {
@@ -32,9 +31,23 @@ fun MachineBuilder.buildMachine() {
         control = Watermark()
     )
     HeaterFan("extruder fan control", e0, fan1)
+
+//    val stepperE0 = LinearStepper(
+//        name = "e0 stepper",
+//        pins = mcu.stepper3,
+//        stepsPerRotation = 200,
+//        rotationDistance = 50.0,
+//        gearRatio = 1.0/5,
+//        driver = TMC2209(
+//            name = "e0 driver",
+//            pins = mcu.stepper3Uart,
+//            microsteps = 16,
+//            runCurrent = 0.65,
+//            idleCurrent = 0.1,
+//            stealthchopTreshold = 999999,
+//        )
+//    )
 }
-
-
 
 //
 //val extruder = stepperRail(

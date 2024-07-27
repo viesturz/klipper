@@ -33,7 +33,7 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
     fun send(data: UByteArray, minClock: McuClock = 0u, reqClock: McuClock = 0u, ackId: ULong=0u) {
         val connection = this.connection ?:
             throw RuntimeException("Trying to send before setup is finished")
-        logger.trace { "Sending ${data.toHexString()}, ackId=#$ackId" }
+        logger.trace {  "Sending ${data.toHexString()}, ackId=#$ackId" }
         chelper.serialqueue_send(connection.serial.ptr, queue.ptr,
             data.toCValues(), data.size, minClock, reqClock,  notify_id = ackId)
         lastClock = reqClock

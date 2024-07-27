@@ -4,7 +4,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 
 /** Component handling the basic MCU features. */
 class McuBasics(val mcu: McuImpl, val configure: McuConfigure): McuComponent {
-    private val logger = KotlinLogging.logger("${mcu.config.name} Basics")
+    private val logger = KotlinLogging.logger(mcu.config.name)
 
 
     override fun configure(configure: McuConfigure) {
@@ -16,7 +16,7 @@ class McuBasics(val mcu: McuImpl, val configure: McuConfigure): McuComponent {
         logger.trace { "Stats: $stats" }
     }
     fun onShutdown(resp: ResponseShutdown) {
-        val reason = configure.identify.enumerationIdToValue("static_string_id")[resp.staticStringId.toInt()]  ?: "unknown Firmware error ${resp.staticStringId}"
+        val reason = configure.firmware.enumerationIdToValue("static_string_id")[resp.staticStringId.toInt()]  ?: "unknown Firmware error ${resp.staticStringId}"
         logger.error {  "Shutdown Firmware error: $reason" }
         mcu.shutdown("MCU ${mcu.config.name}: $reason")
     }
