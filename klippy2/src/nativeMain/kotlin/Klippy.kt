@@ -25,7 +25,9 @@ fun main(args: Array<String>) = runBlocking {
 
             gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=0.5")
             gcode.run("SET_FAN_SPEED FAN=fan0 SPEED=0.5")
-            gcode.run("SET_HEATER_TEMPERATURE HEATER='extruder heater' TARGET=100")
+            gcode.run("SET_HEATER_TEMPERATURE HEATER='extruder' TARGET=100")
+            gcode.run("TEMPERATURE_WAIT SENSOR='extruder' MINIMUM=100")
+            gcode.run("SHUTDOWN")
         }
 
         // Wait until shutdown.

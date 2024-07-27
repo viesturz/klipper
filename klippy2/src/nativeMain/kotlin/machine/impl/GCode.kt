@@ -1,5 +1,7 @@
 package machine.impl
 
+import Temperature
+import celsius
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
 import mcu.ConfigurationException
@@ -137,4 +139,6 @@ class GcodeParams(val raw: String, val name: String, val params: Map<String, Str
         params[name]?.toFloat() ?: default ?: throw MissingRequiredParameterException(name)
     fun getDouble(name: String, default: Double? = null) =
         params[name]?.toDouble() ?: default ?: throw MissingRequiredParameterException(name)
+    fun getCelsius(name: String, default: Temperature? = null) =
+        params[name]?.toDouble()?.celsius ?: default ?: throw MissingRequiredParameterException(name)
 }
