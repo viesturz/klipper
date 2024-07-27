@@ -3,4 +3,6 @@ out
 *.pyc
 .config
 .config.old
+.gradle
 klippy/.version
+klippy/.build
