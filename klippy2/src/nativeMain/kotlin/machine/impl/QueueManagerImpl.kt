@@ -17,8 +17,8 @@ import kotlin.time.Duration.Companion.seconds
 
 
 /** Time it takes for a queue to start */
-private val QUEUE_START_TIME = 0.2
-private val QUEUE_CHECK_TIMEOUT = 1.0
+private const val QUEUE_START_TIME = 0.2
+private const val QUEUE_CHECK_TIMEOUT = 1.0
 
 class QueueManagerImpl(val reactor: Reactor): QueueManager {
     val queues = ArrayList<QueueImpl>()
@@ -108,7 +108,7 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
         while (canGenerate()) {
             val cmd = commands.first()
             val partQueue = cmd.partQueue ?: throw RuntimeException("Comand with no partQueue")
-            val actualDuration = commands.first().measureActual(partQueue.commands) ?: break
+            val actualDuration = commands.first().measureActual(manager.reactor, partQueue.commands) ?: break
             if (nextCommandTime == TIME_EAGER_START) {
                 nextCommandTime = manager.reactor.now + QUEUE_START_TIME
             }

@@ -2,6 +2,7 @@ package machine
 
 import MachineDuration
 import MachineTime
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import machine.impl.PartQueue
 import machine.impl.Reactor
@@ -26,7 +27,7 @@ abstract class Command(
     /** Measure the min time needed for this command. */
     open fun measureMin(): MachineDuration = 0.0
     /** Measure the actual time needed for this command. Or null if not enough followup commands in the queue. */
-    abstract fun measureActual(followupCommands: List<Command>): MachineDuration?
+    abstract fun measureActual(reactor: Reactor, followupCommands: List<Command>): MachineDuration?
     /** Generate this command. Will be called upon successful measureActual. Finalizes the processing of a command. */
     abstract fun generate(reactor: Reactor, startTime: MachineTime, duration: MachineDuration, followupCommands: List<Command>)
 }
@@ -69,7 +70,7 @@ fun CommandQueue.addBasicMcuCommand(origin: Any, generate: (time: MachineTime) -
     = add(object: Command(origin) {
 
     override fun measureMin() = 0.0
-    override fun measureActual(followupCommands: List<Command>) = 0.0
+    override fun measureActual(reactor: Reactor, followupCommands: List<Command>) = 0.0
 
     override fun generate(
         reactor: Reactor,
@@ -86,7 +87,7 @@ fun CommandQueue.addBasicMcuCommand(origin: Any, generate: (time: MachineTime) -
 fun CommandQueue.addLocalCommand(origin: Any, generate: (time: MachineTime) -> Unit)
         = add(object: Command(origin) {
     override fun measureMin() = 0.0
-    override fun measureActual(followupCommands: List<Command>) = 0.0
+    override fun measureActual(reactor: Reactor, followupCommands: List<Command>) = 0.0
     override fun generate(
         reactor: Reactor,
         startTime: MachineTime,
@@ -96,6 +97,33 @@ fun CommandQueue.addLocalCommand(origin: Any, generate: (time: MachineTime) -> U
         reactor.scheduleOrdered(startTime) {
             generate(startTime)
         }
+    }
+})
+
+/** A command to wait until the suspend method completes.
+ *  IE: Wait for temperature.
+ * */
+fun CommandQueue.addWaitForCommand(origin: Any, function: suspend () -> Unit) = add(object: Command(origin) {
+    var job: Job? = null
+    override fun measureMin() = 0.0
+    override fun measureActual(reactor: Reactor, followupCommands: List<Command>): MachineDuration? {
+        val curJob = job
+        if (curJob == null) {
+            job = reactor.launch { function(); tryGenerate() }
+            return 0.0
+        } else if (curJob.isCompleted) {
+            return 0.0
+        } else {
+            return null
+        }
+    }
+    override fun generate(
+        reactor: Reactor,
+        startTime: MachineTime,
+        duration: MachineDuration,
+        followupCommands: List<Command>
+    ) {
+        // Nothing to generate
     }
 })
 
@@ -109,7 +137,7 @@ class WaitForTimeCommand(origin: Any, time: MachineTime = TIME_WAIT) : Command(o
         this.minTime = time
         this.queue?.tryGenerate()
     }
-    override fun measureActual(followupCommands: List<Command>) = 0.0
+    override fun measureActual(reactor: Reactor, followupCommands: List<Command>) = 0.0
     override fun generate(
         reactor: Reactor,
         startTime: MachineTime,
@@ -121,7 +149,7 @@ class WaitForTimeCommand(origin: Any, time: MachineTime = TIME_WAIT) : Command(o
 /** A command to wait for a duration. */
 class DelayCommand(val duration: MachineDuration) : Command(Unit) {
     override fun measureMin() = duration
-    override fun measureActual(followupCommands: List<Command>) = duration
+    override fun measureActual(reactor: Reactor, followupCommands: List<Command>) = duration
     override fun generate(
         reactor: Reactor,
         startTime: MachineTime,

@@ -6,14 +6,11 @@ import celsius
 import config.DigitalOutPin
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kelvins
-import kotlinx.coroutines.flow.count
-import kotlinx.coroutines.flow.takeWhile
 import machine.CommandQueue
 import machine.MachineBuilder
 import machine.MachinePart
 import machine.MachineRuntime
 import machine.addLocalCommand
-import machine.addWaitForCommand
 import machine.impl.GcodeParams
 import machine.impl.PartLifecycle
 import kotlin.math.min
@@ -48,7 +45,6 @@ private class HeaterImpl(
         get() = _target
     init {
         setup.registerMuxCommand("SET_HEATER_TEMPERATURE", "HEATER", name, this::setTargetGcode)
-        setup.registerMuxCommand("TEMPERATURE_WAIT", "HEATER", name, this::waitForTempGcode)
     }
 
     override suspend fun onStart(runtime: MachineRuntime) {
@@ -58,18 +54,6 @@ private class HeaterImpl(
     private fun setTargetGcode(queue: CommandQueue, params: GcodeParams) {
         val temperature = params.getDouble("TARGET").celsius
         setTarget(queue, temperature)
-    }
-
-    private fun waitForTempGcode(queue: CommandQueue, params: GcodeParams) {
-        val min = params.getCelsius("MIN", sensor.minTemp)
-        val max = params.getCelsius("MAX", sensor.maxTemp)
-//        queue.addWaitForCommand(this) {
-//            tempWait(min, max)
-//        }
-    }
-
-    private suspend fun tempWait(min: Temperature, max: Temperature) {
-        sensor.value.takeWhile { it.temp > min || it.temp < max }.count()
     }
 
     override fun setTarget(queue: CommandQueue, t: Temperature) {
@@ -84,7 +68,7 @@ private class HeaterImpl(
 
     override fun status() = mapOf(
         "power" to loop.power,
-        "temperature" to loop.sensor.value,
+        "temperature" to loop.sensor.measurement,
         "target" to target,
         )
 }
@@ -102,7 +86,7 @@ private class HeaterLoop(name: String,
     var target: Temperature = 0.kelvins
 
     suspend fun runLoop() {
-            sensor.value.collect { measurement ->
+            sensor.measurement.collect { measurement ->
                 if (target == 0.celsius) {
                     heater.setNow(0.0)
                     return@collect

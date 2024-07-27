@@ -19,10 +19,10 @@ fun MachineBuilder.buildMachine() {
     )
 
     val e0 = Heater(
-        name = "extruder heater",
+        name = "extruder",
         pin = mcu.heaterE0,
         sensor = AdcTemperatureSensor(
-            name = "extruder temp",
+            name = "extruder",
             pin = mcu.temp0,
             sensor = NTC100K,
             minTemp = 0.celsius,
