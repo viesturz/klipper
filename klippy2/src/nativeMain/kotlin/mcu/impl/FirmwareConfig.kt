@@ -3,10 +3,12 @@ package mcu.impl
 import MachineDuration
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.long
@@ -17,10 +19,12 @@ import okio.buffer
 @Serializable
 data class FirmwareConfig @OptIn(ExperimentalSerializationApi::class) constructor(
     val version: String,
-    @kotlinx.serialization.ExperimentalSerializationApi @JsonNames("build_versions")
+    val app: String,
+    val license: String,
+    @ExperimentalSerializationApi @JsonNames("build_versions")
     val buildVersions: String,
-    val commands: Map<String, UInt>,
-    val responses: Map<String, UInt>,
+    val commands: Map<String, Int>,
+    val responses: Map<String, Int>,
     val config: Map<String, JsonPrimitive>,
     val enumerations: Map<String, Map<String, JsonElement>>,
 ) {
@@ -72,6 +76,8 @@ data class FirmwareConfig @OptIn(ExperimentalSerializationApi::class) constructo
         }
     }
 
+    fun hasCommand(signature: String) = commands.containsKey(signature)
+
     companion object {
         fun parse(compressedIdentify: ByteArray?): FirmwareConfig {
             if (compressedIdentify == null) return DEFAULT_IDENTIFY
@@ -79,16 +85,22 @@ data class FirmwareConfig @OptIn(ExperimentalSerializationApi::class) constructo
             val unzipped = okio.InflaterSource(input, okio.Inflater(nowrap = false))
             input.write(compressedIdentify).close()
             val result = unzipped.buffer().readByteArray().decodeToString()
+
+//            println(JSON.encodeToString(JSON.decodeFromString<JsonObject>(result)))
             return Json.decodeFromString<FirmwareConfig>(result)
         }
 
         val DEFAULT_IDENTIFY = FirmwareConfig(
             version = "",
+            app = "",
+            license = "",
             buildVersions = "",
-            commands = mapOf("identify offset=%u count=%c" to 1u),
-            responses = mapOf("identify_response offset=%u data=%.*s" to 0u),
+            commands = mapOf("identify offset=%u count=%c" to 1),
+            responses = mapOf("identify_response offset=%u data=%.*s" to 0),
             config = mapOf(),
             enumerations = mapOf(),
         )
+
+        val JSON = Json{prettyPrint = true}
     }
 }

@@ -23,7 +23,7 @@ interface McuComponent {
  */
 interface McuConfigure {
     /** MCU self identification data. */
-    val identify: FirmwareConfig
+    val firmware: FirmwareConfig
     /** Allocate new object ID. */
     fun makeOid(): ObjectId
     /** Create a new command queue, separate from the default one.
@@ -39,14 +39,17 @@ interface McuConfigure {
     fun queryCommand(signature: String, block: CommandBuilder.(clock: McuClock32)->Unit)
     /** Add a handler for an event sent by the MCU. */
     fun <ResponseType: McuResponse> responseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: suspend (message: ResponseType) -> Unit)
-    fun durationToTicks(durationSeconds: MachineDuration) = identify.durationToTicks(durationSeconds)
+    fun durationToClock(durationSeconds: MachineDuration) = firmware.durationToTicks(durationSeconds)
 }
 
 interface McuRuntime {
+    val firmware: FirmwareConfig
     val reactor: Reactor
     val defaultQueue: CommandQueue
 
     fun durationToClock(duration: MachineDuration): McuClock32
     fun timeToClock(time: MachineTime): McuClock
     fun clockToTime(clock: McuClock32): MachineTime
+    /** Add a handler for an event sent by the MCU. */
+    fun <ResponseType: McuResponse> responseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: suspend (message: ResponseType) -> Unit)
 }

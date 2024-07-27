@@ -22,6 +22,7 @@ interface Machine {
         STARTING,
         /** All parts report up and running. */
         RUNNING,
+        STOPPING,
         SHUTDOWN,
     }
 }

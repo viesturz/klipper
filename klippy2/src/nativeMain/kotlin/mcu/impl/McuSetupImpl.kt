@@ -7,6 +7,7 @@ import config.I2CPins
 import config.McuConfig
 import config.SpiPins
 import config.StepperPins
+import config.UartPins
 import machine.impl.Reactor
 import mcu.Endstop
 import mcu.I2CBus
@@ -17,10 +18,12 @@ import mcu.PulseCounter
 import mcu.PwmPin
 import mcu.SPIBus
 import mcu.StepperMotor
+import mcu.UartBus
 import mcu.components.McuAnalogPin
 import mcu.components.McuButton
 import mcu.components.McuHwPwmPin
 import mcu.components.McuPwmPin
+import mcu.components.McuStepperMotor
 import mcu.connection.McuConnection
 
 class McuSetupImpl(override val config: McuConfig, val connection: McuConnection): McuSetup {
@@ -28,19 +31,22 @@ class McuSetupImpl(override val config: McuConfig, val connection: McuConnection
     private val mcu = McuImpl(config, connection, configuration)
 
     init {
-        addComponent(McuBasics(mcu, configuration))
+        add(McuBasics(mcu, configuration))
     }
+
+    private fun add(component: McuComponent) = configuration.components.add(component)
 
     override suspend fun start(reactor: Reactor): Mcu {
         mcu.start(reactor)
         return mcu
     }
 
-    override fun addButton(pin: DigitalInPin) = addComponent(McuButton(mcu, pin, configuration))
+    override fun addButton(pin: DigitalInPin) = McuButton(mcu, pin, configuration).also { add(it) }
     override fun addPwmPin(config: DigitalOutPin): PwmPin =
-        if (config.hardwarePwm) addComponent(McuHwPwmPin(mcu, config, configuration))
-        else addComponent(McuPwmPin(mcu, config, configuration))
-    override fun addAnalogPin(pin: AnalogInPin) = addComponent(McuAnalogPin(mcu, pin, configuration))
+        (if (config.hardwarePwm) McuHwPwmPin(mcu, config, configuration)
+        else McuPwmPin(mcu, config, configuration)).also { add(it) }
+    override fun addAnalogPin(pin: AnalogInPin) = McuAnalogPin(mcu, pin, configuration).also { add(it) }
+    override fun addStepperMotor(config: StepperPins): StepperMotor = McuStepperMotor(mcu, config, configuration).also { add(it) }
 
     override fun addPulseCounter(pin: DigitalInPin): PulseCounter {
         TODO("Not yet implemented")
@@ -62,16 +68,11 @@ class McuSetupImpl(override val config: McuConfig, val connection: McuConnection
         TODO("Not yet implemented")
     }
 
-    override fun addStepperMotor(config: StepperPins): StepperMotor {
-        TODO("Not yet implemented")
-    }
-
     override fun addEndstop(pin: DigitalInPin, motors: List<StepperMotor>): Endstop {
         TODO("Not yet implemented")
     }
-
-    private inline fun <reified Type: McuComponent> addComponent(component: Type): Type {
-        configuration.components.add(component)
-        return component
+    override fun addUart(config: UartPins): UartBus {
+        TODO("Not yet implemented")
     }
+
 }

@@ -44,7 +44,7 @@ private class FanImpl(
     pinConfig: DigitalOutPin,
     setup: MachineBuilder,
 ): PartLifecycle, Fan {
-    val pin = setup.setupMcu(pinConfig.mcu).addPwmPin(pinConfig)
+    val pin = setup.setupMcu(pinConfig.mcu).addPwmPin(pinConfig.copy(watchdogDuration = 0.0))
     val logger = KotlinLogging.logger("Fan $name")
     var _speed = 0.0
     override val speed: Double
