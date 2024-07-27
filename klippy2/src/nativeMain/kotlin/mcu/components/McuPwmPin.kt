@@ -39,7 +39,7 @@ class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initial
         configure.initCommand("set_digital_out_pwm_cycle oid=%c cycle_ticks=%u") {
             addId(id);addU(cycleTicks)
         }
-        configure.initCommand("set_digital_out_pwm oid=%c on_ticks=%u") {
+        configure.initCommand("update_digital_out_pwm oid=%c on_ticks=%u") {
             addId(id);addU(dutyToTicks(dutyCycle))
         }
     }
@@ -56,14 +56,12 @@ class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initial
         if (cycleChange || dutyCycle != _dutyCycle || config.watchdogDuration > 0) {
             _dutyCycle = dutyCycle
             val clock = max(runtime.timeToClock(time),queue.lastClock)
-            runtime.reactor.launch {
-                queue.send(
-                    minClock = lastClock,
-                    reqClock = clock,
-                    data = queue.build("queue_digital_out oid=%c clock=%u on_ticks=%u") {
-                        addId(id);addU(clock.toUInt());addU(dutyToTicks(_dutyCycle))
-                    })
-            }
+            queue.send(
+                minClock = lastClock,
+                reqClock = clock,
+                data = queue.build("queue_digital_out oid=%c clock=%u on_ticks=%u") {
+                    addId(id);addU(clock.toUInt());addU(dutyToTicks(_dutyCycle))
+                })
         }
     }
 
@@ -76,7 +74,7 @@ class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initial
             queue.send(
                 minClock = lastClock,
                 reqClock = runtime.timeToClock(curClock),
-                data = queue.build("set_digital_out_pwm oid=%c on_ticks=%u") {
+                data = queue.build("update_digital_out_pwm oid=%c on_ticks=%u") {
                     addId(id);addU(dutyToTicks(_dutyCycle))
                 })
         }

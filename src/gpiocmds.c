@@ -142,19 +142,6 @@ DECL_COMMAND(command_set_digital_out_pwm_cycle,
              "set_digital_out_pwm_cycle oid=%c cycle_ticks=%u");
 
 void
-command_set_digital_out_pwm(uint32_t *args)
-{
-    struct digital_out_s *d = oid_lookup(args[0], command_config_digital_out);
-    irq_disable();
-    if (!move_queue_empty(&d->mq))
-        shutdown("Can not set soft pwm cycle on_ticks while updates pending");
-    d->on_duration = args[1];
-    irq_enable();
-}
-DECL_COMMAND(command_set_digital_out_pwm,
-             "set_digital_out_pwm oid=%c on_ticks=%u");
-
-void
 command_queue_digital_out(uint32_t *args)
 {
     struct digital_out_s *d = oid_lookup(args[0], command_config_digital_out);
@@ -206,6 +193,49 @@ command_update_digital_out(uint32_t *args)
     }
 }
 DECL_COMMAND(command_update_digital_out, "update_digital_out oid=%c value=%c");
+
+void
+command_update_digital_out_pwm(uint32_t *args)
+{
+    struct digital_out_s *d = oid_lookup(args[0], command_config_digital_out);
+    irq_disable();
+    if (!move_queue_empty(&d->mq))
+        shutdown("Can not set soft pwm cycle on_ticks while updates pending");
+    sched_del_timer(&d->timer);
+    uint32_t on_duration = args[1];
+    uint8_t flags = d->flags & DF_DEFAULT_ON; // Clear all fags except default on
+    gpio_out_write(d->pin, on_duration > 0);
+    if (on_duration == 0) {
+        // Always off
+    } else if (on_duration >= d->cycle_time) {
+        // Constant on
+        flags |= DF_ON;
+    } else {
+        flags |= DF_TOGGLING;
+    }
+    int watchdog = ((!on_duration != !(flags & DF_DEFAULT_ON)) || flags & DF_TOGGLING )  && d->max_duration;
+    if (watchdog) {
+        flags |= DF_CHECK_END;
+        d->end_time = timer_read_time() + d->max_duration;
+    } else {
+        d->end_time = 0;
+    }
+    if (flags & DF_TOGGLING) {
+        d->on_duration = on_duration;
+        d->off_duration = d->cycle_time - on_duration;
+        d->timer.waketime = timer_read_time() + on_duration;
+        d->timer.func = digital_toggle_event;
+        sched_add_timer(&d->timer);
+    } else if (watchdog) {
+        d->timer.waketime = d->end_time;
+        d->timer.func = digital_load_event;
+        sched_add_timer(&d->timer);
+    }
+    d->flags = flags;
+    irq_enable();
+}
+DECL_COMMAND(command_update_digital_out_pwm,
+             "update_digital_out_pwm oid=%c on_ticks=%u");
 
 void
 digital_out_shutdown(void)
