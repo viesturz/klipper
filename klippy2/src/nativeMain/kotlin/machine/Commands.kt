@@ -3,13 +3,19 @@ package machine
 import MachineDuration
 import MachineTime
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import machine.impl.PartQueue
 import machine.impl.Reactor
-import machine.impl.waitUntil
+import platform.posix.time
+import kotlin.math.min
 
+/* Can start at any suitable time. */
 val TIME_EAGER_START = -1.0
+/** Cannot start yet, check back later.  */
 val TIME_WAIT = -2.0
+/** Actively running, check back later.  */
+val TIME_BUSY = -3.0
+/** Need more elements in queue, check back later.  */
+val TIME_INSUFFICIENT_QUEUE = -4.0
 
 /** Individual command to be added to a queue. */
 abstract class Command(
@@ -18,6 +24,9 @@ abstract class Command(
     val origin: Any) {
     var partQueue: PartQueue? = null
     var queue: CommandQueue? = null
+    /** Minimum time this command can start.
+     *  Wth special values for EAGER_START and WAIT.
+     */
     var minTime = TIME_EAGER_START
 
     /** Will not attempt to generate this command until chained commands up to this far in the future are available. */
@@ -26,10 +35,15 @@ abstract class Command(
 
     /** Measure the min time needed for this command. */
     open fun measureMin(): MachineDuration = 0.0
-    /** Measure the actual time needed for this command. Or null if not enough followup commands in the queue. */
-    abstract fun measureActual(reactor: Reactor, followupCommands: List<Command>): MachineDuration?
-    /** Generate this command. Will be called upon successful measureActual. Finalizes the processing of a command. */
-    abstract fun generate(reactor: Reactor, startTime: MachineTime, duration: MachineDuration, followupCommands: List<Command>)
+    /** Generate this command. Called when all preceding commands have been run.
+     *  Return if done:
+     *   - end time of the command, if it as a deterministic duration
+     *   - TIME_EAGER_START, if the next command can start as soon as possible
+     *   Return if not done, will be called again later:
+     *   - TIME_WAIT, the machine time needs to advance before this command can be run.
+     *   - TIME_BUSY, the command is actively running, end time not known.
+     */
+    abstract fun run(reactor: Reactor, startTime: MachineTime, followupCommands: List<Command>): MachineTime
 }
 
 interface QueueManager {
@@ -68,62 +82,51 @@ interface CommandQueue {
  * */
 fun CommandQueue.addBasicMcuCommand(origin: Any, generate: (time: MachineTime) -> Unit)
     = add(object: Command(origin) {
-
-    override fun measureMin() = 0.0
-    override fun measureActual(reactor: Reactor, followupCommands: List<Command>) = 0.0
-
-    override fun generate(
+    override fun run(
         reactor: Reactor,
         startTime: MachineTime,
-        duration: MachineDuration,
         followupCommands: List<Command>
-    ) {
+    ): MachineTime {
         generate(startTime)
+        return startTime
     }
 })
 
-/** Add a command that will be executed locally without sending to the MCU.
+/** Add a command that will be queued locally without sending to the MCU.
  *  IE, target temperature change, gcode offset change. */
-fun CommandQueue.addLocalCommand(origin: Any, generate: (time: MachineTime) -> Unit)
+fun CommandQueue.addLocalCommand(origin: Any, impl: (time: MachineTime) -> Unit)
         = add(object: Command(origin) {
-    override fun measureMin() = 0.0
-    override fun measureActual(reactor: Reactor, followupCommands: List<Command>) = 0.0
-    override fun generate(
+    override fun run(
         reactor: Reactor,
         startTime: MachineTime,
-        duration: MachineDuration,
         followupCommands: List<Command>
-    ) {
+    ): MachineTime {
         reactor.scheduleOrdered(startTime) {
-            generate(startTime)
+            impl(startTime)
         }
+        return startTime
     }
 })
 
-/** A command to wait until the suspend method completes.
- *  IE: Wait for temperature.
+/** A command that takes indeterminate time to run.
+ *  IE: Wait for temperature, HOME, etc.
  * */
-fun CommandQueue.addWaitForCommand(origin: Any, function: suspend () -> Unit) = add(object: Command(origin) {
+fun CommandQueue.addLongRunningCommand(origin: Any, function: suspend () -> Unit) = add(object: Command(origin) {
     var job: Job? = null
-    override fun measureMin() = 0.0
-    override fun measureActual(reactor: Reactor, followupCommands: List<Command>): MachineDuration? {
+    override fun run(
+        reactor: Reactor,
+        startTime: MachineTime,
+        followupCommands: List<Command>
+    ): MachineTime {
         val curJob = job
         if (curJob == null) {
             job = reactor.launch { function(); tryGenerate() }
-            return 0.0
+            return TIME_BUSY
         } else if (curJob.isCompleted) {
-            return 0.0
+            return TIME_EAGER_START
         } else {
-            return null
+            return TIME_BUSY
         }
-    }
-    override fun generate(
-        reactor: Reactor,
-        startTime: MachineTime,
-        duration: MachineDuration,
-        followupCommands: List<Command>
-    ) {
-        // Nothing to generate
     }
 })
 
@@ -137,23 +140,19 @@ class WaitForTimeCommand(origin: Any, time: MachineTime = TIME_WAIT) : Command(o
         this.minTime = time
         this.queue?.tryGenerate()
     }
-    override fun measureActual(reactor: Reactor, followupCommands: List<Command>) = 0.0
-    override fun generate(
+    override fun run(
         reactor: Reactor,
         startTime: MachineTime,
-        duration: MachineDuration,
         followupCommands: List<Command>
-    ) {}
+    ) = if (minTime < 0) minTime else min(startTime, minTime)
 }
 
 /** A command to wait for a duration. */
-class DelayCommand(val duration: MachineDuration) : Command(Unit) {
+class DwellCommand(val duration: MachineDuration) : Command(Unit) {
     override fun measureMin() = duration
-    override fun measureActual(reactor: Reactor, followupCommands: List<Command>) = duration
-    override fun generate(
+    override fun run(
         reactor: Reactor,
         startTime: MachineTime,
-        duration: MachineDuration,
         followupCommands: List<Command>
-    ) {}
+    ) = startTime + duration
 }

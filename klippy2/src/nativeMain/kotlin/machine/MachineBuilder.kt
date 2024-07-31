@@ -21,6 +21,7 @@ interface MachineBuilder
 
 /** API available at the run time.  */
 interface MachineRuntime {
+    val parts: List<MachinePart>
     val reactor: Reactor
     val gCode: GCode
     val queueManager: QueueManager
@@ -30,3 +31,6 @@ interface MachineRuntime {
 interface MachinePart {
     val name: String
 }
+
+inline fun <reified PartType> MachineRuntime.getPartByName(name: String): PartType? =
+    parts.first { it.name == name && it is PartType } as PartType?

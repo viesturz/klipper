@@ -47,6 +47,8 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
     override val shutdownReason: String
         get() = _shutdownReason
     val partsList = ArrayList<PartLifecycle>()
+    override val parts
+        get() = partsList
     val mcuList = ArrayList<Mcu>()
     val mcuSetups = HashMap<McuConfig, McuSetup>()
 

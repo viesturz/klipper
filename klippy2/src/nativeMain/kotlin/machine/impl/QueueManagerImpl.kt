@@ -8,6 +8,7 @@ import kotlinx.coroutines.delay
 import machine.Command
 import machine.CommandQueue
 import machine.QueueManager
+import machine.TIME_BUSY
 import machine.TIME_EAGER_START
 import machine.TIME_WAIT
 import machine.WaitForTimeCommand
@@ -108,14 +109,20 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
         while (canGenerate()) {
             val cmd = commands.first()
             val partQueue = cmd.partQueue ?: throw RuntimeException("Comand with no partQueue")
-            val actualDuration = commands.first().measureActual(manager.reactor, partQueue.commands) ?: break
-            if (nextCommandTime == TIME_EAGER_START) {
-                nextCommandTime = manager.reactor.now + QUEUE_START_TIME
+            var cmdTime = nextCommandTime
+            if (cmdTime == TIME_EAGER_START) {
+                cmdTime = manager.reactor.now + QUEUE_START_TIME
             }
-            val cmdTime = max(nextCommandTime, cmd.minTime)
-            logger.info { "Generating command $cmd at $nextCommandTime" }
-            cmd.generate(manager.reactor, cmdTime, actualDuration, partQueue.commands)
-            nextCommandTime = cmdTime + actualDuration
+            cmdTime = max(cmdTime, cmd.minTime)
+            logger.info { "Attempting command $cmd at $cmdTime" }
+            val endTime = commands.first().run(manager.reactor, cmdTime, partQueue.commands)
+            when (endTime) {
+                TIME_WAIT -> break
+                TIME_BUSY -> break
+                else -> {}
+            }
+            require(endTime >= cmdTime) { "Command end time before the start time!" }
+            nextCommandTime = endTime
             // Remove the command
             partQueue.pop(cmd, nextCommandTime)
             commands.remove(cmd)

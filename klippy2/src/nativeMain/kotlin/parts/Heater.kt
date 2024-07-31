@@ -4,8 +4,12 @@ import MachineTime
 import Temperature
 import celsius
 import config.DigitalOutPin
+import config.PID
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kelvins
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.takeWhile
 import machine.CommandQueue
 import machine.MachineBuilder
 import machine.MachinePart
@@ -13,6 +17,7 @@ import machine.MachineRuntime
 import machine.addLocalCommand
 import machine.impl.GcodeParams
 import machine.impl.PartLifecycle
+import kotlin.math.absoluteValue
 import kotlin.math.min
 import kotlin.math.sign
 
@@ -32,6 +37,17 @@ interface Heater: MachinePart {
     val sensor: TemperatureSensor
     val target: Temperature
     fun setTarget(queue: CommandQueue, t: Temperature)
+    fun setTarget(t: Temperature)
+    fun setControl(control: TemperatureControl): TemperatureControl
+    fun setControl(config: config.PID) = setControl(makeControl(config))
+    suspend fun waitForStable()
+}
+
+interface TemperatureControl {
+    /** Computes next power value. */
+    fun update(time: MachineTime, currentTemp: Temperature, currentPower: Double, targetTemp: Temperature): Double
+    fun reset() {}
+    fun isStable(): Boolean
 }
 
 private class HeaterImpl(
@@ -52,7 +68,7 @@ private class HeaterImpl(
     }
 
     private fun setTargetGcode(queue: CommandQueue, params: GcodeParams) {
-        val temperature = params.getDouble("TARGET").celsius
+        val temperature = params.getCelsius("TARGET")
         setTarget(queue, temperature)
     }
 
@@ -66,6 +82,21 @@ private class HeaterImpl(
         }
     }
 
+    override suspend fun waitForStable() {
+        if (_target <= 0.celsius) return
+        loop.sensor.measurement.map {_target <= 0.celsius || loop.control.isStable()}.takeWhile { !it }.first()
+    }
+
+    override fun setTarget(t: Temperature) {
+        require(t >= sensor.minTemp)
+        require(t <= sensor.maxTemp)
+        if (t == _target) return
+        _target = t
+        loop.setTarget(t)
+    }
+
+    override fun setControl(control: TemperatureControl) = loop.setControl(control)
+
     override fun status() = mapOf(
         "power" to loop.power,
         "temperature" to loop.sensor.measurement,
@@ -77,7 +108,7 @@ private class HeaterImpl(
 private class HeaterLoop(name: String,
                         val sensor: TemperatureSensor,
                          pinConfig: DigitalOutPin,
-                         val control: TemperatureControl,
+                         var control: TemperatureControl,
                          /** Temp delta to consider as stable. */
                          val maxPower: Double, setup: MachineBuilder) {
     val logger = KotlinLogging.logger("Heater $name")
@@ -101,12 +132,13 @@ private class HeaterLoop(name: String,
         target = t
         control.reset()
     }
-}
 
-interface TemperatureControl {
-    /** Computes next power value. */
-    fun update(time: MachineTime, currentTemp: Temperature, currentPower: Double, targetTemp: Temperature): Double
-    fun reset() {}
+    fun setControl(newControl: TemperatureControl): TemperatureControl {
+        val old = control
+        control = newControl
+        control.reset()
+        return old
+    }
 }
 
 private fun makeControl(config: config.TemperatureControl): TemperatureControl = when(config) {
@@ -115,6 +147,9 @@ private fun makeControl(config: config.TemperatureControl): TemperatureControl =
 }
 
 class ControlWatermark(val config: config.Watermark): TemperatureControl {
+    // Watermark is neve really stable, but to have something to wait for.
+    var stable = false
+
     override fun update(
         time: MachineTime,
         currentTemp: Temperature,
@@ -124,17 +159,22 @@ class ControlWatermark(val config: config.Watermark): TemperatureControl {
         currentTemp >= targetTemp + config.maxDelta -> 0.0
         currentTemp <= targetTemp - config.maxDelta -> 1.0
         else -> currentPower
+    }. also { stable = currentTemp >= targetTemp }
+    override fun reset() {
+        stable = false
     }
+    override fun isStable() = stable
 }
 
 // Positional (PID) control alg from https://github.com/DangerKlippers/danger-klipper/pull/210
 class ControlPID(val config: config.PID): TemperatureControl {
     var previousTemp = 0.celsius
     var previousError = 0.0
-    var previousDerivation = 0.0
+    var previousSlope = 0.0
     var previousIntegral = 0.0
     var lastTime = 0.0
     val smoothTime = 1.0
+    var previousTarget = 0.celsius
     val logger = KotlinLogging.logger("PID")
 
     override fun update(
@@ -148,6 +188,7 @@ class ControlPID(val config: config.PID): TemperatureControl {
             lastTime = time
             previousError = error
             previousTemp = currentTemp
+            previousSlope = previousError
             return currentPower
         }
         val timeDiff = time - lastTime
@@ -169,14 +210,18 @@ class ControlPID(val config: config.PID): TemperatureControl {
             previousIntegral = integral
         }
         previousTemp = currentTemp
+        previousSlope = (error - previousError) / timeDiff
         previousError = error
+        previousTarget = targetTemp
         return clampedOutput
     }
 
     override fun reset() {
         lastTime = 0.0
         previousIntegral = 0.0
-        previousDerivation = 0.0
         previousError = 0.0
     }
+
+    // Less than 1 degree off and temp change less that 0.2 deg/sec
+    override fun isStable() = previousError.absoluteValue < 1 && previousSlope < 0.2
 }
