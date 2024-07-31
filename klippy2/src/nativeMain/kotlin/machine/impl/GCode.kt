@@ -4,6 +4,8 @@ import Temperature
 import celsius
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
+import machine.MachineRuntime
+import machine.getPartByName
 import mcu.ConfigurationException
 
 class InvalidGcodeException(cmd: String) : RuntimeException(cmd)
@@ -39,10 +41,10 @@ class GCode {
         muxer.handlers[muxValue] = handler
     }
 
-    fun runner(commandQueue: CommandQueue) = GCodeRunner(commandQueue, this)
+    fun runner(commandQueue: CommandQueue, machineRuntime: MachineRuntime) = GCodeRunner(commandQueue, this, machineRuntime)
 }
 
-class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode) {
+class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode, val machineRuntime: MachineRuntime) {
     private val stringGcmds = listOf("M117", "M118")
 
     fun run(cmd: String) {
@@ -61,7 +63,7 @@ class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode) {
             command.contains("=") -> parseWithAssign(cmd, args)
             else -> parseBasic(cmd, args)
         }
-        val params = GcodeParams(command, name, map)
+        val params = GcodeParams(command, name, map, machineRuntime)
         val muxer = gCode.muxCommands[name]
         if (muxer != null && params.params.containsKey(muxer.key)) {
             val handler = muxer.handlers[params.params[muxer.key]]
@@ -130,7 +132,7 @@ class MuxCommandHandler(val key: String) {
     val handlers = HashMap<String, GCodeHandler>()
 }
 
-class GcodeParams(val raw: String, val name: String, val params: Map<String, String>) {
+class GcodeParams(val raw: String, val name: String, val params: Map<String, String>, val runtime: MachineRuntime) {
     fun get(name: String, default: String? = null) =
         params[name] ?: default ?: throw MissingRequiredParameterException(name)
     fun getInt(name: String, default: Int? = null) =
@@ -141,4 +143,6 @@ class GcodeParams(val raw: String, val name: String, val params: Map<String, Str
         params[name]?.toDouble() ?: default ?: throw MissingRequiredParameterException(name)
     fun getCelsius(name: String, default: Temperature? = null) =
         params[name]?.toDouble()?.celsius ?: default ?: throw MissingRequiredParameterException(name)
+    inline fun <reified PartType> getPartByName(param: String) = runtime.getPartByName<PartType>(get(param)) ?:
+    throw InvalidGcodeException("${PartType::class.simpleName} with name ${get(param)} not found")
 }

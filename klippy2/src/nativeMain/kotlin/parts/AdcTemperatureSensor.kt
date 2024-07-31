@@ -15,7 +15,7 @@ import machine.CommandQueue
 import machine.MachineBuilder
 import machine.MachinePart
 import machine.MachineRuntime
-import machine.addWaitForCommand
+import machine.addLongRunningCommand
 import machine.impl.GcodeParams
 import machine.impl.PartLifecycle
 import kotlin.math.max
@@ -62,7 +62,7 @@ private class AdcTemperatureSensorImpl(
     private fun waitForTempGcode(queue: CommandQueue, params: GcodeParams) {
         val min = params.getCelsius("MINIMUM", minTemp)
         val max = params.getCelsius("MAXIMUM", maxTemp)
-        queue.addWaitForCommand(this) {
+        queue.addLongRunningCommand(this) {
             waitForTemp(min, max)
         }
     }
