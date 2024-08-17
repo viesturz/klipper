@@ -1,8 +1,11 @@
 import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
 import io.github.oshai.kotlinlogging.Level
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import logging.LogFormatter
+import logging.LogWriter
 import machine.Machine
 import machine.impl.InvalidGcodeException
 import machine.impl.MachineImpl
@@ -23,11 +26,16 @@ suspend fun gcodeFromCommandline(machine: MachineImpl) {
     }
 }
 
+@OptIn(DelicateCoroutinesApi::class)
 fun main(args: Array<String>) = runBlocking {
     println("Klippy 2!")
+    val logfile = "klippy.log"
 
     KotlinLoggingConfiguration.logLevel = Level.INFO
     KotlinLoggingConfiguration.formatter = LogFormatter()
+    if (logfile != null) {
+        KotlinLoggingConfiguration.appender = LogWriter(logfile, GlobalScope)
+    }
 
     while (true) {
         val machine = MachineImpl()
@@ -35,16 +43,14 @@ fun main(args: Array<String>) = runBlocking {
         machine.start()
         // Wait until running
         machine.state.first { it == Machine.State.RUNNING }
-
-        machine.reactor.launch {
-            gcodeFromCommandline(machine)
+        println("Machine running")
+        gcodeFromCommandline(machine)
 //
 //            gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=0.3")
 //            gcode.run("PID_CALIBRATE HEATER='extruder' TARGET=150")
 //            gcode.run("SET_FAN_SPEED FAN=fan0 SPEED=0.5")
 //            gcode.run("SET_HEATER_TEMPERATURE HEATER='extruder' TARGET=150")
 //            gcode.run("TEMPERATURE_WAIT SENSOR='extruder' MINIMUM=150")
-        }
 
         // Wait until shutdown.
         machine.state.first { it == Machine.State.SHUTDOWN }

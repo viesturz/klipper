@@ -116,6 +116,7 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
             cmdTime = max(cmdTime, cmd.minTime)
             logger.trace { "Attempting command $cmd at $cmdTime" }
             val endTime = commands.first().run(manager.reactor, cmdTime, partQueue.commands)
+            logger.trace { "Command $cmd at endTime = $endTime" }
             when (endTime) {
                 TIME_WAIT -> break
                 TIME_BUSY -> break
@@ -128,6 +129,7 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
             commands.remove(cmd)
             cmd.queue = null
         }
+        logger.trace { "TryGenerate - can not generate now, len=${commands.size} nextTime=$nextCommandTime, cMinTime=${commands.firstOrNull()?.minTime}" }
         // Schedule next generation
         maybeSchedulePolling()
     }

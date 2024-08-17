@@ -14,8 +14,9 @@ class InvalidGcodeException(cmd: String) : RuntimeException(cmd)
 class MissingRequiredParameterException(cmd: String) : RuntimeException(cmd)
 class FailedToParseParamsException(cmd: String) : RuntimeException(cmd)
 
+/** Handler generates commands and puts them into a queue. */
 typealias GCodeHandler = (queue: CommandQueue, params: GCodeCommand) -> Unit
-typealias GCodeOutputHandler = (message: String) -> Unit
+typealias GCodeOutputSink = (message: String) -> Unit
 private val logger = KotlinLogging.logger("Gcode")
 
 class GCode {
@@ -44,10 +45,10 @@ class GCode {
         muxer.handlers[muxValue] = handler
     }
 
-    fun runner(commandQueue: CommandQueue, machineRuntime: MachineRuntime, outputHandler: GCodeOutputHandler) = GCodeRunner(commandQueue, this, machineRuntime, outputHandler)
+    fun runner(commandQueue: CommandQueue, machineRuntime: MachineRuntime, outputHandler: GCodeOutputSink) = GCodeRunner(commandQueue, this, machineRuntime, outputHandler)
 }
 
-class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode, val machineRuntime: MachineRuntime, val outputHandler: GCodeOutputHandler) {
+class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode, val machineRuntime: MachineRuntime, val outputHandler: GCodeOutputSink) {
     private val stringGcmds = listOf("M117", "M118")
 
     fun schedule(cmd: String) {
@@ -141,7 +142,7 @@ class MuxCommandHandler(val key: String) {
     val handlers = HashMap<String, GCodeHandler>()
 }
 
-class GCodeCommand(val raw: String, val name: String, val params: Map<String, String>, val runtime: MachineRuntime, val outputHandler: GCodeOutputHandler) {
+class GCodeCommand(val raw: String, val name: String, val params: Map<String, String>, val runtime: MachineRuntime, val outputCollector: GCodeOutputSink) {
     fun get(name: String, default: String? = null) =
         params[name] ?: default ?: throw MissingRequiredParameterException(name)
     fun getInt(name: String, default: Int? = null) =
@@ -156,5 +157,5 @@ class GCodeCommand(val raw: String, val name: String, val params: Map<String, St
     inline fun <reified PartType> getPartByName(param: String) = runtime.getPartByName<PartType>(get(param)) ?:
     throw InvalidGcodeException("${PartType::class.simpleName} with name ${get(param)} not found")
 
-    fun respond(msg: String) = outputHandler(msg)
+    fun respond(msg: String) = outputCollector(msg)
 }
