@@ -7,9 +7,9 @@ import config.DigitalOutPin
 import config.PID
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kelvins
+import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.takeWhile
 import machine.CommandQueue
 import machine.MachineBuilder
 import machine.MachinePart
@@ -18,7 +18,6 @@ import machine.addLocalCommand
 import machine.impl.GcodeParams
 import machine.impl.PartLifecycle
 import kotlin.math.absoluteValue
-import kotlin.math.min
 import kotlin.math.sign
 
 fun MachineBuilder.Heater(
@@ -36,6 +35,8 @@ fun MachineBuilder.Heater(
 interface Heater: MachinePart {
     val sensor: TemperatureSensor
     val target: Temperature
+    val power: Double
+    val maxPower: Double
     fun setTarget(queue: CommandQueue, t: Temperature)
     fun setTarget(t: Temperature)
     fun setControl(control: TemperatureControl): TemperatureControl
@@ -59,6 +60,10 @@ private class HeaterImpl(
     var _target: Temperature = 0.kelvins
     override val target: Temperature
         get() = _target
+    override val power: Double
+        get() = loop.power
+    override val maxPower: Double
+        get() = loop.maxPower
     init {
         setup.registerMuxCommand("SET_HEATER_TEMPERATURE", "HEATER", name, this::setTargetGcode)
     }
@@ -84,7 +89,7 @@ private class HeaterImpl(
 
     override suspend fun waitForStable() {
         if (_target <= 0.celsius) return
-        loop.sensor.measurement.map {_target <= 0.celsius || loop.control.isStable()}.takeWhile { !it }.first()
+        loop.sensor.measurement.map {_target <= 0.celsius || loop.control.isStable()}.dropWhile { !it }.first()
     }
 
     override fun setTarget(t: Temperature) {
@@ -99,7 +104,7 @@ private class HeaterImpl(
 
     override fun status() = mapOf(
         "power" to loop.power,
-        "temperature" to loop.sensor.measurement,
+        "temperature" to loop.sensor.measurement.value,
         "target" to target,
         )
 }
@@ -122,7 +127,7 @@ private class HeaterLoop(name: String,
                     heater.setNow(0.0)
                     return@collect
                 }
-                power = min(control.update(measurement.time, measurement.temp, power, target), maxPower)
+                power = control.update(measurement.time, measurement.temp, power, target).coerceAtMost(maxPower)
                 logger.info { "Update temp=${measurement.temp}, target=$target, power=$power" }
                 heater.setNow(power)
             }
