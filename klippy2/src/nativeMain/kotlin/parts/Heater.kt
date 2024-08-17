@@ -18,6 +18,7 @@ import machine.addLocalCommand
 import machine.impl.GcodeParams
 import machine.impl.PartLifecycle
 import kotlin.math.absoluteValue
+import kotlin.math.log
 import kotlin.math.sign
 
 fun MachineBuilder.Heater(
@@ -175,6 +176,7 @@ class ControlWatermark(val config: config.Watermark): TemperatureControl {
 class ControlPID(val config: config.PID): TemperatureControl {
     var previousTemp = 0.celsius
     var previousError = 0.0
+    var previousDer = 0.0
     var previousSlope = 0.0
     var previousIntegral = 0.0
     var lastTime = 0.0
@@ -205,19 +207,21 @@ class ControlPID(val config: config.PID): TemperatureControl {
         // and derivative on measurement, to account for derivative kick
         // when the set point changes
         var derivative = -(currentTemp - previousTemp) / timeDiff
-        derivative = ((smoothCoef - 1.0) * previousError + derivative) / smoothCoef
+        derivative = ((smoothCoef - 1.0) * previousDer + derivative) / smoothCoef
         // calculate the output
         val output = config.kP * error + config.kI * integral + config.kD * derivative
         val clampedOutput = output.coerceIn(0.0..1.0)
-        logger.info { "Update, P = $error, D=$derivative, I=$integral" }
-        if (output == clampedOutput || sign(output) != sign(ic)) {
+        logger.trace { "Update, P = $error, D=$derivative, I=$integral" }
+        if (output == clampedOutput || sign(output-0.1) != sign(ic)) {
             // Integral update is allowed when not saturated or opposite to the integral.
             previousIntegral = integral
         }
         previousTemp = currentTemp
         previousSlope = (error - previousError) / timeDiff
         previousError = error
+        previousDer = derivative
         previousTarget = targetTemp
+        lastTime = time
         return clampedOutput
     }
 

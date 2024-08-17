@@ -6,12 +6,14 @@ import parts.AdcTemperatureSensor
 import parts.Heater
 import parts.Fan
 import parts.HeaterFan
+import parts.PidCalibrate
 
 fun MachineBuilder.buildMachine() {
     val mcu = SkrMiniE3V2(serial="/dev/serial/by-id/usb-Klipper_stm32f103xe_31FFD7053030473538690543-if00")
     val fan0 = Fan(
         name = "fan0",
-        pin = mcu.fan0,
+        pin = mcu.fan0.copy(shutdownValue = 1.0),
+        maxPower = 0.6,
     )
     val fan1 = Fan(
         name = "fan1",
@@ -28,12 +30,10 @@ fun MachineBuilder.buildMachine() {
             minTemp = 0.celsius,
             maxTemp = 300.celsius,
         ),
-        control = PID(
-            kP = 10.2,
-            kI = 2.0,
-            kD = 100.0,)
+        control = PID(kP=0.05931248913992124, kI=0.002886204038118223, kD=0.3047230307967899)
     )
-    HeaterFan("extruder fan control", e0, fan1)
+    PidCalibrate()
+    HeaterFan("extruder fan control", e0, fan0)
 
 //    val stepperE0 = LinearStepper(
 //        name = "e0 stepper",
