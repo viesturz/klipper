@@ -134,6 +134,7 @@ fun CommandQueue.addLocalCommand(origin: Any, impl: (time: MachineTime) -> Unit)
  * */
 fun CommandQueue.addLongRunningCommand(origin: Any, function: suspend () -> Unit) = add(object: Command(origin) {
     var job: Job? = null
+    val completable = CompletableDeferred<Unit>()
     override fun run(
         reactor: Reactor,
         startTime: MachineTime,
@@ -141,9 +142,9 @@ fun CommandQueue.addLongRunningCommand(origin: Any, function: suspend () -> Unit
     ): MachineTime {
         val curJob = job
         if (curJob == null) {
-            job = reactor.launch { function(); tryGenerate() }
+            job = reactor.launch { function(); completable.complete(Unit);tryGenerate() }
             return TIME_BUSY
-        } else if (curJob.isCompleted) {
+        } else if (completable.isCompleted) {
             return TIME_EAGER_START
         } else {
             return TIME_BUSY
