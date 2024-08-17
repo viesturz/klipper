@@ -12,7 +12,8 @@ import machine.impl.PartLifecycle
 
 fun MachineBuilder.Fan(
     name: String,
-    pin: DigitalOutPin): Fan = FanImpl(name, pin, this).also { addPart(it) }
+    maxPower: Double = 1.0,
+    pin: DigitalOutPin): Fan = FanImpl(name, maxPower, pin, this).also { addPart(it) }
 
 fun MachineBuilder.HeaterFan(
     name: String,
@@ -41,6 +42,7 @@ interface Fan: MachinePart {
 
 private class FanImpl(
     override val name: String,
+    val maxPower: Double,
     pinConfig: DigitalOutPin,
     setup: MachineBuilder,
 ): PartLifecycle, Fan {
@@ -61,13 +63,13 @@ private class FanImpl(
     override fun queueSpeed(queue: CommandQueue, value: Double) {
         require(value in 0f..1f)
         logger.info { "Fan set speed $value" }
-        _speed = value
+        _speed = speed.coerceAtMost(maxPower)
         queue.addBasicMcuCommand(this) { time ->
             pin.set(time, value)
         }
     }
     override fun setSpeed(speed: Double) {
-        _speed = speed
+        _speed = speed.coerceAtMost(maxPower)
         pin.setNow(speed)
     }
 

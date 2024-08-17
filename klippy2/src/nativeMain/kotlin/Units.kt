@@ -1,6 +1,6 @@
 
 
-/** Machine time in seconds. Counted from primary MCU boot time. */
+/** Machine time in seconds. Counted from Host computer boot time. */
 typealias MachineTime = Double
 typealias MachineDuration = Double
 typealias Voltage = Double

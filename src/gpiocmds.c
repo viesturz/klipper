@@ -211,7 +211,7 @@ command_update_digital_out_pwm(uint32_t *args)
         // Constant on
         flags |= DF_ON;
     } else {
-        flags |= DF_TOGGLING;
+        flags |= DF_TOGGLING | DF_ON;
     }
     int watchdog = ((!on_duration != !(flags & DF_DEFAULT_ON)) || flags & DF_TOGGLING )  && d->max_duration;
     if (watchdog) {
@@ -220,6 +220,7 @@ command_update_digital_out_pwm(uint32_t *args)
     } else {
         d->end_time = 0;
     }
+    d->flags = flags;
     if (flags & DF_TOGGLING) {
         d->on_duration = on_duration;
         d->off_duration = d->cycle_time - on_duration;
@@ -231,7 +232,6 @@ command_update_digital_out_pwm(uint32_t *args)
         d->timer.func = digital_load_event;
         sched_add_timer(&d->timer);
     }
-    d->flags = flags;
     irq_enable();
 }
 DECL_COMMAND(command_update_digital_out_pwm,
