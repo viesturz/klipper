@@ -108,28 +108,29 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
     override fun tryGenerate() {
         while (canGenerate()) {
             val cmd = commands.first()
-            val partQueue = cmd.partQueue ?: throw RuntimeException("Comand with no partQueue")
+            val partQueue = cmd.partQueue ?: throw RuntimeException("Command with no partQueue")
             var cmdTime = nextCommandTime
-            if (cmdTime == TIME_EAGER_START) {
-                cmdTime = manager.reactor.now + QUEUE_START_TIME
+            val nowTime = manager.reactor.now
+            // Make sure there is enough time for command queuing.
+            if (cmdTime == TIME_EAGER_START || cmdTime < nowTime + QUEUE_START_TIME) {
+                cmdTime = nowTime + QUEUE_START_TIME
             }
             cmdTime = max(cmdTime, cmd.minTime)
-            logger.trace { "Attempting command $cmd at $cmdTime" }
-            val endTime = commands.first().run(manager.reactor, cmdTime, partQueue.commands)
-            logger.trace { "Command $cmd at endTime = $endTime" }
+            logger.info {  "Attempting command $cmd at $cmdTime" }
+            var endTime = commands.first().run(manager.reactor, cmdTime, partQueue.commands)
+            logger.info { "Command $cmd at endTime = $endTime" }
             when (endTime) {
                 TIME_WAIT -> break
                 TIME_BUSY -> break
                 else -> {}
             }
-            require(endTime >= cmdTime) { "Command end time before the start time!" }
             nextCommandTime = endTime
             // Remove the command
             partQueue.pop(cmd, nextCommandTime)
             commands.remove(cmd)
             cmd.queue = null
         }
-        logger.trace { "TryGenerate - can not generate now, len=${commands.size} nextTime=$nextCommandTime, cMinTime=${commands.firstOrNull()?.minTime}" }
+        logger.info { "TryGenerate - can not generate now, len=${commands.size} nextTime=$nextCommandTime, cMinTime=${commands.firstOrNull()?.minTime}" }
         // Schedule next generation
         maybeSchedulePolling()
     }
