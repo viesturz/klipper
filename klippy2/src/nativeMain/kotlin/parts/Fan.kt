@@ -3,7 +3,7 @@ package parts
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
 import machine.addBasicMcuCommand
-import machine.impl.GcodeParams
+import machine.impl.GCodeCommand
 import celsius
 import config.DigitalOutPin
 import machine.MachineBuilder
@@ -56,7 +56,7 @@ private class FanImpl(
         setup.registerMuxCommand("SET_FAN_SPEED", "FAN", name, this::setSpeedGcode)
     }
 
-    private fun setSpeedGcode(queue: CommandQueue, params: GcodeParams) {
+    private fun setSpeedGcode(queue: CommandQueue, params: GCodeCommand) {
         val speed = params.getDouble("SPEED")
         queueSpeed(queue, speed)
     }

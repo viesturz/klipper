@@ -4,7 +4,6 @@ import MachineTime
 import Temperature
 import celsius
 import config.DigitalOutPin
-import config.PID
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kelvins
 import kotlinx.coroutines.flow.dropWhile
@@ -15,10 +14,9 @@ import machine.MachineBuilder
 import machine.MachinePart
 import machine.MachineRuntime
 import machine.addLocalCommand
-import machine.impl.GcodeParams
+import machine.impl.GCodeCommand
 import machine.impl.PartLifecycle
 import kotlin.math.absoluteValue
-import kotlin.math.log
 import kotlin.math.sign
 
 fun MachineBuilder.Heater(
@@ -73,7 +71,7 @@ private class HeaterImpl(
         runtime.reactor.launch { loop.runLoop() }
     }
 
-    private fun setTargetGcode(queue: CommandQueue, params: GcodeParams) {
+    private fun setTargetGcode(queue: CommandQueue, params: GCodeCommand) {
         val temperature = params.getCelsius("TARGET")
         setTarget(queue, temperature)
     }

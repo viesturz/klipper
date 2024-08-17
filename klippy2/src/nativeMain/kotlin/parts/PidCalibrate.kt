@@ -11,7 +11,7 @@ import machine.MachinePart
 import machine.MachineRuntime
 import machine.addLongRunningCommand
 import machine.impl.CommandException
-import machine.impl.GcodeParams
+import machine.impl.GCodeCommand
 import machine.impl.PartLifecycle
 import kotlin.math.PI
 import kotlin.math.absoluteValue
@@ -39,7 +39,7 @@ private class PidCalibrateImpl(override val name: String, setup: MachineBuilder)
         this.runtime = runtime
     }
 
-    private fun pidCalibrateGcode(queue: CommandQueue, params: GcodeParams) {
+    private fun pidCalibrateGcode(queue: CommandQueue, params: GCodeCommand) {
         val target = params.getCelsius("TARGET")
         val heater = params.getPartByName<Heater>("HEATER")
         val tolerance = params.getDouble("TOLERANCE", 0.02)

@@ -5,6 +5,7 @@ import celsius
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
 import machine.MachineRuntime
+import machine.addWaitForCompletionCommand
 import machine.getPartByName
 import mcu.ConfigurationException
 
@@ -13,7 +14,8 @@ class InvalidGcodeException(cmd: String) : RuntimeException(cmd)
 class MissingRequiredParameterException(cmd: String) : RuntimeException(cmd)
 class FailedToParseParamsException(cmd: String) : RuntimeException(cmd)
 
-typealias GCodeHandler = (queue: CommandQueue, params: GcodeParams) -> Unit
+typealias GCodeHandler = (queue: CommandQueue, params: GCodeCommand) -> Unit
+typealias GCodeOutputHandler = (message: String) -> Unit
 private val logger = KotlinLogging.logger("Gcode")
 
 class GCode {
@@ -42,13 +44,13 @@ class GCode {
         muxer.handlers[muxValue] = handler
     }
 
-    fun runner(commandQueue: CommandQueue, machineRuntime: MachineRuntime) = GCodeRunner(commandQueue, this, machineRuntime)
+    fun runner(commandQueue: CommandQueue, machineRuntime: MachineRuntime, outputHandler: GCodeOutputHandler) = GCodeRunner(commandQueue, this, machineRuntime, outputHandler)
 }
 
-class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode, val machineRuntime: MachineRuntime) {
+class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode, val machineRuntime: MachineRuntime, val outputHandler: GCodeOutputHandler) {
     private val stringGcmds = listOf("M117", "M118")
 
-    fun run(cmd: String) {
+    fun schedule(cmd: String) {
         logger.info { cmd }
         var command = cmd
         val comment = command.indexOfFirst { it == ';' }
@@ -64,7 +66,7 @@ class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode, val machineR
             command.contains("=") -> parseWithAssign(cmd, args)
             else -> parseBasic(cmd, args)
         }
-        val params = GcodeParams(command, name, map, machineRuntime)
+        val params = GCodeCommand(command, name, map, machineRuntime, outputHandler)
         val muxer = gCode.muxCommands[name]
         if (muxer != null && params.params.containsKey(muxer.key)) {
             val handler = muxer.handlers[params.params[muxer.key]]
@@ -84,6 +86,12 @@ class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode, val machineR
         }
         handler.impl(commandQueue, params)
     }
+
+    suspend fun run(cmd: String) {
+        schedule(cmd)
+        commandQueue.addWaitForCompletionCommand(this).await()
+    }
+
     // Parses X10 Y20.5
     private fun parseBasic(cmd: String,parts: List<String>) = buildMap {
         parts.filter { it.isNotBlank() }.forEach {
@@ -133,7 +141,7 @@ class MuxCommandHandler(val key: String) {
     val handlers = HashMap<String, GCodeHandler>()
 }
 
-class GcodeParams(val raw: String, val name: String, val params: Map<String, String>, val runtime: MachineRuntime) {
+class GCodeCommand(val raw: String, val name: String, val params: Map<String, String>, val runtime: MachineRuntime, val outputHandler: GCodeOutputHandler) {
     fun get(name: String, default: String? = null) =
         params[name] ?: default ?: throw MissingRequiredParameterException(name)
     fun getInt(name: String, default: Int? = null) =
@@ -144,6 +152,9 @@ class GcodeParams(val raw: String, val name: String, val params: Map<String, Str
         params[name]?.toDouble() ?: default ?: throw MissingRequiredParameterException(name)
     fun getCelsius(name: String, default: Temperature? = null) =
         params[name]?.toDouble()?.celsius ?: default ?: throw MissingRequiredParameterException(name)
+
     inline fun <reified PartType> getPartByName(param: String) = runtime.getPartByName<PartType>(get(param)) ?:
     throw InvalidGcodeException("${PartType::class.simpleName} with name ${get(param)} not found")
+
+    fun respond(msg: String) = outputHandler(msg)
 }
