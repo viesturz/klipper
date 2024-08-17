@@ -2,6 +2,8 @@ package machine
 
 import MachineDuration
 import MachineTime
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import machine.impl.PartQueue
 import machine.impl.Reactor
@@ -91,6 +93,25 @@ fun CommandQueue.addBasicMcuCommand(origin: Any, generate: (time: MachineTime) -
         return startTime
     }
 })
+
+
+/** Add a trigger that completes when the queue is evaluated up to here.
+ * IE, wait for previous long running command to finish.
+ * */
+fun CommandQueue.addWaitForCompletionCommand(origin: Any): Deferred<MachineTime> {
+    val deferred = CompletableDeferred<MachineTime>()
+    add(object : Command(origin) {
+        override fun run(
+            reactor: Reactor,
+            startTime: MachineTime,
+            followupCommands: List<Command>
+        ): MachineTime {
+            deferred.complete(startTime)
+            return startTime
+        }
+    })
+    return deferred
+}
 
 /** Add a command that will be queued locally without sending to the MCU.
  *  IE, target temperature change, gcode offset change. */

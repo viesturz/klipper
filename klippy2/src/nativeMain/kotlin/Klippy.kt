@@ -4,7 +4,24 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import logging.LogFormatter
 import machine.Machine
+import machine.impl.InvalidGcodeException
 import machine.impl.MachineImpl
+
+
+suspend fun gcodeFromCommandline(machine: MachineImpl) {
+    val queue = machine.queueManager.newQueue()
+    val runner = machine.gCode.runner(queue, machine) { msg -> println(msg) }
+    while (machine.state.value != Machine.State.SHUTDOWN) {
+        print(": ")
+        val cmd = readln()
+        try {
+            runner.run(cmd)
+        } catch (e: InvalidGcodeException) {
+            println("  Invalid gcode: ${e.message}")
+        }
+        println()
+    }
+}
 
 fun main(args: Array<String>) = runBlocking {
     println("Klippy 2!")
@@ -20,14 +37,13 @@ fun main(args: Array<String>) = runBlocking {
         machine.state.first { it == Machine.State.RUNNING }
 
         machine.reactor.launch {
-            val queue = machine.queueManager.newQueue()
-            val gcode = machine.gCode.runner(queue, machine)
-
-            gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=0.3")
+            gcodeFromCommandline(machine)
+//
+//            gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=0.3")
 //            gcode.run("PID_CALIBRATE HEATER='extruder' TARGET=150")
 //            gcode.run("SET_FAN_SPEED FAN=fan0 SPEED=0.5")
-            gcode.run("SET_HEATER_TEMPERATURE HEATER='extruder' TARGET=150")
-            gcode.run("TEMPERATURE_WAIT SENSOR='extruder' MINIMUM=150")
+//            gcode.run("SET_HEATER_TEMPERATURE HEATER='extruder' TARGET=150")
+//            gcode.run("TEMPERATURE_WAIT SENSOR='extruder' MINIMUM=150")
         }
 
         // Wait until shutdown.

@@ -114,7 +114,7 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
                 cmdTime = manager.reactor.now + QUEUE_START_TIME
             }
             cmdTime = max(cmdTime, cmd.minTime)
-            logger.info { "Attempting command $cmd at $cmdTime" }
+            logger.trace { "Attempting command $cmd at $cmdTime" }
             val endTime = commands.first().run(manager.reactor, cmdTime, partQueue.commands)
             when (endTime) {
                 TIME_WAIT -> break
