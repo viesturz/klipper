@@ -1,5 +1,6 @@
 package mcu.connection
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
@@ -7,9 +8,11 @@ import kotlinx.cinterop.ptr
 import kotlinx.cinterop.set
 import platform.posix.*
 
+private val logger = KotlinLogging.logger("SerialIO")
+
 @OptIn(ExperimentalForeignApi::class)
 fun connectPipe(path: String): Int {
-    println("Connecting to Pipe $path")
+    logger.info { "Connecting to Pipe $path" }
     val fd = open(path, O_RDWR or O_NOCTTY)
     if (fd == -1) {
         val error = errno
@@ -21,7 +24,7 @@ fun connectPipe(path: String): Int {
 
 @OptIn(ExperimentalForeignApi::class)
 fun connectSerial(path: String, baud: Int): Int {
-    println("Connecting to serial $path")
+    logger.info { "Connecting to serial $path" }
     val fd = open(path, O_RDWR)
     if (fd == -1) {
         val error = errno
