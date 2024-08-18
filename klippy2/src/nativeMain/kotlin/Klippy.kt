@@ -29,13 +29,10 @@ suspend fun gcodeFromCommandline(machine: MachineImpl) {
 @OptIn(DelicateCoroutinesApi::class)
 fun main(args: Array<String>) = runBlocking {
     println("Klippy 2!")
-    val logfile = "klippy.log"
 
     KotlinLoggingConfiguration.logLevel = Level.INFO
     KotlinLoggingConfiguration.formatter = LogFormatter()
-    if (logfile != null) {
-        KotlinLoggingConfiguration.appender = LogWriter(logfile, GlobalScope)
-    }
+    KotlinLoggingConfiguration.appender = LogWriter("klippy.log", GlobalScope)
 
     while (true) {
         val machine = MachineImpl()

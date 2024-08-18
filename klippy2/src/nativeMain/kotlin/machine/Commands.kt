@@ -7,7 +7,6 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import machine.impl.PartQueue
 import machine.impl.Reactor
-import platform.posix.time
 import kotlin.math.min
 
 /* Can start at any suitable time. */

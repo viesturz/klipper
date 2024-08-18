@@ -85,7 +85,7 @@ private class CalibrateControl(
      * Each sample consists of heating cycle up to tempHigh and observing the following peak,
      * then cooling down to tempLow and observing the following low peak.
      * */
-    data class Sample(val power: Double, var max: Temperature, var maxTime:MachineTime, var min: Temperature, var minTime: MachineTime, var heatStartTime: MachineTime, var heatStopTime:MachineTime)
+    data class Sample(val power: Double, var max: Temperature, var maxTime: MachineTime, var min: Temperature, var minTime: MachineTime, var heatStartTime: MachineTime, var heatStopTime: MachineTime)
     var current = Sample(powerToUse, target, 0.0, target, 0.0, 0.0, 0.0)
     var next = current
     var samples = ArrayList<Sample>()

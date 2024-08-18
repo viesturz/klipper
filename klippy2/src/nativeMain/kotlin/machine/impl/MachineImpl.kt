@@ -1,6 +1,5 @@
 package machine.impl
 
-import MachineTime
 import machine.MachineBuilder
 import machine.MachinePart
 import machine.MachineRuntime
@@ -11,7 +10,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.runBlocking
 import machine.Machine
 import machine.Machine.State
