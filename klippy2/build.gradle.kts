@@ -3,11 +3,14 @@ plugins {
     kotlin("plugin.serialization") version "2.0.0"
 }
 
-group = "me.user"
 version = "0.1"
 
 repositories {
     mavenCentral()
+}
+
+dependencies {
+    project(":klippy")
 }
 
 kotlin {
@@ -39,6 +42,8 @@ kotlin {
         }
     }
     sourceSets {
+        val commonMain by getting
+        val commonTest by getting
         val nativeMain by getting
         val nativeTest by getting
 
