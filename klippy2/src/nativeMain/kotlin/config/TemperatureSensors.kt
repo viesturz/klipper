@@ -16,7 +16,7 @@ interface TemperatureCalibration {
 }
 
 data class ResistanceCalibration(val r: Resistance, val t: Temperature)
-infix fun Temperature.to(r:Resistance) = ResistanceCalibration(r=r, t=this)
+infix fun Temperature.to(r: Resistance) = ResistanceCalibration(r=r, t=this)
 
 // NTC 100K MGB18-104F39050L32
 // Definition from description of Marlin "thermistor 75"

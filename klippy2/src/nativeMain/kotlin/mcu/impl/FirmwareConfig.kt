@@ -3,16 +3,13 @@ package mcu.impl
 import MachineDuration
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.long
-import mcu.McuDuration
 import okio.buffer
 
 /** Configuration retrieved from the MCU firmware. */
