@@ -13,6 +13,7 @@ import machine.CommandQueue
 import machine.MachineBuilder
 import machine.MachinePart
 import machine.MachineRuntime
+import machine.addLocal
 import machine.addLocalCommand
 import machine.impl.GCodeCommand
 import machine.impl.PartLifecycle
@@ -79,9 +80,7 @@ private class HeaterImpl(
         require(t <= sensor.maxTemp)
         if (t == _target) return
         _target = t
-        queue.addLocalCommand(this) {
-            loop.setTarget(t)
-        }
+        queue.addLocal{ loop.setTarget(t) }
     }
 
     override suspend fun waitForStable() {

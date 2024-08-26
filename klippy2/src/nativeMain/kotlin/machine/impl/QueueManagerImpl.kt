@@ -3,27 +3,25 @@ package machine.impl
 import MachineDuration
 import MachineTime
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import machine.Command
 import machine.CommandQueue
+import machine.Planner
 import machine.QueueManager
-import machine.TIME_BUSY
-import machine.TIME_EAGER_START
-import machine.TIME_WAIT
-import machine.WaitForTimeCommand
-import machine.addQueuedMcuCommand
-import kotlin.math.max
 import kotlin.time.Duration.Companion.seconds
-
 
 /** Time it takes for a queue to start */
 private const val QUEUE_START_TIME = 0.2
 private const val QUEUE_CHECK_TIMEOUT = 1.0
+private const val TIME_EAGER_START = -1.0
+private const val TIME_WAIT = -2.0
 
 class QueueManagerImpl(val reactor: Reactor): QueueManager {
     val queues = ArrayList<QueueImpl>()
-    val partCommands = HashMap<Any, PartQueue>()
+    val plannerQueues = HashMap<Any, PlannerQueue<*>>()
 
     override fun newQueue(): CommandQueue {
         val q = QueueImpl(this)
@@ -39,71 +37,92 @@ class QueueManagerImpl(val reactor: Reactor): QueueManager {
         TODO("Not yet implemented")
     }
 
-    fun partQueue(part: Any) = partCommands.getOrPut(part) { PartQueue(part) }
+    @Suppress("UNCHECKED_CAST")
+    fun <T> plannerQueueFor(planner: Planner<T>): PlannerQueue<T> {
+        return plannerQueues.getOrPut(planner) { PlannerQueue(planner)} as PlannerQueue<T>
+    }
 }
 
-class PartQueue(val part: Any) {
-    val commands = ArrayList<Command>()
-    var minDuration = 0.0
-    var lookaheadTime = 0.0
-    internal fun addCommand(c: Command) {
-        if (commands.isEmpty()) lookaheadTime = c.lookaheadTime
+data class Configuration(val block: (time: MachineTime) -> Unit)
+
+sealed class Command {
+    var configs = ArrayList<Configuration>()
+}
+class ConfigurationCommand: Command()
+class PlannedCommand<Data>(val queue: CommandQueue, val planner: PlannerQueue<Data>, val data: Data): Command()
+class WaitForCommand(val block: (time: MachineTime) -> Deferred<MachineTime>): Command()
+
+class PlannerQueue<Data>(val planner: Planner<Data>) {
+    val generationWindow: MachineDuration = 10.0
+    val commands = ArrayList<PlannedCommand<Data>>()
+    val data = ArrayList<Data>()
+    internal fun addCommand(c: PlannedCommand<Data>) {
         commands.add(c)
-        c.partQueue = this
-        minDuration += c.measureMin()
+        data.add(c.data)
     }
 
     fun peek() = commands.getOrNull(0)
-    fun pop(cmd: Command, nextCommandTime: MachineTime) {
+    fun pop(cmd: PlannedCommand<*>, nextCommandTime: MachineTime) {
         commands.remove(cmd)
-        cmd.partQueue = null
-        minDuration -= cmd.measureMin()
-        lookaheadTime = peek()?.lookaheadTime ?: 0.0
+        data.removeFirst()
         // Potentially trigger generation for the next queue for this part.
         peek()?.run {
-            if (minTime != TIME_WAIT) {
-                minTime = max(minTime, nextCommandTime)
-            }
             if (queue != cmd.queue) {
-                queue?.tryGenerate()
+                queue.tryGenerate()
             }
         }
     }
-    fun isEmpty() = commands.isEmpty()
-    fun canGenerate(c: Command): Boolean {
-        if (c != peek()) return false
 
-        return true
+    fun tryGenerate(cmd: PlannedCommand<*>, time: MachineTime, force: Boolean): MachineTime? {
+        if (cmd != peek()) return null
+        if (cmd.queue.reactor.now + generationWindow < time) return null
+        // TODO: check for gaps in the sequence
+        val rest = data.subList(1, data.size)
+        return planner.tryPlan(time, cmd.data, rest, force)
     }
 }
 
 class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
-    val generationWindow: MachineDuration = 10.0
     var _nextCommandTime: MachineTime = TIME_EAGER_START
     val commands = ArrayList<Command>()
     private val logger = KotlinLogging.logger("QueueImpl")
+    private var waiting: Deferred<MachineTime>? = null
     private var closed = false
     override fun isClosed() = closed
-    var pollingJob: Job? = null
+    override val reactor: Reactor
+        get() = manager.reactor
 
-    override fun add(cmd: Command) {
-        require(!closed) { "Adding command to close queue" }
-        manager.partQueue(cmd.origin).addCommand(cmd)
-        cmd.queue = this
+    override fun <T> addPlanned(planner: Planner<T>, data: T) {
+        require(!closed) { "Adding command to closed queue" }
+        val plannerQueue = manager.plannerQueueFor(planner)
+        val cmd = PlannedCommand(this, plannerQueue, data)
+        plannerQueue.addCommand(cmd)
         commands.add(cmd)
         tryGenerate()
     }
 
-    private fun canGenerate() =
-        _nextCommandTime != TIME_WAIT &&
-        !commands.isEmpty() &&
-        commands.first().minTime != TIME_WAIT &&
-        commands.first().partQueue?.canGenerate(commands.first()) ?: false &&
-        !needToWaitForNextCommand()
+    override fun add(block: (time: MachineTime) -> Unit) {
+        require(!closed) { "Adding command to closed queue" }
+        if (commands.isEmpty()) {
+            // Add a no-op command to attach the config change to.
+            commands.add(ConfigurationCommand())
+        }
+        commands.last().configs.add(Configuration(block))
+        tryGenerate()
+    }
 
-    private fun needToWaitForNextCommand()  =
-        !commands.isEmpty() &&
-        manager.reactor.now + generationWindow < _nextCommandTime
+    override fun wait(deferred: Deferred<MachineTime>) {
+        require(!closed) { "Adding command to closed queue" }
+        commands.add(WaitForCommand{ deferred })
+        tryGenerate()
+    }
+
+    private fun canGenerate(): Boolean {
+        val isWaiting = waiting?.isActive ?: false
+        return _nextCommandTime != TIME_WAIT &&
+                !commands.isEmpty() &&
+                !isWaiting
+    }
 
     private fun nextCommandTime(): MachineTime {
         val cmdTime = _nextCommandTime
@@ -115,68 +134,88 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
         return cmdTime
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun tryGenerate() {
+        var waitFor: Deferred<MachineTime>? = null
         while (canGenerate()) {
-            val cmd = commands.first()
-            val partQueue = cmd.partQueue ?: throw RuntimeException("Command with no partQueue")
-            var cmdTime = nextCommandTime()
-            cmdTime = max(cmdTime, cmd.minTime)
-            logger.info {  "Attempting command $cmd at $cmdTime" }
-            var endTime = commands.first().run(manager.reactor, cmdTime, partQueue.commands)
-            logger.info { "Command $cmd at endTime = $endTime" }
-            when (endTime) {
-                TIME_WAIT -> break
-                TIME_BUSY -> break
-                else -> {}
+            waiting?.run {
+                if (isCompleted) waiting = null
             }
-            _nextCommandTime = endTime
-            // Remove the command
-            partQueue.pop(cmd, _nextCommandTime)
-            commands.remove(cmd)
-            cmd.queue = null
+            val cmd = commands.first()
+            val cmdTime = nextCommandTime()
+            logger.info { "Attempting command $cmd at $cmdTime" }
+            val endTime: MachineTime? = when(cmd) {
+                is ConfigurationCommand -> cmdTime
+                is WaitForCommand -> {
+                    val deferred = cmd.block(cmdTime)
+                    if (deferred.isCompleted) {
+                        deferred.getCompleted()
+                    } else {
+                        waitFor = deferred
+                        null
+                    }
+                }
+                is PlannedCommand<*> -> cmd.planner.tryGenerate(cmd, cmdTime, force = false)
+            }
+            logger.info { "Command $cmd at endTime = $endTime" }
+            if (endTime == null) {
+                break
+            }
+            finalizeCommand(cmd, endTime)
         }
-        logger.info { "TryGenerate - can not generate now, len=${commands.size} nextTime=$_nextCommandTime, cMinTime=${commands.firstOrNull()?.minTime}" }
+        logger.info { "TryGenerate - can not generate now, len=${commands.size} nextTime=$_nextCommandTime" }
         // Schedule next generation
-        maybeSchedulePolling()
+        if (waitFor != null && waitFor != waiting) {
+            waiting = waitFor
+            reactor.launch { waitFor.await(); tryGenerate() }
+        }
     }
 
-    private fun maybeSchedulePolling() {
-        if (needToWaitForNextCommand() && !commands.isEmpty() && pollingJob == null) {
-            pollingJob = manager.reactor.launch {
-                while (needToWaitForNextCommand())
-                {
-                    delay(QUEUE_CHECK_TIMEOUT.seconds)
-                    tryGenerate()
-                }
-                pollingJob = null
+    suspend fun forceGenerate() {
+        waiting?.cancel()
+        waiting = null
+        while (commands.isNotEmpty()) {
+            val cmd = commands.first()
+            val cmdTime = nextCommandTime()
+            logger.info { "Attempting command $cmd at $cmdTime" }
+            val endTime = when (cmd) {
+                is ConfigurationCommand -> cmdTime
+                is WaitForCommand -> cmd.block(cmdTime).await()
+                is PlannedCommand<*> -> cmd.planner.tryGenerate(cmd, cmdTime, force = true)!!
             }
+            logger.info { "Command $cmd at endTime = $endTime" }
+            finalizeCommand(cmd, endTime)
         }
+    }
+
+    private fun finalizeCommand(cmd: Command, endTime: MachineTime) {
+        cmd.configs.forEach { it.block(endTime) }
+        _nextCommandTime = endTime
+        // Remove the command
+        if (cmd is PlannedCommand<*>) {
+            cmd.planner.pop(cmd, endTime)
+        }
+        commands.remove(cmd)
     }
 
     override suspend fun flush(): MachineTime {
-        while (commands.isNotEmpty()) {
-            tryGenerate()
-            delay(100)
-        }
+        forceGenerate()
         return nextCommandTime()
     }
 
     override fun fork(): CommandQueue {
         val fork = QueueImpl(manager)
-        fork._nextCommandTime = TIME_WAIT
-        addQueuedMcuCommand(fork) { time ->
-            fork._nextCommandTime = time
-            fork.tryGenerate()
-        }
+        val deferred = CompletableDeferred<MachineTime>()
+        add { time -> deferred.complete(time) }
+        fork.wait(deferred)
         manager.queues.add(this)
         return fork
     }
 
     override fun join(other: CommandQueue) {
-        // Block this queue until joined
-        val join = WaitForTimeCommand(other)
-        add(join)
-        other.addQueuedMcuCommand(this, join::setTime)
+        val deferred = CompletableDeferred<MachineTime>()
+        wait(deferred)
+        other.add { time -> deferred.complete(time) }
         other.close()
     }
 

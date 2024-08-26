@@ -2,7 +2,6 @@ package parts
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
-import machine.addQueuedMcuCommand
 import celsius
 import config.DigitalOutPin
 import machine.MachineBuilder
@@ -58,13 +57,11 @@ private class FanImpl(
         }
     }
 
-    override fun queueSpeed(queue: CommandQueue, value: Double) {
-        require(value in 0f..1f)
-        logger.info { "Fan set speed $value" }
-        _speed = speed.coerceAtMost(maxPower)
-        queue.addQueuedMcuCommand(this) { time ->
-            pin.set(time, value)
-        }
+    override fun queueSpeed(queue: CommandQueue, speed: Double) {
+        require(speed in 0f..1f)
+        logger.info { "Fan set speed $speed" }
+        _speed = this.speed.coerceAtMost(maxPower)
+        queue.add { time -> pin.set(time, speed) }
     }
     override fun setSpeed(speed: Double) {
         _speed = speed.coerceAtMost(maxPower)
