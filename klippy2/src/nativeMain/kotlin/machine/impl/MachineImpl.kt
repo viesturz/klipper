@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import machine.GCodeHandler
 import machine.Machine
 import machine.Machine.State
 import machine.QueueManager
@@ -105,7 +106,6 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
     override fun addPart(part: PartLifecycle) {
         partsList.add(part)
     }
-
     override fun registerCommand(command: String, rawText: Boolean,  handler: GCodeHandler) {
         gCode.registerCommand(command, handler)
     }

@@ -4,6 +4,8 @@ import Temperature
 import celsius
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
+import machine.GCodeHandler
+import machine.GCodeRunner
 import machine.MachineRuntime
 import machine.getPartByName
 import mcu.ConfigurationException
@@ -13,18 +15,13 @@ class InvalidGcodeException(cmd: String) : RuntimeException(cmd)
 class MissingRequiredParameterException(cmd: String) : RuntimeException(cmd)
 class FailedToParseParamsException(cmd: String) : RuntimeException(cmd)
 
-typealias GCodeHandler = suspend GCodeRunner.(cmd: GCodeCommand) -> Unit
-interface GCodeRunner {
-    suspend fun gcode(cmd: String)
-    fun respond(msg: String)
-}
-
 class GCodeCommand(val raw: String,
                    val name: String,
                    val params: Map<String, String>,
                    val runtime: MachineRuntime,
                    val queue: CommandQueue,
-                   val runner: GCodeRunner) {
+                   val runner: GCodeRunner,
+) {
     fun get(name: String, default: String? = null) =
         params[name] ?: default ?: throw MissingRequiredParameterException(name)
     fun getInt(name: String, default: Int? = null) =

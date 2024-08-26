@@ -2,10 +2,16 @@ package machine
 
 import config.McuConfig
 import machine.impl.GCode
-import machine.impl.GCodeHandler
+import machine.impl.GCodeCommand
 import machine.impl.PartLifecycle
 import machine.impl.Reactor
 import mcu.McuSetup
+
+typealias GCodeHandler = suspend GCodeRunner.(cmd: GCodeCommand) -> Unit
+interface GCodeRunner {
+    suspend fun gcode(cmd: String)
+    fun respond(msg: String)
+}
 
 typealias ActionBlock = suspend (m: MachineRuntime) -> Unit
 
