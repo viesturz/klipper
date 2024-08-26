@@ -55,7 +55,10 @@ data class AnalogOutPin(val mcu: McuConfig, val pin: String)
 
 // Composite 
 data class StepperPins(val mcu: McuConfig, val enablePin: DigitalOutPin, val stepPin: DigitalOutPin, val dirPin: DigitalOutPin)
-data class UartPins(val mcu: McuConfig, val uartPin: DigitalOutPin, val txPin: DigitalOutPin, val address: Int)
+data class UartPins(val mcu: McuConfig, val rxPin: DigitalOutPin, val txPin: DigitalOutPin, val baudRate: Int = 40_000, val pullup: Boolean = false) {
+    fun withAddress(address: Int) = TmcAddressUartPins(this, address)
+}
+data class TmcAddressUartPins(val uartPins: UartPins, val address: Int)
 data class I2CPins(val mcu: McuConfig, val csPin: DigitalOutPin, val clkPin: DigitalOutPin, val mosiPin: DigitalOutPin, val misoPin: DigitalOutPin)
 data class SpiPins(val mcu: McuConfig, val csPin: DigitalOutPin, val clkPin: DigitalOutPin, val mosiPin: DigitalOutPin, val misoPin: DigitalOutPin)
 
@@ -65,7 +68,6 @@ open class McuTemplate(val mcu: McuConfig) {
     fun digitalPin(pin: String)= DigitalInPin(mcu, pin)
     fun digitalOutPin(pin: String, invert: Boolean = false) = DigitalOutPin(mcu, pin, invert)
     fun analogOutPin(pin: String) = AnalogOutPin(mcu, pin)
-
     fun stepperPins(enablePin: DigitalOutPin, stepPin: DigitalOutPin, dirPin: DigitalOutPin) = StepperPins(mcu, enablePin, stepPin, dirPin)
-    fun uartPins(uartPin: DigitalOutPin, txPin: DigitalOutPin, address: Int) = UartPins(mcu, uartPin, txPin, address)
+    fun uartPins(rxPin: DigitalOutPin, txPin: DigitalOutPin, baudRate: Int = 40_000, pullup: Boolean = false) = UartPins(mcu, rxPin, txPin, baudRate, pullup)
 }

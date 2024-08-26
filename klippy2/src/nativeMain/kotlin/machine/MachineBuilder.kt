@@ -15,7 +15,7 @@ interface MachineBuilder
 {
     fun setupMcu(config: McuConfig): McuSetup
     fun addPart(part: PartLifecycle)
-    fun registerCommand(command: String, handler: GCodeHandler)
+    fun registerCommand(command: String, rawText: Boolean = false, handler: GCodeHandler)
     fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler)
 }
 

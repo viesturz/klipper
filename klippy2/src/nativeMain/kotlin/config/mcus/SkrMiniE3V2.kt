@@ -1,4 +1,4 @@
-package config.mcu
+package config.mcus
 
 import config.McuConfig
 import config.McuTemplate
@@ -15,7 +15,11 @@ class SkrMiniE3V2(serial: String): McuTemplate(McuConfig(SerialConnection(serial
     val stepper1 = stepperPins(dirPin=digitalOutPin("PB2"), stepPin=digitalOutPin("PB10"), enablePin=digitalOutPin("PB11", invert = true))
     val stepper2 = stepperPins(dirPin=digitalOutPin("PC5"), stepPin=digitalOutPin("PB0"), enablePin=digitalOutPin("PB1", invert = true))
     val stepper3 = stepperPins(dirPin=digitalOutPin("PB4"), stepPin=digitalOutPin("PB3"), enablePin=digitalOutPin("PB4", invert = true))
-    val stepper3Uart = uartPins(uartPin = digitalOutPin("PC11"), txPin = digitalOutPin("PC10"), address = 3)
+    val tmcUart = uartPins(rxPin = digitalOutPin("PC11"), txPin = digitalOutPin("PC10"))
+    val stepper0Uart = tmcUart.withAddress(0)
+    val stepper1Uart = tmcUart.withAddress(1)
+    val stepper2Uart = tmcUart.withAddress(2)
+    val stepper3Uart = tmcUart.withAddress(3)
     val endstop0 = digitalPin(pin="PC0")
     val endstop1 = digitalPin(pin="PC1")
     val endstop2 = digitalPin(pin="PC2")

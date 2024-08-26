@@ -76,12 +76,15 @@ interface CommandQueue {
     fun abort()
     /** Tries to generate output, as much as available */
     fun tryGenerate()
+    /** Generate any queued commands and return end time.
+     * Returns next available schedule time if no new commands queued. */
+    suspend fun flush(): MachineTime
 }
 
 /** Add a basic command that needs to be queued to the MCU queue.
  * IE, a pin value change.
  * */
-fun CommandQueue.addBasicMcuCommand(origin: Any, generate: (time: MachineTime) -> Unit)
+fun CommandQueue.addQueuedMcuCommand(origin: Any, generate: (time: MachineTime) -> Unit)
     = add(object: Command(origin) {
     override fun run(
         reactor: Reactor,
@@ -92,7 +95,6 @@ fun CommandQueue.addBasicMcuCommand(origin: Any, generate: (time: MachineTime) -
         return startTime
     }
 })
-
 
 /** Add a trigger that completes when the queue is evaluated up to here.
  * IE, wait for previous long running command to finish.

@@ -1,8 +1,12 @@
 package parts
 
+import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import machine.MachineBuilder
 import machine.MachineRuntime
 import machine.impl.PartLifecycle
+import platform.posix.log
 
 fun MachineBuilder.ControlLoop(
     name: String,
@@ -17,19 +21,25 @@ private class LocalControlImpl(
     override val name: String,
     val control: suspend (runtime: MachineRuntime) -> Unit
 ) : ControlLoop, PartLifecycle {
-    var _running = false
-    override val running: Boolean
-        get() = _running
+    private var job: Job? = null
+    private val logger = KotlinLogging.logger("ControlLoop $name")
+    override val running = job?.isActive ?: false
 
     override suspend fun onStart(runtime: MachineRuntime) {
-        runtime.reactor.launch {
-            _running = true
-            control(runtime)
+        job = runtime.reactor.launch {
+            try {
+                control(runtime)
+            } catch (e: CancellationException) {
+                logger.info { "Cancelled" }
+            }
+            catch (e: Exception) {
+                logger.error(e) { "Crashed" }
+            }
         }
     }
 
     override fun shutdown() {
-        _running = false
+        job?.cancel()
     }
 
     override fun status() = mapOf("running" to running)

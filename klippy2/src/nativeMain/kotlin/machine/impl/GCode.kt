@@ -5,7 +5,6 @@ import celsius
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
 import machine.MachineRuntime
-import machine.addWaitForCompletionCommand
 import machine.getPartByName
 import mcu.ConfigurationException
 
@@ -14,8 +13,33 @@ class InvalidGcodeException(cmd: String) : RuntimeException(cmd)
 class MissingRequiredParameterException(cmd: String) : RuntimeException(cmd)
 class FailedToParseParamsException(cmd: String) : RuntimeException(cmd)
 
-/** Handler generates commands and puts them into a queue. */
-typealias GCodeHandler = (queue: CommandQueue, params: GCodeCommand) -> Unit
+typealias GCodeHandler = suspend GCodeRunner.(cmd: GCodeCommand) -> Unit
+interface GCodeRunner {
+    suspend fun gcode(cmd: String)
+    fun respond(msg: String)
+}
+
+class GCodeCommand(val raw: String,
+                   val name: String,
+                   val params: Map<String, String>,
+                   val runtime: MachineRuntime,
+                   val queue: CommandQueue,
+                   val runner: GCodeRunner) {
+    fun get(name: String, default: String? = null) =
+        params[name] ?: default ?: throw MissingRequiredParameterException(name)
+    fun getInt(name: String, default: Int? = null) =
+        params[name]?.toInt() ?: default ?: throw MissingRequiredParameterException(name)
+    fun getFloat(name: String, default: Float? = null) =
+        params[name]?.toFloat() ?: default ?: throw MissingRequiredParameterException(name)
+    fun getDouble(name: String, default: Double? = null) =
+        params[name]?.toDouble() ?: default ?: throw MissingRequiredParameterException(name)
+    fun getCelsius(name: String, default: Temperature? = null) =
+        params[name]?.toDouble()?.celsius ?: default ?: throw MissingRequiredParameterException(name)
+    inline fun <reified PartType> getPartByName(param: String) = runtime.getPartByName<PartType>(get(param)) ?:
+        throw InvalidGcodeException("${PartType::class.simpleName} with name ${get(param)} not found")
+    fun respond(msg: String) = runner.respond(msg)
+}
+
 typealias GCodeOutputSink = (message: String) -> Unit
 private val logger = KotlinLogging.logger("Gcode")
 
@@ -45,13 +69,15 @@ class GCode {
         muxer.handlers[muxValue] = handler
     }
 
-    fun runner(commandQueue: CommandQueue, machineRuntime: MachineRuntime, outputHandler: GCodeOutputSink) = GCodeRunner(commandQueue, this, machineRuntime, outputHandler)
+    fun runner(commandQueue: CommandQueue, machineRuntime: MachineRuntime, outputHandler: GCodeOutputSink): GCodeRunner = GCodeRunnerImpl(commandQueue, this, machineRuntime, outputHandler)
 }
 
-class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode, val machineRuntime: MachineRuntime, val outputHandler: GCodeOutputSink) {
-    private val stringGcmds = listOf("M117", "M118")
+private val STRING_GCODES = listOf("M117", "M118")
 
-    fun schedule(cmd: String) {
+class GCodeRunnerImpl(val commandQueue: CommandQueue, val gCode: GCode, val machineRuntime: MachineRuntime, val outputHandler: GCodeOutputSink): GCodeRunner {
+    override fun respond(msg: String) = outputHandler(msg)
+
+    override suspend fun gcode(cmd: String) {
         logger.info { cmd }
         var command = cmd
         val comment = command.indexOfFirst { it == ';' }
@@ -59,22 +85,21 @@ class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode, val machineR
             command = command.substring(0, comment)
         }
         command = command.trim()
+        if (command.isBlank()) return
         val parts = command.split(" ")
         val name = parts[0].uppercase()
         val args = parts.subList(1, parts.size)
         val map = when {
-            name in stringGcmds -> mapOf()
+            name in STRING_GCODES -> mapOf()
             command.contains("=") -> parseWithAssign(cmd, args)
             else -> parseBasic(cmd, args)
         }
-        val params = GCodeCommand(command, name, map, machineRuntime, outputHandler)
+        val params = GCodeCommand(command, name, map, machineRuntime, commandQueue, this)
         val muxer = gCode.muxCommands[name]
         if (muxer != null && params.params.containsKey(muxer.key)) {
             val handler = muxer.handlers[params.params[muxer.key]]
-            if (handler == null) {
-                throw InvalidGcodeException("No handler registered for ${params.name} ${muxer.key}=${params.params[muxer.key]}")
-            }
-            handler(commandQueue, params)
+                ?: throw InvalidGcodeException("No handler registered for ${params.name} ${muxer.key}=${params.params[muxer.key]}")
+            handler(params)
             return
         }
         val handler = gCode.commands[name]
@@ -85,12 +110,7 @@ class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode, val machineR
                 throw InvalidGcodeException("Unknown gcode $cmd")
             }
         }
-        handler.impl(commandQueue, params)
-    }
-
-    suspend fun run(cmd: String) {
-        schedule(cmd)
-        commandQueue.addWaitForCompletionCommand(this).await()
+        handler.impl(this, params)
     }
 
     // Parses X10 Y20.5
@@ -140,22 +160,4 @@ class GCodeRunner(val commandQueue: CommandQueue, val gCode: GCode, val machineR
 
 class MuxCommandHandler(val key: String) {
     val handlers = HashMap<String, GCodeHandler>()
-}
-
-class GCodeCommand(val raw: String, val name: String, val params: Map<String, String>, val runtime: MachineRuntime, val outputCollector: GCodeOutputSink) {
-    fun get(name: String, default: String? = null) =
-        params[name] ?: default ?: throw MissingRequiredParameterException(name)
-    fun getInt(name: String, default: Int? = null) =
-        params[name]?.toInt() ?: default ?: throw MissingRequiredParameterException(name)
-    fun getFloat(name: String, default: Float? = null) =
-        params[name]?.toFloat() ?: default ?: throw MissingRequiredParameterException(name)
-    fun getDouble(name: String, default: Double? = null) =
-        params[name]?.toDouble() ?: default ?: throw MissingRequiredParameterException(name)
-    fun getCelsius(name: String, default: Temperature? = null) =
-        params[name]?.toDouble()?.celsius ?: default ?: throw MissingRequiredParameterException(name)
-
-    inline fun <reified PartType> getPartByName(param: String) = runtime.getPartByName<PartType>(get(param)) ?:
-    throw InvalidGcodeException("${PartType::class.simpleName} with name ${get(param)} not found")
-
-    fun respond(msg: String) = outputCollector(msg)
 }

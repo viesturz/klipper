@@ -64,16 +64,14 @@ private class HeaterImpl(
     override val maxPower: Double
         get() = loop.maxPower
     init {
-        setup.registerMuxCommand("SET_HEATER_TEMPERATURE", "HEATER", name, this::setTargetGcode)
+        setup.registerMuxCommand("SET_HEATER_TEMPERATURE", "HEATER", name) { params ->
+            val temperature = params.getCelsius("TARGET")
+            setTarget(params.queue, temperature)
+        }
     }
 
     override suspend fun onStart(runtime: MachineRuntime) {
         runtime.reactor.launch { loop.runLoop() }
-    }
-
-    private fun setTargetGcode(queue: CommandQueue, params: GCodeCommand) {
-        val temperature = params.getCelsius("TARGET")
-        setTarget(queue, temperature)
     }
 
     override fun setTarget(queue: CommandQueue, t: Temperature) {

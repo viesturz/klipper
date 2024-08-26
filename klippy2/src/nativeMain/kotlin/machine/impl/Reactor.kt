@@ -111,5 +111,5 @@ class Reactor {
 
 }
 
-suspend fun CoroutineScope.waitUntil(time: MachineTime) =
+suspend fun waitUntil(time: MachineTime) =
     delay(max(0.0, time - Reactor.now).seconds)

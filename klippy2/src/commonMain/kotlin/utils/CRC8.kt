@@ -2,6 +2,7 @@ package utils
 
 // Generate a CRC8 - ATM value for a bytearray
 fun ByteArray.crc8(): UByte = this.fold(initial) { crc, byte -> crc8Lookup[(crc xor byte.toUByte()).toInt()] }
+fun UByteArray.crc8(): UByte = this.fold(initial) { crc, byte -> crc8Lookup[(crc xor byte).toInt()] }
 
 private val initial: UByte = 0x0u
 private val polynomial: UByte = 0x07u

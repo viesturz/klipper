@@ -100,7 +100,15 @@ class CommandBuilder(private val parser: Commands) {
 
     fun addStr(v: String) {
         bytes.add(v.length.toUByte())
-        bytes.addAll(v.encodeToByteArray().toList().map { it.toUByte() })
+        bytes.addAll(v.encodeToByteArray().toUByteArray())
+    }
+    fun addBytes(v: ByteArray) {
+        bytes.add(v.size.toUByte())
+        bytes.addAll(v.toUByteArray())
+    }
+    fun addBytes(v: UByteArray) {
+        bytes.add(v.size.toUByte())
+        bytes.addAll(v)
     }
     fun addEnum(name: String, value: String) {
         val values = parser.identify.enumerationValueToId(name)

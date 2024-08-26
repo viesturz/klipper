@@ -1,12 +1,15 @@
 package config
 import celsius
-import config.mcu.SkrMiniE3V2
+import config.mcus.SkrMiniE3V2
 import machine.MachineBuilder
+import ohms
 import parts.AdcTemperatureSensor
 import parts.Heater
 import parts.Fan
+import parts.GCodeScript
 import parts.HeaterFan
 import parts.PidCalibrate
+import parts.drivers.TMC2209
 
 fun MachineBuilder.buildMachine() {
     val mcu = SkrMiniE3V2(serial="/dev/serial/by-id/usb-Klipper_stm32f103xe_31FFD7053030473538690543-if00")
@@ -34,6 +37,22 @@ fun MachineBuilder.buildMachine() {
     )
     PidCalibrate()
     HeaterFan("extruder fan control", e0, fan0)
+
+    val zDriver = TMC2209(
+        name = "driverZ",
+        pins = mcu.stepper2Uart,
+        microsteps = 16,
+        runCurrent = 0.32,
+        senseResistor = 0.110.ohms
+    )
+
+    GCodeScript("PRINT_START") { params ->
+        val bedTemp = params.getInt("BED_TEMP", 0)
+        val nozzleTemp = params.getInt("TEMP", 0)
+        gcode("M140 S$bedTemp")
+        gcode("G28")
+        gcode("M109 S$nozzleTemp")
+    }
 
 //    val stepperE0 = LinearStepper(
 //        name = "e0 stepper",

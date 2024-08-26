@@ -16,15 +16,16 @@ interface McuSetup {
 
     fun addButton(pin: config.DigitalInPin): Button
     fun addAnalogPin(pin: config.AnalogInPin): AnalogInPin
-    fun addPulseCounter(pin: config.DigitalInPin): PulseCounter
-    fun addDigitalOutPin(config: config.DigitalOutPin): DigitalOutPin
     fun addPwmPin(config: config.DigitalOutPin): PwmPin
-    fun addI2C(config: config.I2CPins): I2CBus
-    fun addSpi(config: config.SpiPins): SPIBus
-    fun addUart(config: config.UartPins): UartBus
-    fun addNeopixel(config: config.DigitalOutPin): Neopixel
+    fun addTmcUart(config: config.UartPins): MessageBus
     fun addStepperMotor(config: config.StepperPins): StepperMotor
-    fun addEndstop(pin: config.DigitalInPin, motors: List<StepperMotor>): Endstop
+//    fun addPulseCounter(pin: config.DigitalInPin): PulseCounter
+//    fun addDigitalOutPin(config: config.DigitalOutPin): DigitalOutPin
+//    fun addI2C(config: config.I2CPins): MessageBus
+//    fun addSpi(config: config.SpiPins): MessageBus
+//    fun addUart(config: config.UartPins): MessageBus
+//    fun addNeopixel(config: config.DigitalOutPin): Neopixel
+//    fun addEndstop(pin: config.DigitalInPin, motors: List<StepperMotor>): Endstop
 
     suspend fun start(reactor: Reactor): Mcu
 }
@@ -120,19 +121,11 @@ interface StepperMotor {
     suspend fun getPosition()
 }
 
-// Buses
-interface I2CBus{
+interface MessageBus{
     val mcu: Mcu
-    fun send(data: Array<Byte>)
-    suspend fun read(): Array<Byte>
-}
-interface SPIBus{
-    val mcu: Mcu
-    fun send(data: Array<Byte>)
-    suspend fun read(): Array<Byte>
-}
-interface UartBus{
-    val mcu: Mcu
-    fun send(data: Array<Byte>)
-    suspend fun read(): Array<Byte>
+    /** Returns null if the CRC check failed. Need to retry. */
+    suspend fun sendReply(data: UByteArray, readBytes:Int): UByteArray?
+    /* Grants exclusive access to the bus during the transaction. */
+    suspend fun transaction(function: suspend () -> Unit) {
+    }
 }
