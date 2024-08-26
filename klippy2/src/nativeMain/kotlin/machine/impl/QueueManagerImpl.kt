@@ -12,7 +12,7 @@ import machine.TIME_BUSY
 import machine.TIME_EAGER_START
 import machine.TIME_WAIT
 import machine.WaitForTimeCommand
-import machine.addBasicMcuCommand
+import machine.addQueuedMcuCommand
 import kotlin.math.max
 import kotlin.time.Duration.Companion.seconds
 
@@ -79,7 +79,7 @@ class PartQueue(val part: Any) {
 
 class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
     val generationWindow: MachineDuration = 10.0
-    var nextCommandTime: MachineTime = TIME_EAGER_START
+    var _nextCommandTime: MachineTime = TIME_EAGER_START
     val commands = ArrayList<Command>()
     private val logger = KotlinLogging.logger("QueueImpl")
     private var closed = false
@@ -95,7 +95,7 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
     }
 
     private fun canGenerate() =
-        nextCommandTime != TIME_WAIT &&
+        _nextCommandTime != TIME_WAIT &&
         !commands.isEmpty() &&
         commands.first().minTime != TIME_WAIT &&
         commands.first().partQueue?.canGenerate(commands.first()) ?: false &&
@@ -103,18 +103,23 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
 
     private fun needToWaitForNextCommand()  =
         !commands.isEmpty() &&
-        manager.reactor.now + generationWindow < nextCommandTime
+        manager.reactor.now + generationWindow < _nextCommandTime
+
+    private fun nextCommandTime(): MachineTime {
+        val cmdTime = _nextCommandTime
+        val nowTime = manager.reactor.now
+        // Make sure there is enough time for command queuing.
+        if (cmdTime == TIME_EAGER_START || cmdTime < nowTime + QUEUE_START_TIME) {
+            return nowTime + QUEUE_START_TIME
+        }
+        return cmdTime
+    }
 
     override fun tryGenerate() {
         while (canGenerate()) {
             val cmd = commands.first()
             val partQueue = cmd.partQueue ?: throw RuntimeException("Command with no partQueue")
-            var cmdTime = nextCommandTime
-            val nowTime = manager.reactor.now
-            // Make sure there is enough time for command queuing.
-            if (cmdTime == TIME_EAGER_START || cmdTime < nowTime + QUEUE_START_TIME) {
-                cmdTime = nowTime + QUEUE_START_TIME
-            }
+            var cmdTime = nextCommandTime()
             cmdTime = max(cmdTime, cmd.minTime)
             logger.info {  "Attempting command $cmd at $cmdTime" }
             var endTime = commands.first().run(manager.reactor, cmdTime, partQueue.commands)
@@ -124,13 +129,13 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
                 TIME_BUSY -> break
                 else -> {}
             }
-            nextCommandTime = endTime
+            _nextCommandTime = endTime
             // Remove the command
-            partQueue.pop(cmd, nextCommandTime)
+            partQueue.pop(cmd, _nextCommandTime)
             commands.remove(cmd)
             cmd.queue = null
         }
-        logger.info { "TryGenerate - can not generate now, len=${commands.size} nextTime=$nextCommandTime, cMinTime=${commands.firstOrNull()?.minTime}" }
+        logger.info { "TryGenerate - can not generate now, len=${commands.size} nextTime=$_nextCommandTime, cMinTime=${commands.firstOrNull()?.minTime}" }
         // Schedule next generation
         maybeSchedulePolling()
     }
@@ -148,11 +153,19 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
         }
     }
 
+    override suspend fun flush(): MachineTime {
+        while (commands.isNotEmpty()) {
+            tryGenerate()
+            delay(100)
+        }
+        return nextCommandTime()
+    }
+
     override fun fork(): CommandQueue {
         val fork = QueueImpl(manager)
-        fork.nextCommandTime = TIME_WAIT
-        addBasicMcuCommand(fork) { time ->
-            fork.nextCommandTime = time
+        fork._nextCommandTime = TIME_WAIT
+        addQueuedMcuCommand(fork) { time ->
+            fork._nextCommandTime = time
             fork.tryGenerate()
         }
         manager.queues.add(this)
@@ -163,7 +176,7 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
         // Block this queue until joined
         val join = WaitForTimeCommand(other)
         add(join)
-        other.addBasicMcuCommand(this, join::setTime)
+        other.addQueuedMcuCommand(this, join::setTime)
         other.close()
     }
 

@@ -18,7 +18,7 @@ suspend fun gcodeFromCommandline(machine: MachineImpl) {
         print(": ")
         val cmd = readln()
         try {
-            runner.run(cmd)
+            runner.gcode(cmd)
         } catch (e: InvalidGcodeException) {
             println("  Invalid gcode: ${e.message}")
         }

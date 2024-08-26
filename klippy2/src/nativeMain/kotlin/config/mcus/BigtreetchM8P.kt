@@ -1,4 +1,4 @@
-package config.mcu
+package config.mcus
 
 import config.McuConfig
 import config.McuTemplate

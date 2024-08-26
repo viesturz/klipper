@@ -5,14 +5,11 @@ import Temperature
 import celsius
 import io.github.oshai.kotlinlogging.KLogger
 import io.github.oshai.kotlinlogging.KotlinLogging
-import machine.CommandQueue
 import machine.MachineBuilder
 import machine.MachinePart
-import machine.MachineRuntime
-import machine.addLongRunningCommand
 import machine.impl.CommandException
-import machine.impl.GCodeCommand
 import machine.impl.PartLifecycle
+import machine.impl.waitUntil
 import kotlin.math.PI
 import kotlin.math.absoluteValue
 import kotlin.math.max
@@ -28,22 +25,13 @@ interface PidCalibrate: MachinePart {
 }
 
 private class PidCalibrateImpl(override val name: String, setup: MachineBuilder) : PidCalibrate, PartLifecycle {
-    private lateinit var runtime: MachineRuntime
-
     private val logger = KotlinLogging.logger("PidCalibrate $name")
-
     init {
-        setup.registerCommand("PID_CALIBRATE", this::pidCalibrateGcode)
-    }
-    override suspend fun onStart(runtime: MachineRuntime) {
-        this.runtime = runtime
-    }
-
-    private fun pidCalibrateGcode(queue: CommandQueue, params: GCodeCommand) {
-        val target = params.getCelsius("TARGET")
-        val heater = params.getPartByName<Heater>("HEATER")
-        val tolerance = params.getDouble("TOLERANCE", 0.02)
-        queue.addLongRunningCommand(this) {
+        setup.registerCommand("PID_CALIBRATE") { params ->
+            val target = params.getCelsius("TARGET")
+            val heater = params.getPartByName<Heater>("HEATER")
+            val tolerance = params.getDouble("TOLERANCE", 0.02)
+            waitUntil(params.queue.flush())
             val pid = calibrate(heater, target, tolerance)
             heater.setControl(pid)
         }

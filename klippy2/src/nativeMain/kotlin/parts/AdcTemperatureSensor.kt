@@ -7,6 +7,8 @@ import config.AnalogInPin
 import config.TemperatureCalibration
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kelvins
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.count
@@ -18,8 +20,16 @@ import machine.MachineRuntime
 import machine.addLongRunningCommand
 import machine.impl.GCodeCommand
 import machine.impl.PartLifecycle
+import machine.impl.Reactor
+import machine.impl.waitUntil
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.time.Duration.Companion.seconds
+
+
+suspend fun CoroutineScope.waitUntil(time: MachineTime) =
+    delay(max(0.0, time - Reactor.now).seconds)
+
 
 fun MachineBuilder.AdcTemperatureSensor(
     name: String,
@@ -56,13 +66,10 @@ private class AdcTemperatureSensorImpl(
         get() = _value
 
     init {
-        setup.registerMuxCommand("TEMPERATURE_WAIT", "SENSOR", name, this::waitForTempGcode)
-    }
-
-    private fun waitForTempGcode(queue: CommandQueue, params: GCodeCommand) {
-        val min = params.getCelsius("MINIMUM", minTemp)
-        val max = params.getCelsius("MAXIMUM", maxTemp)
-        queue.addLongRunningCommand(this) {
+        setup.registerMuxCommand("TEMPERATURE_WAIT", "SENSOR", name) { params ->
+            val min = params.getCelsius("MINIMUM", minTemp)
+            val max = params.getCelsius("MAXIMUM", maxTemp)
+            waitUntil(params.queue.flush())
             waitForTemp(min, max)
         }
     }

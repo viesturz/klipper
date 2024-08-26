@@ -106,7 +106,7 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
         partsList.add(part)
     }
 
-    override fun registerCommand(command: String, handler: GCodeHandler) {
+    override fun registerCommand(command: String, rawText: Boolean,  handler: GCodeHandler) {
         gCode.registerCommand(command, handler)
     }
     override fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler) {

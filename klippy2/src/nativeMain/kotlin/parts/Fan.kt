@@ -2,8 +2,7 @@ package parts
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
-import machine.addBasicMcuCommand
-import machine.impl.GCodeCommand
+import machine.addQueuedMcuCommand
 import celsius
 import config.DigitalOutPin
 import machine.MachineBuilder
@@ -53,18 +52,17 @@ private class FanImpl(
         get() = _speed
 
     init {
-        setup.registerMuxCommand("SET_FAN_SPEED", "FAN", name, this::setSpeedGcode)
+        setup.registerMuxCommand("SET_FAN_SPEED", "FAN", name) { params ->
+            val speed = params.getDouble("SPEED")
+            queueSpeed(params.queue, speed)
+        }
     }
 
-    private fun setSpeedGcode(queue: CommandQueue, params: GCodeCommand) {
-        val speed = params.getDouble("SPEED")
-        queueSpeed(queue, speed)
-    }
     override fun queueSpeed(queue: CommandQueue, value: Double) {
         require(value in 0f..1f)
         logger.info { "Fan set speed $value" }
         _speed = speed.coerceAtMost(maxPower)
-        queue.addBasicMcuCommand(this) { time ->
+        queue.addQueuedMcuCommand(this) { time ->
             pin.set(time, value)
         }
     }
