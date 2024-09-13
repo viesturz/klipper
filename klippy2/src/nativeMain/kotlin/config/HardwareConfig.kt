@@ -4,6 +4,7 @@ import MachineDuration
 import Resistance
 import Voltage
 import ohms
+import kotlin.math.max
 import kotlin.math.min
 
 sealed interface Connection
@@ -38,23 +39,38 @@ data class AnalogInPin(
     val pin: String,
     val pullupResistor: Resistance = 4_700.ohms,
     val inlineResistor: Resistance = 0.ohms,
-    val referenceVoltage: Voltage = 5.0,
-    val minValue: Double = 0.0,
-    val maxValue: Double = 1.0,
+    val referenceVoltage: Voltage = 3.3,
+    // Seconds between value updates
     val reportInterval: MachineDuration = 0.300,
-    val sampleInterval: MachineDuration = 0.001,
+    // Number of samples in each update
     val sampleCount: UInt = 8u,
+    // Interval between samples
+    val sampleInterval: MachineDuration = 0.001,
+    // Shutdown if sensor value less than this.
+    val minValue: Double = 0.0,
+    // Shutdown if sensor value more than this.
+    val maxValue: Double = 1.0,
+    // Number of out of range samples before Shutdown
     val rangeCheckCount: UByte = 4u) {
     fun toVoltage(v: Double) = v * referenceVoltage
     fun fromVoltage(v: Voltage) = v / referenceVoltage
     fun toResistance(v:Double) = v * pullupResistor/(1.0-min(v, 0.99999)) - inlineResistor
     fun fromResistance(r: Resistance) = (r + inlineResistor) / (r + inlineResistor + pullupResistor)
+
+    fun validResistanceRange(min: Resistance, max: Resistance)  = copy(
+        minValue = min(fromResistance(min), fromResistance(max)),
+        maxValue = max(fromResistance(min), fromResistance(max)),
+    )
+    fun validVoltageRange(min: Voltage, max: Voltage)  = copy(
+        minValue = min(fromVoltage(min), fromVoltage(max)),
+        maxValue = max(fromVoltage(min), fromVoltage(max)),
+    )
 }
 
 data class AnalogOutPin(val mcu: McuConfig, val pin: String)
 
 // Composite 
-data class StepperPins(val mcu: McuConfig, val enablePin: DigitalOutPin, val stepPin: DigitalOutPin, val dirPin: DigitalOutPin)
+data class StepperPins(val mcu: McuConfig, val enablePin: DigitalOutPin, val stepPin: DigitalOutPin, val dirPin: DigitalOutPin, val pulseDuration: Double = 0.000_002, val stepBothEdges: Boolean = false)
 data class UartPins(val mcu: McuConfig, val rxPin: DigitalOutPin, val txPin: DigitalOutPin, val baudRate: Int = 40_000, val pullup: Boolean = false) {
     fun withAddress(address: Int) = TmcAddressUartPins(this, address)
 }

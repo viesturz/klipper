@@ -4,6 +4,7 @@ import MachineTime
 import Temperature
 import celsius
 import config.DigitalOutPin
+import config.ValueSensor
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kelvins
 import kotlinx.coroutines.flow.dropWhile
@@ -14,8 +15,6 @@ import machine.MachineBuilder
 import machine.MachinePart
 import machine.MachineRuntime
 import machine.addLocal
-import machine.addLocalCommand
-import machine.impl.GCodeCommand
 import machine.impl.PartLifecycle
 import kotlin.math.absoluteValue
 import kotlin.math.sign
@@ -23,7 +22,7 @@ import kotlin.math.sign
 fun MachineBuilder.Heater(
     name: String,
     pin: DigitalOutPin,
-    sensor: TemperatureSensor,
+    sensor: ValueSensor<Temperature>,
     maxPower: Double = 1.0,
     stableDelta: Temperature = 1.celsius,
     control: config.TemperatureControl,
@@ -33,7 +32,7 @@ fun MachineBuilder.Heater(
 }
 
 interface Heater: MachinePart {
-    val sensor: TemperatureSensor
+    val sensor: ValueSensor<Temperature>
     val target: Temperature
     val power: Double
     val maxPower: Double
@@ -54,7 +53,7 @@ interface TemperatureControl {
 private class HeaterImpl(
     override val name: String,
     private val loop: HeaterLoop,
-    override val sensor: TemperatureSensor,
+    override val sensor: ValueSensor<Temperature>,
     setup: MachineBuilder): PartLifecycle, Heater {
 
     var _target: Temperature = 0.kelvins
@@ -76,8 +75,8 @@ private class HeaterImpl(
     }
 
     override fun setTarget(queue: CommandQueue, t: Temperature) {
-        require(t >= sensor.minTemp)
-        require(t <= sensor.maxTemp)
+        require(t >= sensor.minValue)
+        require(t <= sensor.maxValue)
         if (t == _target) return
         _target = t
         queue.addLocal{ loop.setTarget(t) }
@@ -89,8 +88,8 @@ private class HeaterImpl(
     }
 
     override fun setTarget(t: Temperature) {
-        require(t >= sensor.minTemp)
-        require(t <= sensor.maxTemp)
+        require(t >= sensor.minValue)
+        require(t <= sensor.maxValue)
         if (t == _target) return
         _target = t
         loop.setTarget(t)
@@ -107,7 +106,7 @@ private class HeaterImpl(
 
 /** Heater control loop. */
 private class HeaterLoop(name: String,
-                        val sensor: TemperatureSensor,
+                        val sensor: ValueSensor<Temperature>,
                          pinConfig: DigitalOutPin,
                          var control: TemperatureControl,
                          /** Temp delta to consider as stable. */
@@ -119,12 +118,12 @@ private class HeaterLoop(name: String,
 
     suspend fun runLoop() {
             sensor.measurement.collect { measurement ->
-                if (target == 0.celsius) {
+                if (target <= 0.celsius) {
                     heater.setNow(0.0)
                     return@collect
                 }
-                power = control.update(measurement.time, measurement.temp, power, target).coerceAtMost(maxPower)
-                logger.info { "Update temp=${measurement.temp}, target=$target, power=$power" }
+                power = control.update(measurement.time, measurement.value, power, target).coerceAtMost(maxPower)
+                logger.info { "Update temp=${measurement.value}, target=$target, power=$power" }
                 heater.setNow(power)
             }
         }

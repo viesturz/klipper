@@ -21,7 +21,7 @@ fun MachineBuilder.HeaterFan(
     control = { runtime ->
         heater.sensor.measurement.collect { temp ->
             val speed = when {
-                temp.temp > 50.celsius -> 1.0
+                temp.value > 50.celsius -> 1.0
                 heater.target > 0.celsius -> 1.0
                 else -> 0.0
             }

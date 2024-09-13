@@ -119,6 +119,7 @@ class CommandBuilder(private val parser: Commands) {
         }
         addI(id)
     }
+    fun addPin(pinName: String) = addEnum("pin", pinName)
     private fun addVLQ(v: Long) {
         if (v >= 0xc000000 || v < -0x4000000) bytes.add((((v shr 28) and 0x7f) or 0x80).toUByte())
         if (v >= 0x180000 || v < -0x80000) bytes.add((((v shr 21) and 0x7f) or 0x80).toUByte())

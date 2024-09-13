@@ -3,10 +3,12 @@ package mcu.impl
 import MachineDuration
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.long
@@ -24,6 +26,7 @@ data class FirmwareConfig @OptIn(ExperimentalSerializationApi::class) constructo
     val responses: Map<String, Int>,
     val config: Map<String, JsonPrimitive>,
     val enumerations: Map<String, Map<String, JsonElement>>,
+    var rawJson: String = "",
 ) {
     private val enumerationsValueToId = buildEnumerationsLookup()
     private val enumerationsIdToValue = enumerationsValueToId.mapValues { e ->
@@ -82,9 +85,9 @@ data class FirmwareConfig @OptIn(ExperimentalSerializationApi::class) constructo
             val unzipped = okio.InflaterSource(input, okio.Inflater(nowrap = false))
             input.write(compressedIdentify).close()
             val result = unzipped.buffer().readByteArray().decodeToString()
-
-//            println(JSON.encodeToString(JSON.decodeFromString<JsonObject>(result)))
-            return Json.decodeFromString<FirmwareConfig>(result)
+            val config = Json.decodeFromString<FirmwareConfig>(result)
+            config.rawJson = JSON.encodeToString(JSON.decodeFromString<JsonObject>(result))
+            return config
         }
 
         val DEFAULT_IDENTIFY = FirmwareConfig(
