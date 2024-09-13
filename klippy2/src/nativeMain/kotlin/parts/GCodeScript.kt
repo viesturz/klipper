@@ -1,8 +1,8 @@
 package parts
 
+import machine.GCodeHandler
 import machine.MachineBuilder
 import machine.MachineRuntime
-import machine.impl.GCodeHandler
 import machine.impl.PartLifecycle
 
 fun MachineBuilder.GCodeScript(
