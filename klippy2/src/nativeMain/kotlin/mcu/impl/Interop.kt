@@ -12,9 +12,6 @@ class GcWrapper<Typename: CPointed> @OptIn(ExperimentalForeignApi::class) constr
     val ptr: CPointer<Typename>
         get() = _ptr ?: throw RuntimeException("Native pointer use after free")
 
-    // Called on GC
-    protected fun finalize() = free()
-
     fun free() {
         _ptr?.let {
             destructor(it)
