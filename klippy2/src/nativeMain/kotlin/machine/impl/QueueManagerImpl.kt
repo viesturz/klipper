@@ -6,16 +6,12 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import machine.CommandQueue
 import machine.Planner
 import machine.QueueManager
-import kotlin.time.Duration.Companion.seconds
 
 /** Time it takes for a queue to start */
 private const val QUEUE_START_TIME = 0.2
-private const val QUEUE_CHECK_TIMEOUT = 1.0
 private const val TIME_EAGER_START = -1.0
 private const val TIME_WAIT = -2.0
 
@@ -196,6 +192,10 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
             cmd.planner.pop(cmd, endTime)
         }
         commands.remove(cmd)
+
+        if (commands.isEmpty() && closed) {
+            manager.queues.remove(this)
+        }
     }
 
     override suspend fun flush(): MachineTime {

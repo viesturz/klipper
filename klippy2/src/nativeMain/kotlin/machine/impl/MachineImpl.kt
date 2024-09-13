@@ -99,6 +99,7 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
         }
         logger.info { "Acquire mcu $config" }
         val mcu = McuSetupImpl(config, connection = acquireConnection(config.connection))
+        logger.info { "Mcu ${config.name} firmware config:\n ${mcu.connection.commands.identify.rawJson}" }
         mcuSetups[config] = mcu
         return mcu
     }
@@ -119,7 +120,7 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
             is SerialConnection -> McuConnection(connectSerial(config.file, config.baud), reactor)
             else -> throw RuntimeException("Unsupported connection ${config}")
         }
-        logger.debug { "Identifying connection $config" }
+        logger.info { "Identifying connection $config" }
         runBlocking { connection.identify() }
         return connection
     }

@@ -5,7 +5,9 @@ import kotlinx.coroutines.flow.StateFlow
 import MachineTime
 import Resistance
 import Voltage
+import kotlinx.cinterop.ExperimentalForeignApi
 import machine.impl.Reactor
+import mcu.impl.GcWrapper
 import mcu.impl.McuComponent
 
 typealias McuClock = ULong
@@ -62,7 +64,11 @@ interface AnalogInPin {
     val value: Measurement
     fun setListener(handler: suspend (m: Measurement) -> Unit)
 
-    data class Measurement(val time: MachineTime, val value: Double, val config: config.AnalogInPin) {
+    data class Measurement(
+        val time: MachineTime,
+        // Raw ADC value in the range of 0..1
+        val value: Double,
+        val config: config.AnalogInPin) {
         val voltage: Voltage
             get() = config.toVoltage(value)
         val resistance: Resistance
@@ -113,19 +119,22 @@ interface Endstop {
         PAST_END_TIME(id = 4u),
     }
 }
+@OptIn(ExperimentalForeignApi::class)
 interface StepperMotor {
     val mcu: Mcu
+    val stepcompress: GcWrapper<cnames.structs.stepcompress>
     fun resetClock()
     // Move number of steps, with interval ticks between, modify interval on each step by add.
-    fun queueMove(steps: Int, interval: McuDuration, add: McuDuration)
-    suspend fun getPosition()
+    fun move(startTime: MachineTime, steps: Int, interval: McuDuration, intervalAdd: McuDuration)
+    fun setPosition(pos: Int)
+    suspend fun getPosition(): Int
 }
 
 interface MessageBus{
     val mcu: Mcu
     /** Returns null if the CRC check failed. Need to retry. */
     suspend fun sendReply(data: UByteArray, readBytes:Int): UByteArray?
-    /* Grants exclusive access to the bus during the transaction. */
+    /** Grants exclusive access to the bus during the transaction. */
     suspend fun transaction(function: suspend () -> Unit) {
     }
 }
