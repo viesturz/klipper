@@ -84,7 +84,7 @@ private class HeaterImpl(
 
     override suspend fun waitForStable() {
         if (_target <= 0.celsius) return
-        loop.sensor.measurement.map {_target <= 0.celsius || loop.control.isStable()}.dropWhile { !it }.first()
+        loop.sensor.flow.map {_target <= 0.celsius || loop.control.isStable()}.dropWhile { !it }.first()
     }
 
     override fun setTarget(t: Temperature) {
@@ -99,7 +99,7 @@ private class HeaterImpl(
 
     override fun status() = mapOf(
         "power" to loop.power,
-        "temperature" to loop.sensor.measurement.value,
+        "temperature" to loop.sensor.value,
         "target" to target,
         )
 }
@@ -117,7 +117,7 @@ private class HeaterLoop(name: String,
     var target: Temperature = 0.kelvins
 
     suspend fun runLoop() {
-            sensor.measurement.collect { measurement ->
+            sensor.flow.collect { measurement ->
                 if (target <= 0.celsius) {
                     heater.setNow(0.0)
                     return@collect

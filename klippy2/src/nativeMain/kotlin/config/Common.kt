@@ -1,6 +1,7 @@
 package config
 
 import MachineTime
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.count
 import kotlinx.coroutines.flow.takeWhile
@@ -16,10 +17,11 @@ data class PID(
 
 interface ValueSensor<ValueType: Comparable<ValueType>> {
     data class Measurement<ValueType>(val time: MachineTime, val value: ValueType)
-    val measurement: StateFlow<Measurement<ValueType>>
+    val value: Measurement<ValueType>
+    val flow: SharedFlow<Measurement<ValueType>>
     val minValue: ValueType
     val maxValue: ValueType
     suspend fun waitFor(min: ValueType = minValue, max: ValueType = maxValue) {
-        measurement.takeWhile { it.value < min || it.value > max }.count()
+        flow.takeWhile { it.value < min || it.value > max }.count()
     }
 }
