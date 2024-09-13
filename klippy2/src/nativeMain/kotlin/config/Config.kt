@@ -159,11 +159,12 @@ fun MachineBuilder.buildMachine() {
 //        },
 //        speedAxis = "xyz"
 //    )
-//    GCodeScript("PRINT_START") { params ->
-//        val bedTemp = params.getInt("BED_TEMP", 0)
-//        val nozzleTemp = params.getInt("TEMP", 0)
-//        gcode("M140 S$bedTemp")
-//        gcode("G28")
-//        gcode("M109 S$nozzleTemp")
-//    }
+
+    GCodeScript("PRINT_START") { params ->
+        val bedTemp = params.getInt("BED_TEMP", 0)
+        val nozzleTemp = params.getInt("TEMP", 0)
+        gcode("M140 S$bedTemp")
+        gcode("G28")
+        gcode("M109 S$nozzleTemp")
+    }
 }
