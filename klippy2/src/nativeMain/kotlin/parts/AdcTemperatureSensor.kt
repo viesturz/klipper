@@ -6,9 +6,8 @@ import config.AnalogInPin
 import config.TemperatureCalibration
 import config.ValueSensor
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kelvins
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import machine.MachineBuilder
 import machine.MachineRuntime
 import machine.impl.PartLifecycle
@@ -32,9 +31,12 @@ private class AdcTemperatureSensorImpl(
     setup: MachineBuilder): PartLifecycle, ValueSensor<Temperature> {
     val adc = setup.setupMcu(pinConfig.mcu).addAnalogPin(pinConfig.validResistanceRange(sensor.tempToResistance(minValue), sensor.tempToResistance(maxValue)))
     val logger = KotlinLogging.logger("AdcTemperatureSensorImpl $name")
-    val _value = MutableStateFlow(ValueSensor.Measurement(0.0, 0.kelvins))
-    override val measurement: StateFlow<ValueSensor.Measurement<Temperature>>
+    var _value = ValueSensor.Measurement(0.0, 0.celsius)
+    val _flow = MutableSharedFlow<ValueSensor.Measurement<Temperature>>()
+    override val value: ValueSensor.Measurement<Temperature>
         get() = _value
+    override val flow: SharedFlow<ValueSensor.Measurement<Temperature>>
+        get() = _flow
 
     init {
         setup.registerMuxCommand("TEMPERATURE_WAIT", "SENSOR", name) { params ->
@@ -48,9 +50,10 @@ private class AdcTemperatureSensorImpl(
     override suspend fun onStart(runtime: MachineRuntime) {
         adc.setListener { m ->
             val measurement = ValueSensor.Measurement(m.time, sensor.resistanceToTemp(m.resistance))
-            _value.value = measurement
+            _value = measurement
+            _flow.emit(measurement)
         }
     }
 
-    override fun status() = mapOf("temperature" to measurement.value.value)
+    override fun status() = mapOf("temperature" to value)
 }

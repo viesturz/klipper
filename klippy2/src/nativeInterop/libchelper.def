@@ -1,4 +1,4 @@
-headers = serialqueue.h pyhelper.h
+headers = serialqueue.h pyhelper.h stepcompress.h itersolve.h kin_cartesian.h kin_corexy.h trapq.h
 headerFilter = *.h
 libraryPaths = ../klippy/build/libs/main
 staticLibraries = libklippy.a

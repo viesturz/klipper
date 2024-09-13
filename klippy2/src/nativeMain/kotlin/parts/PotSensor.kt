@@ -4,8 +4,8 @@ import Resistance
 import config.AnalogInPin
 import config.ValueSensor
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import machine.MachineBuilder
 import machine.MachineRuntime
 import machine.impl.PartLifecycle
@@ -35,18 +35,21 @@ private class PotSensorImpl(
     val adc = setup.setupMcu(pinConfig.mcu).addAnalogPin(pinConfig)
     override val minValue: Double = 0.0
     override val maxValue: Double = 1.0
-    val _value = MutableStateFlow(ValueSensor.Measurement(0.0, minValue))
-
-    override val measurement: StateFlow<ValueSensor.Measurement<Double>>
+    var _value = ValueSensor.Measurement(0.0, minValue)
+    val _flow = MutableSharedFlow<ValueSensor.Measurement<Double>>()
+    override val value: ValueSensor.Measurement<Double>
         get() = _value
+    override val flow: SharedFlow<ValueSensor.Measurement<Double>>
+        get() = _flow
 
     override suspend fun onStart(runtime: MachineRuntime) {
         adc.setListener { m ->
             val value = ((m.resistance - minResistance) / (maxResistance - minResistance)).coerceIn(minValue, maxValue)
             logger.info { "raw = ${m.value.format(0, 3)} resistance = ${m.resistance.format(0)} value = ${value.format(0,3)}" }
-            _value.value = ValueSensor.Measurement(m.time, value)
+            _value = ValueSensor.Measurement(m.time, value)
+            _flow.emit(_value)
         }
     }
 
-    override fun status() = mapOf("value" to measurement.value.value)
+    override fun status() = mapOf("value" to value)
 }

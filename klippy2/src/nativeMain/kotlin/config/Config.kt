@@ -2,9 +2,11 @@ package config
 
 import celsius
 import config.mcus.SkrMiniE3V2
+import kotlinx.coroutines.flow.collect
 import machine.MachineBuilder
 import ohms
 import parts.AdcTemperatureSensor
+import parts.ControlLoop
 import parts.Heater
 import parts.Fan
 import parts.GCodeMove
@@ -13,6 +15,7 @@ import parts.HeaterFan
 import parts.LinearStepper
 import parts.PidCalibrate
 import parts.PotSensor
+import parts.Servo
 import parts.drivers.TMC2209
 import parts.kinematics.CoreXYKinematics
 import parts.kinematics.Homing
@@ -49,10 +52,24 @@ fun MachineBuilder.buildMachine() {
 
     val potSensor = PotSensor(
         name = "POT",
-        pin = mcu.bedTemp.copy(reportInterval = 0.1, sampleCount = 4u),
-        minResistance = 3.ohms,
-        maxResistance = 9_855.ohms,
+        pin = mcu.bedTemp.copy(reportInterval = 0.05, sampleCount = 6u),
+        minResistance = 500.ohms,
+        maxResistance = 9_500.ohms,
     )
+    val servo = Servo(
+        name = "Servo",
+        pin = mcu.zProbeServo.copy(hardwarePwm = true, cycleTime = 0.01),
+        minAngle = 0.0,
+        maxAngle = 180.0,
+    )
+
+    ControlLoop("Servo + POT") { runtime ->
+        val queue = runtime.queueManager.newQueue()
+        potSensor.flow.collect { m ->
+            servo.setAngle(m.value * 180)
+        }
+    }
+
 //
 //    val aDriver = TMC2209(
 //        name = "driverX",

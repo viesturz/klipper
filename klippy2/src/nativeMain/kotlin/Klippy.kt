@@ -41,7 +41,7 @@ fun main(args: Array<String>) = runBlocking {
         // Wait until running
         machine.state.first { it == Machine.State.RUNNING }
         println("Machine running")
-        gcodeFromCommandline(machine)
+//        gcodeFromCommandline(machine)
 //
 //            gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=0.3")
 //            gcode.run("PID_CALIBRATE HEATER='extruder' TARGET=150")

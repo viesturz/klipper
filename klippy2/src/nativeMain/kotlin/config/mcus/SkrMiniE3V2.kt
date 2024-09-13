@@ -11,6 +11,7 @@ class SkrMiniE3V2(serial: String): McuTemplate(McuConfig(SerialConnection(serial
     val fan1 = digitalOutPin(pin="PC7")
     val heaterBed = digitalOutPin(pin="PC9")
     val heaterE0 = digitalOutPin(pin="PC8")
+    val zProbeServo = digitalOutPin(pin="PA1")
     val stepper0 = stepperPins(dirPin=digitalOutPin("PB12"), stepPin=digitalOutPin("PB13"), enablePin=digitalOutPin("PB14", invert = true))
     val stepper1 = stepperPins(dirPin=digitalOutPin("PB2"), stepPin=digitalOutPin("PB10"), enablePin=digitalOutPin("PB11", invert = true))
     val stepper2 = stepperPins(dirPin=digitalOutPin("PC5"), stepPin=digitalOutPin("PB0"), enablePin=digitalOutPin("PB1", invert = true))
