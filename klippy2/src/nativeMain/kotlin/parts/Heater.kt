@@ -4,6 +4,7 @@ import MachineTime
 import Temperature
 import celsius
 import config.DigitalOutPin
+import config.TemperatureSensor
 import config.ValueSensor
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kelvins
@@ -22,7 +23,7 @@ import kotlin.math.sign
 fun MachineBuilder.Heater(
     name: String,
     pin: DigitalOutPin,
-    sensor: ValueSensor<Temperature>,
+    sensor: TemperatureSensor,
     maxPower: Double = 1.0,
     stableDelta: Temperature = 1.celsius,
     control: config.TemperatureControl,
@@ -32,7 +33,7 @@ fun MachineBuilder.Heater(
 }
 
 interface Heater: MachinePart {
-    val sensor: ValueSensor<Temperature>
+    val sensor: TemperatureSensor
     val target: Temperature
     val power: Double
     val maxPower: Double
@@ -53,7 +54,7 @@ interface TemperatureControl {
 private class HeaterImpl(
     override val name: String,
     private val loop: HeaterLoop,
-    override val sensor: ValueSensor<Temperature>,
+    override val sensor: TemperatureSensor,
     setup: MachineBuilder): PartLifecycle, Heater {
 
     var _target: Temperature = 0.kelvins
@@ -106,7 +107,7 @@ private class HeaterImpl(
 
 /** Heater control loop. */
 private class HeaterLoop(name: String,
-                        val sensor: ValueSensor<Temperature>,
+                        val sensor: TemperatureSensor,
                          pinConfig: DigitalOutPin,
                          var control: TemperatureControl,
                          /** Temp delta to consider as stable. */

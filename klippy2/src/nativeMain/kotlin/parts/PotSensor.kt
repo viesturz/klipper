@@ -45,7 +45,7 @@ private class PotSensorImpl(
     override suspend fun onStart(runtime: MachineRuntime) {
         adc.setListener { m ->
             val value = ((m.resistance - minResistance) / (maxResistance - minResistance)).coerceIn(minValue, maxValue)
-            logger.info { "raw = ${m.value.format(0, 3)} resistance = ${m.resistance.format(0)} value = ${value.format(0,3)}" }
+            logger.debug { "raw = ${m.value.format(0, 3)} resistance = ${m.resistance.format(0)} value = ${value.format(0,3)}" }
             _value = ValueSensor.Measurement(m.time, value)
             _flow.emit(_value)
         }

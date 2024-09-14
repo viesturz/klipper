@@ -21,6 +21,7 @@ import mcu.McuState
 import mcu.connection.McuConnection
 import mcu.connection.connectSerial
 import mcu.impl.McuSetupImpl
+import parts.Stats
 
 private val logger = KotlinLogging.logger("MachineImpl")
 
@@ -54,6 +55,7 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
     override suspend fun start() {
         _state.value = State.CONFIGURING
         buildMachine()
+        addCommonParts()
         for (mcu in mcuSetups.values){
             logger.info { "Initializing MCU: ${mcu.config.name}" }
             val mcu = mcu.start(reactor)
@@ -70,6 +72,10 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
         }
         if (state.value != State.STARTING) return
         _state.value = State.RUNNING
+    }
+
+    private fun addCommonParts() {
+        addPart(Stats())
     }
 
     override fun shutdown(reason: String) {

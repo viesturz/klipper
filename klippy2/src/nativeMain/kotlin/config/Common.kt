@@ -1,10 +1,11 @@
 package config
 
 import MachineTime
+import Temperature
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.count
 import kotlinx.coroutines.flow.takeWhile
+import machine.MachinePart
 
 
 sealed interface TemperatureControl
@@ -15,7 +16,7 @@ data class PID(
     val kD: Double,
     ): TemperatureControl
 
-interface ValueSensor<ValueType: Comparable<ValueType>> {
+interface ValueSensor<ValueType: Comparable<ValueType>>: MachinePart {
     data class Measurement<ValueType>(val time: MachineTime, val value: ValueType)
     val value: Measurement<ValueType>
     val flow: SharedFlow<Measurement<ValueType>>
@@ -25,3 +26,5 @@ interface ValueSensor<ValueType: Comparable<ValueType>> {
         flow.takeWhile { it.value < min || it.value > max }.count()
     }
 }
+
+typealias TemperatureSensor = ValueSensor<Temperature>

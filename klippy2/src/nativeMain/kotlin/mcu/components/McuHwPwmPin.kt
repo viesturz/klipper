@@ -67,7 +67,7 @@ class McuHwPwmPin(
         _dutyCycle = dutyCycle
         cycleTime?.let { _cycleTime = it }
         val duty = dutyToValue(_dutyCycle)
-        logger.info { "SetNow $duty" }
+        logger.debug { "SetNow $duty" }
         queue.send(
             minClock = queue.lastClock,
             reqClock = runtime.timeToClock(runtime.reactor.now),
