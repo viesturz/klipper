@@ -14,7 +14,7 @@ import kotlin.math.max
 class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initialize: McuConfigure) : PwmPin,
     McuComponent {
     val id = initialize.makeOid()
-    val queue = initialize.makeCommandQueue("McuPwmPin ${config.pin}")
+    val queue = initialize.makeCommandQueue("McuPwmPin ${config.pin}", 3)
     var _dutyCycle = config.startValue
     var _cycleTime = config.cycleTime
     var cycleTicks: McuClock32 = 0u

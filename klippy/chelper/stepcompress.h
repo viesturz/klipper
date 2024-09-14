@@ -11,6 +11,7 @@ struct pull_history_steps {
     int step_count, interval, add;
 };
 
+struct stepcompress;
 struct stepcompress *stepcompress_alloc(uint32_t oid);
 void stepcompress_fill(struct stepcompress *sc, uint32_t max_error
                        , int32_t queue_step_msgtag
@@ -36,6 +37,7 @@ int stepcompress_extract_old(struct stepcompress *sc
                              , uint64_t start_clock, uint64_t end_clock);
 
 struct serialqueue;
+struct steppersync;
 struct steppersync *steppersync_alloc(
     struct serialqueue *sq, struct stepcompress **sc_list, int sc_num
     , int move_num);

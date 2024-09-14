@@ -6,7 +6,9 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toCValues
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 import mcu.McuClock
 import mcu.impl.CommandBuilder
 import mcu.impl.GcWrapper
@@ -16,7 +18,7 @@ import mcu.impl.ResponseParser
 import kotlin.time.Duration.Companion.seconds
 
 /** Queue for sending commands to MCU. */
-@OptIn(ExperimentalForeignApi::class)
+@OptIn(ExperimentalForeignApi::class, ExperimentalStdlibApi::class)
 class CommandQueue(var connection: McuConnection?, logName: String) {
     @OptIn(ExperimentalForeignApi::class)
     private val queue = GcWrapper(serialqueue_alloc_commandqueue()) { serialqueue_free_commandqueue(it) }
@@ -29,7 +31,6 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
 
     /** Schedule to send a message to the MCU.
      * No earlier than minClock and at the order of reqClock. */
-    @OptIn(ExperimentalStdlibApi::class)
     fun send(data: UByteArray, minClock: McuClock = 0u, reqClock: McuClock = 0u, ackId: ULong=0u) {
         val connection = this.connection ?:
             throw RuntimeException("Trying to send before setup is finished")
@@ -42,27 +43,26 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
     suspend fun sendWaitAck(data: UByteArray, minClock: McuClock =0u, reqClock: McuClock = 0u) {
         val connection = this.connection ?:
             throw RuntimeException("Trying to send before setup is finished")
-        var acked = CompletableDeferred<Unit>()
-        val ackId = connection.registerMessageAckedCallback { acked.complete(Unit) }
+        val (ackDeferred, ackId) = connection.registerMessageAckedCallback()
         send(data, minClock, reqClock, ackId=ackId)
-        acked.await()
+        ackDeferred.await()
     }
 
-    suspend fun <ResponseType: McuResponse> sendWithResponse(data: UByteArray, parser: ResponseParser<ResponseType>, id: ObjectId = 0u): ResponseType {
+    suspend fun <ResponseType: McuResponse> sendWithResponse(data: UByteArray, parser: ResponseParser<ResponseType>, id: ObjectId = 0u, retry: Double = 0.01): ResponseType {
         val connection = this.connection ?:
             throw RuntimeException("Trying to send before setup is finished")
-        var wait = 0.01.seconds
+        var wait = retry.seconds
         var received = connection.setResponseHandlerOnce(parser, id)
         for (retry in (1..5)) {
-            val acked = CompletableDeferred<Unit>()
-            val ackId = connection.registerMessageAckedCallback { acked.complete(Unit) }
-            send(data, ackId=ackId)
-            acked.await()
-            if (received.isCompleted) {
-                return received.await()
+            sendWaitAck(data)
+            try {
+                return withTimeout(wait) {
+                    received.await()
+                }
+            } catch (e: TimeoutCancellationException) {
+                delay(wait)
+                wait *= 2
             }
-            delay(wait)
-            wait *= 2
         }
         throw RuntimeException("Timeout out waiting for response")
     }

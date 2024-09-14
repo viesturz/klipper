@@ -70,7 +70,7 @@ data class AnalogInPin(
 data class AnalogOutPin(val mcu: McuConfig, val pin: String)
 
 // Composite 
-data class StepperPins(val mcu: McuConfig, val enablePin: DigitalOutPin, val stepPin: DigitalOutPin, val dirPin: DigitalOutPin, val pulseDuration: Double = 0.000_002, val stepBothEdges: Boolean = false)
+data class StepperPins(val mcu: McuConfig, val enablePin: DigitalOutPin, val stepPin: DigitalOutPin, val dirPin: DigitalOutPin)
 data class UartPins(val mcu: McuConfig, val rxPin: DigitalOutPin, val txPin: DigitalOutPin, val baudRate: Int = 40_000, val pullup: Boolean = false) {
     fun withAddress(address: Int) = TmcAddressUartPins(this, address)
 }

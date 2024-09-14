@@ -3,11 +3,12 @@ package utils
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 
+@OptIn(ExperimentalStdlibApi::class)
 class Serial8N1Test {
     @Test
     fun testEncode1() {
-        val encoded = encode8N1 { add(0xF0u) }
-        val expected = arrayOf<UByte>(0xE0u, 0x03u).toUByteArray()
+        val encoded = encode8N1 { add( "f50002c8".hexToUByteArray()) }
+        val expected = "ea034820e4".hexToUByteArray()
         assertContentEquals(expected, encoded)
     }
     @Test

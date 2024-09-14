@@ -11,17 +11,17 @@ import mcu.impl.McuImpl
 import mcu.impl.McuObjectResponse
 import mcu.impl.ObjectId
 import mcu.impl.ResponseParser
-import utils.crc8
 import utils.decode8N1
 import utils.encode8N1
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalStdlibApi::class)
 class TmcUartBus(override val mcu: McuImpl, val config: UartPins, initialize: McuConfigure) : MessageBus,
     McuComponent {
     val id = initialize.makeOid()
-    private val name = "TmcUartBus ${config.mcu.name} ${config.rxPin} ${config.txPin}"
-    private val queue = initialize.makeCommandQueue(name)
+    private val name = "TmcUartBus ${config.mcu.name} ${config.rxPin.pin} ${config.txPin.pin}"
+    private val queue = initialize.makeCommandQueue(name, 1)
     private val logger = KotlinLogging.logger(name)
     private val mutex = Mutex()
 
@@ -41,16 +41,19 @@ class TmcUartBus(override val mcu: McuImpl, val config: UartPins, initialize: Mc
         val readEncodedBytes = ceil(readBytes * 10.0 / 8.0).roundToInt()
         val reply = queue.sendWithResponse(
             queue.build("tmcuart_send oid=%c write=%*s read=%c"){addId(id);addBytes(encoded);addC(readEncodedBytes.toUByte())},
-            responseTmcuartParser, id).data
-        if (readBytes == 0) return UByteArray(0)
-        return reply.decode8N1()
+            responseTmcuartParser,
+            id = id,
+            retry = 0.1, // Uart is slower to respond, so wait a bit longer
+            ).data
+        if (readBytes > 0 && reply.isEmpty()) return null // Read timeout
+        val result = reply.decode8N1()
+        logger.trace { "SendReply ${data.toHexString()} enc ${encoded.toHexString()} -> ${result.toHexString()}" }
+        return result
     }
 
-    override suspend fun transaction(function: suspend () -> Unit) {
-        mutex.withLock {
+    override suspend fun <ResultType>  transaction(function: suspend () -> ResultType): ResultType = mutex.withLock {
             function()
         }
-    }
 }
 
 data class ResponseTmcuart(override val id: ObjectId, val data: ByteArray) : McuObjectResponse

@@ -17,7 +17,7 @@ class McuHwPwmPin(
     private val logger = KotlinLogging.logger("McuHwPwmPin ${config.pin}")
     val id = configure.makeOid()
     private val pwmMax = configure.firmware.configLong("PWM_MAX", 255)
-    private val queue = configure.makeCommandQueue("McuHwPwmPin ${config.pin}")
+    private val queue = configure.makeCommandQueue("McuHwPwmPin ${config.pin}", 3)
     var _dutyCycle = config.startValue
     var _cycleTime = config.cycleTime
     private lateinit var runtime: McuRuntime

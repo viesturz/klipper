@@ -5,6 +5,7 @@ import MachineTime
 import machine.impl.Reactor
 import mcu.McuClock
 import mcu.connection.CommandQueue
+import mcu.connection.StepQueue
 
 /** McuComponent controls a specific hardware feature in the MCU
  * It's tightly coupled with the MCU code and provides provides an API to the low level
@@ -26,9 +27,12 @@ interface McuConfigure {
     val firmware: FirmwareConfig
     /** Allocate new object ID. */
     fun makeOid(): ObjectId
-    /** Create a new command queue, separate from the default one.
+    /** Create a new command queue, separate from the step queues.
+     *  NumMoves is the number of commands simultaneously queued.
      * Can only be used after start. */
-    fun makeCommandQueue(name:String): CommandQueue
+    fun makeCommandQueue(name:String, numCommands: Int): CommandQueue
+    /** Create a new stepper command queue */
+    fun makeStepQueue(id: ObjectId): StepQueue
     /** Add a configuration command for the MCU */
     fun configCommand(signature: String, block: CommandBuilder.()->Unit)
     /** On soft restart, restart commands are used instead of configuration. */

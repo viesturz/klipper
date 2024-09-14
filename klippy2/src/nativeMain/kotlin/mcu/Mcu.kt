@@ -7,8 +7,9 @@ import Resistance
 import Voltage
 import kotlinx.cinterop.ExperimentalForeignApi
 import machine.impl.Reactor
-import mcu.impl.GcWrapper
+import mcu.connection.StepQueue
 import mcu.impl.McuComponent
+import parts.drivers.StepperDriver
 
 typealias McuClock = ULong
 typealias McuDuration = Long
@@ -20,7 +21,7 @@ interface McuSetup {
     fun addAnalogPin(pin: config.AnalogInPin): AnalogInPin
     fun addPwmPin(config: config.DigitalOutPin): PwmPin
     fun addTmcUart(config: config.UartPins): MessageBus
-    fun addStepperMotor(config: config.StepperPins): StepperMotor
+    fun addStepperMotor(config: config.StepperPins, driver: StepperDriver): StepperMotor
 //    fun addPulseCounter(pin: config.DigitalInPin): PulseCounter
 //    fun addDigitalOutPin(config: config.DigitalOutPin): DigitalOutPin
 //    fun addI2C(config: config.I2CPins): MessageBus
@@ -122,12 +123,12 @@ interface Endstop {
 @OptIn(ExperimentalForeignApi::class)
 interface StepperMotor {
     val mcu: Mcu
-    val stepcompress: GcWrapper<cnames.structs.stepcompress>
-    fun resetClock()
-    // Move number of steps, with interval ticks between, modify interval on each step by add.
-    fun move(startTime: MachineTime, steps: Int, interval: McuDuration, intervalAdd: McuDuration)
-    fun setPosition(pos: Int)
-    suspend fun getPosition(): Int
+    val stepQueue: StepQueue
+    val driver: StepperDriver
+    // Move one step
+    fun step(startTime: MachineTime, direction: Int)
+    fun setPosition(time: MachineTime, pos: Long)
+    suspend fun getPosition(): Long
 }
 
 interface MessageBus{
@@ -135,6 +136,5 @@ interface MessageBus{
     /** Returns null if the CRC check failed. Need to retry. */
     suspend fun sendReply(data: UByteArray, readBytes:Int): UByteArray?
     /** Grants exclusive access to the bus during the transaction. */
-    suspend fun transaction(function: suspend () -> Unit) {
-    }
+    suspend fun <ResultType> transaction(function: suspend () -> ResultType): ResultType
 }

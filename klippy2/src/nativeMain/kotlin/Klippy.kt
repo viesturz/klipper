@@ -9,6 +9,7 @@ import logging.LogWriter
 import machine.Machine
 import machine.impl.InvalidGcodeException
 import machine.impl.MachineImpl
+import platform.posix.log
 
 
 suspend fun gcodeFromCommandline(machine: MachineImpl) {
@@ -30,11 +31,12 @@ suspend fun gcodeFromCommandline(machine: MachineImpl) {
 fun main(args: Array<String>) = runBlocking {
     println("Klippy 2!")
 
+    val logWriter = LogWriter("klippy.log", GlobalScope)
     KotlinLoggingConfiguration.logLevel = Level.INFO
     KotlinLoggingConfiguration.formatter = LogFormatter()
-    KotlinLoggingConfiguration.appender = LogWriter("klippy.log", GlobalScope)
+    KotlinLoggingConfiguration.appender = logWriter
 
-    while (true) {
+    try {
         val machine = MachineImpl()
         println("Machine setup ${machine.status}")
         machine.start()
@@ -52,6 +54,8 @@ fun main(args: Array<String>) = runBlocking {
         // Wait until shutdown.
         machine.state.first { it == Machine.State.SHUTDOWN }
         println("Shutdown detected, reason ${machine.shutdownReason}")
-        break
+    } catch (e: Exception) {
+        runBlocking { logWriter.close() }
+        throw e
     }
 }

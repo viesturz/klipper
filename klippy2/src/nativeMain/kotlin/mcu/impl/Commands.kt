@@ -40,10 +40,15 @@ class Commands(val identify: FirmwareConfig){
     }
 
     inline fun build(signature: String, block: CommandBuilder.()->Unit): UByteArray {
-        val builder = CommandBuilder(this)
+        val buffer = BytesBuffer()
+        build(buffer, signature, block)
+        return buffer.bytes.toUByteArray()
+    }
+
+    inline fun build(buffer: CommandBuffer, signature: String, block: CommandBuilder.()->Unit) {
+        val builder = CommandBuilder(this, buffer)
         builder.addI(identify.commands.getValue(signature))
         builder.block()
-        return builder.bytes.toUByteArray()
     }
 
     fun registerParser(parser: ResponseParser<*>) {
@@ -88,28 +93,41 @@ class Commands(val identify: FirmwareConfig){
     }
 }
 
-class CommandBuilder(private val parser: Commands) {
-    val bytes = ArrayList<UByte>()
-    fun addC(v: Boolean) = addVLQ(if (v) 1 else 0)
-    fun addC(v: UByte) = addVLQ(v.toLong())
-    fun addId(v: ObjectId) = addVLQ(v.toLong())
-    fun addU(v: UInt) = addVLQ(v.toLong())
-    fun addHU(v: UShort) = addVLQ(v.toLong())
-    fun addH(v: Short) = addVLQ(v.toLong())
-    fun addI(v: Int) = addVLQ(v.toLong())
+interface CommandBuffer{
+    fun addVLQ(v: Long)
+    fun addBytes(v:UByteArray)
+}
 
-    fun addStr(v: String) {
-        bytes.add(v.length.toUByte())
-        bytes.addAll(v.encodeToByteArray().toUByteArray())
+class BytesBuffer: CommandBuffer {
+    val bytes = ArrayList<UByte>()
+    override fun addVLQ(v: Long) {
+        if (v >= 0xc000000 || v < -0x4000000) bytes.add((((v shr 28) and 0x7f) or 0x80).toUByte())
+        if (v >= 0x180000 || v < -0x80000) bytes.add((((v shr 21) and 0x7f) or 0x80).toUByte())
+        if (v >= 0x3000 || v < -0x1000) bytes.add((((v shr 14) and 0x7f) or 0x80).toUByte())
+        if (v >= 0x60 || v < -0x20) bytes.add((((v shr 7) and 0x7f) or 0x80).toUByte())
+        bytes.add((v and 0x7f).toUByte())
     }
-    fun addBytes(v: ByteArray) {
-        bytes.add(v.size.toUByte())
-        bytes.addAll(v.toUByteArray())
-    }
-    fun addBytes(v: UByteArray) {
+    override fun addBytes(v: UByteArray) {
         bytes.add(v.size.toUByte())
         bytes.addAll(v)
     }
+
+}
+
+class CommandBuilder(private val parser: Commands, private val buffer: CommandBuffer) {
+
+    fun addC(v: Boolean) = buffer.addVLQ(if (v) 1 else 0)
+    fun addC(v: UByte) = buffer.addVLQ(v.toLong())
+    fun addC(v: Byte) = buffer.addVLQ(v.toLong())
+    fun addId(v: ObjectId) = buffer.addVLQ(v.toLong())
+    fun addU(v: UInt) = buffer.addVLQ(v.toLong())
+    fun addHU(v: UShort) = buffer.addVLQ(v.toLong())
+    fun addH(v: Short) = buffer.addVLQ(v.toLong())
+    fun addI(v: Int) = buffer.addVLQ(v.toLong())
+
+    fun addStr(v: String) = buffer.addBytes(v.encodeToByteArray().toUByteArray())
+    fun addBytes(v: ByteArray) = buffer.addBytes(v.toUByteArray())
+    fun addBytes(v: UByteArray) = buffer.addBytes(v)
     fun addEnum(name: String, value: String) {
         val values = parser.identify.enumerationValueToId(name)
         val id = values[value]
@@ -120,18 +138,12 @@ class CommandBuilder(private val parser: Commands) {
         addI(id)
     }
     fun addPin(pinName: String) = addEnum("pin", pinName)
-    private fun addVLQ(v: Long) {
-        if (v >= 0xc000000 || v < -0x4000000) bytes.add((((v shr 28) and 0x7f) or 0x80).toUByte())
-        if (v >= 0x180000 || v < -0x80000) bytes.add((((v shr 21) and 0x7f) or 0x80).toUByte())
-        if (v >= 0x3000 || v < -0x1000) bytes.add((((v shr 14) and 0x7f) or 0x80).toUByte())
-        if (v >= 0x60 || v < -0x20) bytes.add((((v shr 7) and 0x7f) or 0x80).toUByte())
-        bytes.add((v and 0x7f).toUByte())
-    }
 }
 
 data class ParserContext(val array: ByteArray, var pos: Int = 0, val sentTime: MachineTime, val receiveTime: MachineTime) {
     fun parseU() = parseVLQ(false).toUInt()
     fun parseI() = parseVLQ(false).toInt()
+    fun parseL() = parseVLQ(false)
     fun parseC() = parseVLQ(false).toUByte()
     fun parseHU() = parseVLQ(false).toUShort()
     fun parseH() = parseVLQ(false).toShort()
