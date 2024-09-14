@@ -10,7 +10,7 @@ fun  MachineBuilder.TMC2209(
     name: String,
     pins: TmcAddressUartPins,
     microsteps: Int,
-    senseResistor: Double,
+    senseResistor: Double, // Typically 0.11 ohms, but check your board.
     runCurrent: Double,
     idleCurrent: Double = runCurrent,
     stealthchopTreshold: Int = 999999999,
@@ -66,9 +66,12 @@ class TMC2209Impl(
 ) : PartLifecycle, StepperDriver {
     val comms = setup.setupMcu(pinsConfig.uartPins.mcu).addTmcUart(pinsConfig.uartPins)
     val fields = TmcFields(TmcUartNodeWithAddress(pinsConfig, comms, setup), registers)
+    override val stepBothEdges = false
+    override val pulseDuration = 0.000_000_100
 
     override suspend fun onStart(runtime: MachineRuntime) {
         // Setup fields for UART
+        val ifcnt = fields.readField(TmcField.ifcnt)
         fields.writeField(TmcField.pdn_disable, true)
         fields.writeField(TmcField.senddelay, 2)  // Avoid tx errors on shared uart
 //        // Register commands

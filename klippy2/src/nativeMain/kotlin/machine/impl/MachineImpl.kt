@@ -56,9 +56,9 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
         _state.value = State.CONFIGURING
         buildMachine()
         addCommonParts()
-        for (mcu in mcuSetups.values){
-            logger.info { "Initializing MCU: ${mcu.config.name}" }
-            val mcu = mcu.start(reactor)
+        for (mSetup in mcuSetups.values){
+            logger.info { "Initializing MCU: ${mSetup.config.name}" }
+            val mcu = mSetup.start(reactor)
             mcuList.add(mcu)
             reactor.launch {
                 mcu.state.first { it == McuState.ERROR }
@@ -67,9 +67,7 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
             logger.info { "Initializing MCU: ${mcu.config.name} done" }
         }
         _state.value = State.STARTING
-        reactor.launch {
-            partsList.forEach { it.onStart(this@MachineImpl) }
-        }
+        partsList.forEach { it.onStart(this@MachineImpl) }
         if (state.value != State.STARTING) return
         _state.value = State.RUNNING
     }
@@ -114,7 +112,7 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
         partsList.add(part)
     }
     override fun registerCommand(command: String, rawText: Boolean,  handler: GCodeHandler) {
-        gCode.registerCommand(command, handler)
+        gCode.registerCommand(command, rawText, handler)
     }
     override fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler) {
         gCode.registerMuxCommand(command, muxParam, muxValue, handler)

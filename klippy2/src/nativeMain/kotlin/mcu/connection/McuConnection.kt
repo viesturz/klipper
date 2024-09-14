@@ -11,6 +11,7 @@ import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.readBytes
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
@@ -34,7 +35,7 @@ private val logger = KotlinLogging.logger("McuConnection")
 class McuConnection(val fd: Int, val reactor: Reactor) {
     private val responseHandlersOneshot = HashMap<Pair<String, ObjectId>, CompletableDeferred<McuResponse>>()
     private val responseHandlers = HashMap<Pair<String, ObjectId>, suspend (message: McuResponse) -> Unit>()
-    private val pendingAcks = HashMap<ULong, () -> Unit>()
+    private val pendingAcks = HashMap<ULong, CompletableDeferred<Unit>>()
     private var lastNotifyId = AtomicLong(0)
     var commands = Commands(FirmwareConfig.DEFAULT_IDENTIFY)
     val serial = GcWrapper(
@@ -71,7 +72,7 @@ class McuConnection(val fd: Int, val reactor: Reactor) {
                 }
                 // Acks after handlers - to allow handlers populate data before acks.
                 val ack = pendingAcks.remove(message.notify_id)
-                ack?.let { reactor.launch{ it() } }
+                ack?.complete(Unit)
             }
         }
     }
@@ -133,10 +134,11 @@ class McuConnection(val fd: Int, val reactor: Reactor) {
         close(fd)
     }
 
-    fun registerMessageAckedCallback(function: (() -> Unit)): ULong {
+    fun registerMessageAckedCallback(): Pair<Deferred<Unit>, ULong> {
         val n = lastNotifyId.incrementAndGet().toULong()
-        pendingAcks[n] = function
-        return n
+        val deferred = CompletableDeferred<Unit>()
+        pendingAcks[n] = deferred
+        return deferred to n
     }
 
     @Suppress("UNCHECKED_CAST")

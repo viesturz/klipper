@@ -70,35 +70,34 @@ fun MachineBuilder.buildMachine() {
         }
     }
 
-//
-//    val aDriver = TMC2209(
-//        name = "driverX",
-//        pins = mcu.stepper0Uart,
-//        microsteps = 16,
-//        runCurrent = 0.32,
-//        senseResistor = 0.110.ohms
-//    )
-//    val bDriver = TMC2209(
-//        name = "driverY",
-//        pins = mcu.stepper1Uart,
-//        microsteps = 16,
-//        runCurrent = 0.32,
-//        senseResistor = 0.110.ohms
-//    )
-//    val zDriver = TMC2209(
-//        name = "driverZ",
-//        pins = mcu.stepper2Uart,
-//        microsteps = 16,
-//        runCurrent = 0.32,
-//        senseResistor = 0.110.ohms
-//    )
-//    val eDriver = TMC2209(
-//        name = "driverE",
-//        pins = mcu.stepper3Uart,
-//        microsteps = 16,
-//        runCurrent = 0.32,
-//        senseResistor = 0.110.ohms
-//    )
+    val aDriver = TMC2209(
+        name = "driverX",
+        pins = mcu.stepper0Uart,
+        microsteps = 16,
+        runCurrent = 0.32,
+        senseResistor = 0.110.ohms
+    )
+    val bDriver = TMC2209(
+        name = "driverY",
+        pins = mcu.stepper1Uart,
+        microsteps = 16,
+        runCurrent = 0.32,
+        senseResistor = 0.110.ohms
+    )
+    val zDriver = TMC2209(
+        name = "driverZ",
+        pins = mcu.stepper2Uart,
+        microsteps = 16,
+        runCurrent = 0.32,
+        senseResistor = 0.110.ohms
+    )
+    val eDriver = TMC2209(
+        name = "driverE",
+        pins = mcu.stepper3Uart,
+        microsteps = 16,
+        runCurrent = 0.32,
+        senseResistor = 0.110.ohms
+    )
 //    val aStepper = LinearStepper(
 //        name = "stepperA",
 //        pins = mcu.stepper0,

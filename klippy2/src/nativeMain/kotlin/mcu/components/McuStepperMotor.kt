@@ -2,25 +2,30 @@ package mcu.components
 
 import MachineTime
 import config.StepperPins
-import kotlinx.cinterop.ExperimentalForeignApi
-import mcu.McuDuration
 import mcu.StepperMotor
-import mcu.impl.GcWrapper
 import mcu.impl.McuComponent
 import mcu.impl.McuConfigure
 import mcu.impl.McuImpl
+import mcu.impl.McuObjectResponse
 import mcu.impl.McuRuntime
+import mcu.impl.ObjectId
+import mcu.impl.ResponseParser
+import parts.drivers.StepperDriver
 
-@OptIn(ExperimentalForeignApi::class)
-class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, configuration: McuConfigure) : StepperMotor, McuComponent {
+class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, override val driver: StepperDriver, configuration: McuConfigure) : StepperMotor, McuComponent {
     val id = configuration.makeOid()
-    override val stepcompress = GcWrapper(chelper.stepcompress_alloc(id.toUInt())) { chelper.stepcompress_free(it) }
+    override val stepQueue = configuration.makeStepQueue(id)
     private lateinit var runtime: McuRuntime
 
     override fun configure(configure: McuConfigure) {
-        val pulseTicks = configure.durationToClock(config.pulseDuration)
+        var pulseTicks = configure.durationToClock(driver.pulseDuration)
+        var invert: Byte = if (config.dirPin.invert) 1 else 0
+        if (driver.stepBothEdges) {
+            pulseTicks = 0u
+            invert = -1
+        }
         configure.configCommand("config_stepper oid=%c step_pin=%c dir_pin=%c invert_step=%c step_pulse_ticks=%u") {
-            addId(id); addPin(config.stepPin.pin); addPin(config.dirPin.pin); addC(config.stepPin.invert); addU(pulseTicks)
+            addId(id); addPin(config.stepPin.pin); addPin(config.dirPin.pin); addC(invert); addU(pulseTicks)
         }
         configure.restartCommand("reset_step_clock oid=%c clock=%u") {
             addId(id); addU(0u)
@@ -31,20 +36,22 @@ class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, config
         this.runtime = runtime
     }
 
-    override fun resetClock() {
-
+    override fun setPosition(time: MachineTime, pos: Long) {
+        stepQueue.setLastPosition(runtime.timeToClock(time), pos)
     }
 
-    override fun setPosition(pos: Int) {
-        TODO("Not yet implemented")
-    }
-    override suspend fun getPosition(): Int {
-        return 0
-    }
-
-    override fun move(startTime: MachineTime, steps: Int, interval: McuDuration, intervalAdd: McuDuration) {
-        // chelper.stepcompress_queue_mq_msg(stepcompress, )
-        TODO("Not yet implemented")
+    override suspend fun getPosition(): Long {
+        val position = runtime.defaultQueue.sendWithResponse(runtime.defaultQueue.build("stepper_get_position oid=%c") {addId(id) }, responseStepperGetPositionParser, id=id)
+        setPosition(position.time, position.position)
+        return position.position
     }
 
+    override fun step(startTime: MachineTime, direction: Int) {
+        stepQueue.appendStep(direction, startTime, 0.0)
+    }
+}
+
+data class ResponseStepperGetPosition(override val id: ObjectId, val time: MachineTime, val position: Long) : McuObjectResponse
+val responseStepperGetPositionParser = ResponseParser("stepper_position oid=%c pos=%i") {
+    ResponseStepperGetPosition(parseC(), receiveTime, parseL())
 }

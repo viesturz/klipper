@@ -149,7 +149,7 @@ internal class ClockSync(val mcu: McuImpl, val connection: McuConnection) {
             estimate.clockToTime(newEstimate.lastClock) - newEstimate.clockToTime(newEstimate.lastClock)
         logger.debug { "Estimate update, $newEstimate, stdev=$stdev, correction = $correction" }
         estimate = newEstimate
-        connection.setClockEstimate(
+        mcu.updateClocks(
             frequency = newEstimate.frequency,
             convTime = newEstimate.timeOffset + TRANSMIT_EXTRA,
             convClock = (-3 * stdev).toULong(),

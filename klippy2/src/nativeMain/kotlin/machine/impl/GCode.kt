@@ -41,15 +41,15 @@ typealias GCodeOutputSink = (message: String) -> Unit
 private val logger = KotlinLogging.logger("Gcode")
 
 class GCode {
-    data class CommandHandler(val name: String, val impl: GCodeHandler)
+    data class CommandHandler(val name: String, val rawText: Boolean, val impl: GCodeHandler)
     internal val commands = HashMap<String, CommandHandler>()
     internal val muxCommands = HashMap<String, MuxCommandHandler>()
 
-    fun registerCommand(name: String, code: GCodeHandler) {
+    fun registerCommand(name: String, rawText: Boolean = false, code: GCodeHandler) {
         if (commands.containsKey(name)) {
             throw ConfigurationException("Command $name already registered")
         }
-        commands[name] = CommandHandler(name, code)
+        commands[name] = CommandHandler(name, rawText, code)
     }
     fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler) {
         var muxer = muxCommands[command]
@@ -69,27 +69,26 @@ class GCode {
     fun runner(commandQueue: CommandQueue, machineRuntime: MachineRuntime, outputHandler: GCodeOutputSink): GCodeRunner = GCodeRunnerImpl(commandQueue, this, machineRuntime, outputHandler)
 }
 
-private val STRING_GCODES = listOf("M117", "M118")
-
 class GCodeRunnerImpl(val commandQueue: CommandQueue, val gCode: GCode, val machineRuntime: MachineRuntime, val outputHandler: GCodeOutputSink): GCodeRunner {
     override fun respond(msg: String) = outputHandler(msg)
 
     override suspend fun gcode(cmd: String) {
         logger.info { cmd }
         var command = cmd
+        val name = command.split(" ")[0].uppercase()
+        val isRawText = gCode.commands.get(name)?.rawText == true
         val comment = command.indexOfFirst { it == ';' }
-        if (comment != -1) {
+        if (comment != -1 && !isRawText) {
             command = command.substring(0, comment)
         }
         command = command.trim()
         if (command.isBlank()) return
         val parts = command.split(" ")
-        val name = parts[0].uppercase()
         val args = parts.subList(1, parts.size)
         val map = when {
-            name in STRING_GCODES -> mapOf()
+            isRawText -> mapOf()
             command.contains("=") -> parseWithAssign(cmd, args)
-            else -> parseBasic(cmd, args)
+            else -> parseBasic(args)
         }
         val params = GCodeCommand(command, name, map, machineRuntime, commandQueue, this)
         val muxer = gCode.muxCommands[name]
@@ -111,7 +110,7 @@ class GCodeRunnerImpl(val commandQueue: CommandQueue, val gCode: GCode, val mach
     }
 
     // Parses X10 Y20.5
-    private fun parseBasic(cmd: String,parts: List<String>) = buildMap {
+    private fun parseBasic(parts: List<String>) = buildMap {
         parts.filter { it.isNotBlank() }.forEach {
             put(it.substring(0, 1).uppercase(), it.substring(1))
         }
