@@ -64,7 +64,7 @@ private class ServoImpl(
     override fun setAngle(angle: Double) {
         _angle = angle
         val duty = toDuty(angle)
-        logger.info { "SetAngle $angle, duty = $duty" }
+        logger.debug { "SetAngle $angle, duty = $duty" }
         pin.setNow(duty)
     }
 

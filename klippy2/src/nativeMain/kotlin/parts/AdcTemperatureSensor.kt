@@ -4,6 +4,7 @@ import Temperature
 import celsius
 import config.AnalogInPin
 import config.TemperatureCalibration
+import config.TemperatureSensor
 import config.ValueSensor
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -19,7 +20,7 @@ fun MachineBuilder.AdcTemperatureSensor(
     sensor: TemperatureCalibration,
     minTemp: Temperature = 0.celsius,
     maxTemp: Temperature = 300.celsius,
-): ValueSensor<Temperature>  = AdcTemperatureSensorImpl(
+): TemperatureSensor  = AdcTemperatureSensorImpl(
         name,pin,sensor,minTemp,maxTemp,this).also { addPart(it) }
 
 private class AdcTemperatureSensorImpl(
@@ -28,7 +29,7 @@ private class AdcTemperatureSensorImpl(
     val sensor: TemperatureCalibration,
     override val minValue: Temperature,
     override val maxValue: Temperature,
-    setup: MachineBuilder): PartLifecycle, ValueSensor<Temperature> {
+    setup: MachineBuilder): PartLifecycle, TemperatureSensor {
     val adc = setup.setupMcu(pinConfig.mcu).addAnalogPin(pinConfig.validResistanceRange(sensor.tempToResistance(minValue), sensor.tempToResistance(maxValue)))
     val logger = KotlinLogging.logger("AdcTemperatureSensorImpl $name")
     var _value = ValueSensor.Measurement(0.0, 0.celsius)

@@ -40,3 +40,6 @@ interface MachinePart {
 
 inline fun <reified PartType> MachineRuntime.getPartByName(name: String): PartType? =
     parts.first { it.name == name && it is PartType } as PartType?
+
+/** Get a list of all parts implementing a specific API. */
+inline fun <reified PartApi> MachineRuntime.getPartsImplementing() = parts.filterIsInstance<PartApi>()

@@ -1,5 +1,6 @@
 package utils
 
+import Temperature
 import kotlin.math.absoluteValue
 import kotlin.math.pow
 
@@ -19,6 +20,12 @@ fun Double.format(mainDigits: Int, fractionDigits: Int = 0): String {
             appendULong(intFraction, fractionDigits)
         }
     }
+}
+
+fun Comparable<*>.format(mainDigits: Int, fractionDigits: Int = 0) = when (this) {
+    is Double -> this.format(mainDigits, fractionDigits)
+    is Temperature -> "${celsius.format(mainDigits,fractionDigits)}°C"
+    else -> this.toString()
 }
 
 fun StringBuilder.appendULong(v: ULong, digits: Int) {
