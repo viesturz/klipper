@@ -1,5 +1,6 @@
 package mcu.components
 
+import MachineTime
 import config.UartPins
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
@@ -9,12 +10,15 @@ import mcu.impl.McuComponent
 import mcu.impl.McuConfigure
 import mcu.impl.McuImpl
 import mcu.impl.McuObjectResponse
+import mcu.impl.McuRuntime
 import mcu.impl.ObjectId
 import mcu.impl.ResponseParser
 import utils.decode8N1
 import utils.encode8N1
 import kotlin.math.ceil
 import kotlin.math.roundToInt
+
+val BACKGROUND_PRIORITY_CLOCK = 0x7fffffff00000000u
 
 @OptIn(ExperimentalStdlibApi::class)
 class TmcUartBus(override val mcu: McuImpl, val config: UartPins, initialize: McuConfigure) : MessageBus,
@@ -24,6 +28,7 @@ class TmcUartBus(override val mcu: McuImpl, val config: UartPins, initialize: Mc
     private val queue = initialize.makeCommandQueue(name, 1)
     private val logger = KotlinLogging.logger(name)
     private val mutex = Mutex()
+    private lateinit var runtime: McuRuntime
 
     override fun configure(configure: McuConfigure) {
         val baudTicks = configure.firmware.durationToTicks(1.0/config.baudRate)
@@ -36,7 +41,11 @@ class TmcUartBus(override val mcu: McuImpl, val config: UartPins, initialize: Mc
         }
     }
 
-    override suspend fun sendReply(data: UByteArray, readBytes: Int): UByteArray? {
+    override fun start(runtime: McuRuntime) {
+        this.runtime = runtime
+    }
+
+    override suspend fun sendReply(data: UByteArray, readBytes: Int, sendTime: MachineTime): UByteArray? {
         val encoded = encode8N1 {add(data)}
         val readEncodedBytes = ceil(readBytes * 10.0 / 8.0).roundToInt()
         val reply = queue.sendWithResponse(
@@ -44,6 +53,8 @@ class TmcUartBus(override val mcu: McuImpl, val config: UartPins, initialize: Mc
             responseTmcuartParser,
             id = id,
             retry = 0.1, // Uart is slower to respond, so wait a bit longer
+            minClock = if (sendTime == 0.0) 0u else runtime.timeToClock(sendTime),
+            reqClock = BACKGROUND_PRIORITY_CLOCK,
             ).data
         if (readBytes > 0 && reply.isEmpty()) return null // Read timeout
         val result = reply.decode8N1()

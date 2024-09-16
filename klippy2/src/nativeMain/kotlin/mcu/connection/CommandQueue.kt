@@ -1,11 +1,12 @@
 package mcu.connection
 
+import MachineTime
 import chelper.serialqueue_alloc_commandqueue
 import chelper.serialqueue_free_commandqueue
+import chelper.steppersync_free
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toCValues
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
@@ -15,6 +16,8 @@ import mcu.impl.GcWrapper
 import mcu.impl.McuResponse
 import mcu.impl.ObjectId
 import mcu.impl.ResponseParser
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.time.Duration.Companion.seconds
 
 /** Queue for sending commands to MCU. */
@@ -48,13 +51,13 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
         ackDeferred.await()
     }
 
-    suspend fun <ResponseType: McuResponse> sendWithResponse(data: UByteArray, parser: ResponseParser<ResponseType>, id: ObjectId = 0u, retry: Double = 0.01): ResponseType {
+    suspend fun <ResponseType: McuResponse> sendWithResponse(data: UByteArray, parser: ResponseParser<ResponseType>, id: ObjectId = 0u, retry: Double = 0.01, minClock: McuClock = 0u, reqClock: McuClock = 0u): ResponseType {
         val connection = this.connection ?:
             throw RuntimeException("Trying to send before setup is finished")
         var wait = retry.seconds
         var received = connection.setResponseHandlerOnce(parser, id)
         for (retry in (1..5)) {
-            sendWaitAck(data)
+            sendWaitAck(data, minClock = minClock, reqClock = reqClock)
             try {
                 return withTimeout(wait) {
                     received.await()
@@ -77,4 +80,25 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
         return connection.commands.build(signature, block)
     }
 
+}
+
+@OptIn(ExperimentalForeignApi::class)
+class StepperSync(connection: McuConnection, stepQueues: List<StepQueue>, moveCount: Int) {
+    val stepperSync = GcWrapper(chelper.steppersync_alloc(connection.serial.ptr,
+        stepQueues.map { it.stepcompress.ptr }.toCValues(),
+        stepQueues.size,
+        moveCount)) {
+        steppersync_free(it)
+    }
+
+    fun flushMoves(clock: McuClock, clearHistoryClock: McuClock) {
+        val ret = chelper.steppersync_flush(stepperSync.ptr, clock, clearHistoryClock)
+        if (ret != 0) {
+            throw IllegalStateException("steppersync_flush failed ret=$ret")
+        }
+    }
+
+    fun setTime(convTime: Double, frequency: Double) {
+        chelper.steppersync_set_time(stepperSync.ptr, convTime, frequency)
+    }
 }

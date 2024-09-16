@@ -2,6 +2,7 @@ package mcu.components
 
 import MachineTime
 import config.StepperPins
+import io.github.oshai.kotlinlogging.KotlinLogging
 import mcu.StepperMotor
 import mcu.impl.McuComponent
 import mcu.impl.McuConfigure
@@ -16,6 +17,7 @@ class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, overri
     val id = configuration.makeOid()
     override val stepQueue = configuration.makeStepQueue(id)
     private lateinit var runtime: McuRuntime
+    val logger = KotlinLogging.logger("McuStepperMotor ${config.stepPin.pin}")
 
     override fun configure(configure: McuConfigure) {
         var pulseTicks = configure.durationToClock(driver.pulseDuration)
@@ -48,6 +50,7 @@ class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, overri
 
     override fun step(startTime: MachineTime, direction: Int) {
         stepQueue.appendStep(direction, startTime, 0.0)
+        stepQueue.commit()
     }
 }
 

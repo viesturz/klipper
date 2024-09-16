@@ -1,5 +1,7 @@
 package parts.drivers
 
+import MachineTime
+
 
 data class TmcFieldAddr(val field: TmcField, val offset: Int, val numBits: Int, val signed: Boolean = false)
 data class TmcRegister(
@@ -41,10 +43,24 @@ enum class TmcField {
     dedge,
     diss2g,
     diss2vs,
+    irun,
+    ihold,
+    iholddelay,
+    pwm_ofs,
+    pwm_grad,
+    pwm_freq,
+    pwm_autoscale,
+    pwm_autograd,
+    freewheel,
+    pwm_reg,
+    pwm_lim,
 }
 
+@OptIn(ExperimentalStdlibApi::class)
 class TmcFields(val connection: TmcUartNodeWithAddress, registers: List<TmcRegister>) {
-    private val registers = HashMap<UByte, UInt>()
+    private val registerValues = HashMap<UByte, UInt>()
+    private val registers = HashMap<UByte, TmcRegister>()
+    private val dirtyRegisters = HashMap<UByte, Boolean>()
     private val fields = HashMap<TmcField, TmcFieldAddr>()
     private val fieldToRegister = HashMap<TmcField, TmcRegister>()
 
@@ -52,11 +68,15 @@ class TmcFields(val connection: TmcUartNodeWithAddress, registers: List<TmcRegis
         addRegisters(registers)
     }
     fun addRegisters(f: List<TmcRegister>) {
-        f.forEach { reg -> reg.fields.forEach { field ->
-            this.fields[field.field] = field
-            this.fieldToRegister[field.field] = reg
+        f.forEach { reg ->
+            this.registers[reg.addr] = reg
+            reg.fields.forEach { field ->
+                this.fields[field.field] = field
+                this.fieldToRegister[field.field] = reg
         }}
     }
+
+    fun hasField(f: TmcField) = fields.containsKey(f)
 
     suspend fun readField(field: TmcField): Int {
         val addr = fields.getValue(field)
@@ -65,7 +85,8 @@ class TmcFields(val connection: TmcUartNodeWithAddress, registers: List<TmcRegis
             throw IllegalArgumentException("Field $field is not readable, mode: ${regAddr.mode.name}")
         }
         val register = connection.readRegister(regAddr.addr)
-        registers[regAddr.addr] = register
+        registerValues[regAddr.addr] = register
+        dirtyRegisters.remove(regAddr.addr)
         val data = (register shr addr.offset) and ((1u shl addr.numBits) - 1u)
         if (addr.signed && (data and (1u shl (addr.numBits - 1)) != 0u)) {
             return data.toInt() - (1 shl addr.numBits)
@@ -73,32 +94,41 @@ class TmcFields(val connection: TmcUartNodeWithAddress, registers: List<TmcRegis
         return data.toInt()
     }
 
-    suspend fun writeField(field: TmcField, value: Boolean) {
-        writeField(field, if (value) 1 else 0)
+    suspend fun set(field: TmcField, value: Boolean) {
+        set(field, if (value) 1 else 0)
     }
 
-    suspend fun writeField(field: TmcField, value: Int) {
+    suspend fun set(field: TmcField, value: Int) {
         val addr = fields.getValue(field)
         val regAddr = fieldToRegister.getValue(field)
         if (!regAddr.mode.canWrite) {
             throw IllegalArgumentException("Field $field is not writable, mode: ${regAddr.mode.name}")
         }
-        var register = 0u
-        if (regAddr.mode.canRead) {
-            if (!registers.containsKey(regAddr.addr)) {
-                registers[regAddr.addr] = connection.readRegister(regAddr.addr)
-            }
-            register = registers.getValue(regAddr.addr)
+        val register = when {
+            registerValues.containsKey(regAddr.addr) -> registerValues.getValue(regAddr.addr)
+            regAddr.mode.canRead -> connection.readRegister(regAddr.addr)
+            else -> 0u
         }
-
         val mask = ((1u shl addr.numBits)-1u)
         val clippedValue = value.toUInt() and mask
-        val updatedRegister = register and (mask shl addr.offset).inv() or (clippedValue shl addr.offset)
-        registers[regAddr.addr] = updatedRegister
-        connection.writeRegister(regAddr.addr, updatedRegister)
+        val updatedRegister = (register and (mask shl addr.offset).inv()) or (clippedValue shl addr.offset)
+        registerValues[regAddr.addr] = updatedRegister
+        dirtyRegisters[regAddr.addr] = true
     }
 
-    suspend fun clearField(field: TmcField) {
+    suspend fun flush(time: MachineTime = 0.0) {
+        if (dirtyRegisters.isEmpty()) return
+        // Copy the changes, this will block and something else may write new values.
+        val regs = ArrayList(dirtyRegisters.keys)
+        val values = HashMap(registerValues)
+        dirtyRegisters.clear()
+        for (reg in regs) {
+            val value = values.getValue(reg)
+            connection.writeRegister(reg, value, time = time)
+        }
+    }
+
+    suspend fun clear(field: TmcField) {
         val addr = fields.getValue(field)
         val regAddr = fieldToRegister.getValue(field)
         if (regAddr.mode != TmcRegisterMode.RC) {
@@ -106,6 +136,27 @@ class TmcFields(val connection: TmcUartNodeWithAddress, registers: List<TmcRegis
         }
         val clearMask = ((1u shl addr.numBits)-1u) shl addr.offset
         connection.writeRegister(regAddr.addr, clearMask)
-        registers.remove(regAddr.addr)
+        registerValues.remove(regAddr.addr)
+    }
+
+    suspend fun readAllRegs() {
+        for (reg in registers.values) {
+            if (reg.mode.canRead) {
+                registerValues[reg.addr] = connection.readRegister(reg.addr)
+            }
+        }
+    }
+
+    fun debugPrint() = buildString {
+        for (f in fields) {
+            val addr = f.value
+            val register = fieldToRegister[f.key] ?: continue
+            val reg = registerValues.get(register.addr) ?: continue
+            var value = (reg shr addr.offset and ((1u shl addr.numBits) - 1u)).toInt()
+            if (addr.signed && (value and (1 shl (addr.numBits - 1)) != 0)) {
+                value = value - (1 shl addr.numBits)
+            }
+            append("${f.key.name} = $value; ")
+        }
     }
 }

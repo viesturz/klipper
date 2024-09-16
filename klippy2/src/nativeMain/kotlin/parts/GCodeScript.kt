@@ -12,6 +12,6 @@ fun MachineBuilder.GCodeScript(
 
 class GCodeScriptImpl(override val name: String, val block: GCodeHandler): PartLifecycle {
     override suspend fun onStart(runtime: MachineRuntime) {
-        runtime.gCode.registerCommand(name, block)
+        runtime.gCode.registerCommand(name, rawText = false, block)
     }
 }

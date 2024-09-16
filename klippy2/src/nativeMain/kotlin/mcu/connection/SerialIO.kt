@@ -6,6 +6,7 @@ import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.set
+import mcu.ConfigurationException
 import platform.posix.*
 
 private val logger = KotlinLogging.logger("SerialIO")
@@ -16,19 +17,18 @@ fun connectPipe(path: String): Int {
     val fd = open(path, O_RDWR or O_NOCTTY)
     if (fd == -1) {
         val error = errno
-        throw RuntimeException("Failed to open $path, status:$error")
+        throw ConfigurationException("Failed to open $path, status:$error")
     }
     val serialFd = fdopen(fd, "rb+")
     return fd
 }
 
-@OptIn(ExperimentalForeignApi::class)
 fun connectSerial(path: String, baud: Int): Int {
     logger.info { "Connecting to serial $path" }
     val fd = open(path, O_RDWR)
     if (fd == -1) {
         val error = errno
-        throw RuntimeException("Failed to open $path, status:$error")
+        throw ConfigurationException("Failed to open $path, status:$error")
     }
     configureSerial(fd, baud)
     return fd

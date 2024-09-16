@@ -9,6 +9,7 @@ import logging.LogWriter
 import machine.Machine
 import machine.impl.InvalidGcodeException
 import machine.impl.MachineImpl
+import mcu.ConfigurationException
 import platform.posix.log
 
 
@@ -38,7 +39,7 @@ fun main(args: Array<String>) = runBlocking {
 
     try {
         val machine = MachineImpl()
-        println("Machine setup ${machine.status}")
+        println("Setting up")
         machine.start()
         // Wait until running
         machine.state.first { it == Machine.State.RUNNING }
@@ -55,7 +56,12 @@ fun main(args: Array<String>) = runBlocking {
         machine.state.first { it == Machine.State.SHUTDOWN }
         println("Shutdown detected, reason ${machine.shutdownReason}")
     } catch (e: Exception) {
+        var isUnknown = false
+        when (e) {
+            is ConfigurationException -> println("Configuration error: ${e.message}")
+            else -> isUnknown = true
+        }
         runBlocking { logWriter.close() }
-        throw e
+        if (isUnknown) throw e
     }
 }

@@ -77,6 +77,7 @@ data class FirmwareConfig @OptIn(ExperimentalSerializationApi::class) constructo
     }
 
     fun hasCommand(signature: String) = commands.containsKey(signature)
+    fun getCommandTag(signature: String) = commands.getValue(signature)
 
     companion object {
         fun parse(compressedIdentify: ByteArray?): FirmwareConfig {

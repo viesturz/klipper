@@ -1,11 +1,12 @@
 package machine.impl
 
+import MachineTime
 import machine.MachineBuilder
 import machine.MachinePart
 import machine.MachineRuntime
 import config.McuConfig
 import config.SerialConnection
-import config.buildMachine
+import buildMachine
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -106,6 +107,18 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
         logger.info { "Mcu ${config.name} firmware config:\n ${mcu.connection.commands.identify.rawJson}" }
         mcuSetups[config] = mcu
         return mcu
+    }
+
+    val STEPCOMPRESS_FLUSH_TIME = 0.050
+    val SDS_CHECK_TIME = 0.001 // step+dir+step filter in stepcompress.c
+
+    override fun flushMoves(machineTime: MachineTime) {
+        val flushDelay = STEPCOMPRESS_FLUSH_TIME + SDS_CHECK_TIME
+        val flushTime = machineTime - flushDelay
+        val clearHistoryTime = flushTime - 30.0
+        for (mcu in mcuList) {
+            mcu.flushMoves(flushTime, clearHistoryTime);
+        }
     }
 
     override fun addPart(part: PartLifecycle) {
