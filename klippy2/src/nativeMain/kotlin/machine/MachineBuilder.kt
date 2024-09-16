@@ -27,6 +27,7 @@ interface MachineBuilder
 
 /** API available at the run time.  */
 interface MachineRuntime {
+    fun flushMoves(machineTime: Double)
     val parts: List<MachinePart>
     val reactor: Reactor
     val gCode: GCode

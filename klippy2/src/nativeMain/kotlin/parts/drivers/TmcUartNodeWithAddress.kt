@@ -1,10 +1,9 @@
 package parts.drivers
 
+import MachineTime
 import config.TmcAddressUartPins
 import io.github.oshai.kotlinlogging.KotlinLogging
-import machine.MachineBuilder
 import mcu.MessageBus
-import platform.posix.log
 import utils.crc8
 
 private val NODE_SYNC: UByte = 0x05u
@@ -12,7 +11,7 @@ private val MCU_SYNC: UByte = 0xf5u
 private val IFCNT_REG: UByte = 0x02u
 
 @OptIn(ExperimentalStdlibApi::class)
-class TmcUartNodeWithAddress(val config: TmcAddressUartPins, val bus: MessageBus, initialize: MachineBuilder) {
+class TmcUartNodeWithAddress(val config: TmcAddressUartPins, val bus: MessageBus) {
     private var writeCount: UByte? = null
     private var logger = KotlinLogging.logger("TmcUartNodeWithAddress ${config.uartPins.mcu.name} ${config.address}")
 
@@ -44,7 +43,7 @@ class TmcUartNodeWithAddress(val config: TmcAddressUartPins, val bus: MessageBus
         throw IllegalStateException("Cannot read from TMC UART, register $registerAddr")
     }
 
-    suspend fun writeRegister(registerAddr: UByte, data: UInt) {
+    suspend fun writeRegister(registerAddr: UByte, data: UInt, time: MachineTime = 0.0) {
         val writeCommand = ubyteArrayOf(
             MCU_SYNC,
             config.address.toUByte(),
@@ -61,7 +60,7 @@ class TmcUartNodeWithAddress(val config: TmcAddressUartPins, val bus: MessageBus
                     writesBefore = readLocked(IFCNT_REG).toUByte()
                     writeCount = writesBefore
                 }
-                sendReplyWithCrc(writeCommand, 0)
+                sendReplyWithCrc(writeCommand, 0, time)
                 val writesAfter = readLocked(IFCNT_REG).toUByte()
                 if (writesAfter == (writesBefore + 1u).toUByte()) {
                     writeCount = writesAfter
@@ -79,8 +78,8 @@ class TmcUartNodeWithAddress(val config: TmcAddressUartPins, val bus: MessageBus
         }
     }
 
-    suspend fun sendReplyWithCrc(cmd: UByteArray, readBytes: Int): UByteArray? {
-        val reply = bus.sendReply(cmd + ubyteArrayOf(cmd.crc8()), readBytes)
+    suspend fun sendReplyWithCrc(cmd: UByteArray, readBytes: Int, time: MachineTime = 0.0): UByteArray? {
+        val reply = bus.sendReply(cmd + ubyteArrayOf(cmd.crc8()), readBytes, time)
         if (reply == null || readBytes == 0) return reply
         val crc = reply.last()
         val payload = reply.copyOfRange(0, reply.size-1)

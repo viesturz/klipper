@@ -5,7 +5,6 @@ import kotlinx.coroutines.flow.StateFlow
 import MachineTime
 import Resistance
 import Voltage
-import kotlinx.cinterop.ExperimentalForeignApi
 import machine.impl.Reactor
 import mcu.connection.StepQueue
 import mcu.impl.McuComponent
@@ -18,12 +17,12 @@ interface McuSetup {
     val config: config.McuConfig
 
     fun addButton(pin: config.DigitalInPin): Button
+    fun addDigitalPin(config: config.DigitalOutPin): DigitalOutPin
     fun addAnalogPin(pin: config.AnalogInPin): AnalogInPin
     fun addPwmPin(config: config.DigitalOutPin): PwmPin
     fun addTmcUart(config: config.UartPins): MessageBus
     fun addStepperMotor(config: config.StepperPins, driver: StepperDriver): StepperMotor
 //    fun addPulseCounter(pin: config.DigitalInPin): PulseCounter
-//    fun addDigitalOutPin(config: config.DigitalOutPin): DigitalOutPin
 //    fun addI2C(config: config.I2CPins): MessageBus
 //    fun addSpi(config: config.SpiPins): MessageBus
 //    fun addUart(config: config.UartPins): MessageBus
@@ -38,6 +37,8 @@ interface Mcu {
     val state: StateFlow<McuState>
     val components: List<McuComponent>
     val stateReason: String
+    /** Generates all commanded moves up to this time. */
+    fun flushMoves(time: MachineTime, clearHistoryTime: MachineTime)
     fun shutdown(reason: String)
 }
 
@@ -80,7 +81,9 @@ interface AnalogInPin {
 // Outputs
 interface DigitalOutPin {
     val mcu: Mcu
-    var value: Boolean
+    val value: Boolean
+    fun set(time: MachineTime, value: Boolean)
+    fun setNow(value: Boolean)
 }
 interface PulseCounter {
     val mcu: Mcu
@@ -120,7 +123,6 @@ interface Endstop {
         PAST_END_TIME(id = 4u),
     }
 }
-@OptIn(ExperimentalForeignApi::class)
 interface StepperMotor {
     val mcu: Mcu
     val stepQueue: StepQueue
@@ -134,7 +136,7 @@ interface StepperMotor {
 interface MessageBus{
     val mcu: Mcu
     /** Returns null if the CRC check failed. Need to retry. */
-    suspend fun sendReply(data: UByteArray, readBytes:Int): UByteArray?
+    suspend fun sendReply(data: UByteArray, readBytes:Int, sendTime: MachineTime): UByteArray?
     /** Grants exclusive access to the bus during the transaction. */
     suspend fun <ResultType> transaction(function: suspend () -> ResultType): ResultType
 }

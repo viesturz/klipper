@@ -7,15 +7,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import MachineTime
-import chelper.steppersync_free
-import cnames.structs.steppersync
 import config.AnalogInPin
 import config.DigitalInPin
 import config.DigitalOutPin
 import config.StepperPins
 import config.UartPins
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.toCValues
 import machine.impl.Reactor
 import mcu.Mcu
 import mcu.McuClock
@@ -26,6 +23,7 @@ import mcu.PwmPin
 import mcu.StepperMotor
 import mcu.components.McuAnalogPin
 import mcu.components.McuButton
+import mcu.components.McuDigitalPin
 import mcu.components.McuHwPwmPin
 import mcu.components.McuPwmPin
 import mcu.components.McuStepperMotor
@@ -33,6 +31,7 @@ import mcu.components.TmcUartBus
 import mcu.connection.CommandQueue
 import mcu.connection.McuConnection
 import mcu.connection.StepQueue
+import mcu.connection.StepperSync
 import parts.drivers.StepperDriver
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -53,6 +52,7 @@ class McuSetupImpl(override val config: McuConfig, val connection: McuConnection
     }
 
     override fun addButton(pin: DigitalInPin) = McuButton(mcu, pin, configuration).also { add(it) }
+    override fun addDigitalPin(config: DigitalOutPin) = McuDigitalPin(mcu, config, configuration).also { add(it) }
     override fun addPwmPin(config: DigitalOutPin): PwmPin =
         (if (config.hardwarePwm) McuHwPwmPin(mcu, config, configuration)
         else McuPwmPin(mcu, config, configuration)).also { add(it) }
@@ -90,7 +90,7 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
     }
 
     override fun makeStepQueue(id: ObjectId): StepQueue {
-        val result = StepQueue(null, id)
+        val result = StepQueue(firmware, null, id)
         stepQueues.add(result)
         return result
     }
@@ -110,7 +110,6 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
 data class QueryCommand(val signature: String, val block: CommandBuilder.(clock: McuClock32)->Unit)
 
 /** Step 2 - the MCU runtime. */
-@OptIn(ExperimentalForeignApi::class)
 class McuImpl(override val config: McuConfig, val connection: McuConnection, val configuration: McuConfigureImpl): Mcu {
     private val defaultQueue = CommandQueue(connection, "MCU ${config.name} DefaultQueue")
     override val components: List<McuComponent> = configuration.components
@@ -118,7 +117,7 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
     private val _state = MutableStateFlow(McuState.STARTING)
     private var _stateReason = ""
     private val logger = KotlinLogging.logger("McuImpl ${config.name}")
-    var stepperSync: GcWrapper<steppersync>? = null
+    private var stepperSync: StepperSync? = null
     override val state: StateFlow<McuState>
         get() = _state
     override val stateReason: String
@@ -133,6 +132,7 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         configure(reactor)
         // Unlock the command queues.
         configuration.commandQueues.forEach { it.connection = this.connection }
+        configuration.stepQueues.forEach { it.connection = this.connection }
         logger.info { "Starting components" }
         val runtime = makeRuntime(reactor)
         components.forEach { it.start(runtime) }
@@ -155,6 +155,11 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
             parser: ResponseParser<ResponseType>,
             id: ObjectId,
             handler: suspend (message: ResponseType) -> Unit) = connection.setResponseHandler(parser, id, handler)
+    }
+
+    override fun flushMoves(time: MachineTime,  clearHistoryTime: MachineTime) {
+        require(isRunning)
+        stepperSync?.flushMoves(clocksync.estimate.timeToClock(time), clocksync.estimate.timeToClock(clearHistoryTime))
     }
 
     override fun shutdown(reason: String) {
@@ -212,14 +217,7 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         config = defaultQueue.sendWithResponse("get_config", responseConfigParser)
         if (configuration.reservedMoves > config.moveCount.toInt())
             throw RuntimeException("Mcu ${this.config.name}, moves buffer not enough, has ${config.moveCount}, need ${configuration.reservedMoves}")
-
-        val stepQueuePtrs = configuration.stepQueues.map { it.stepcompress.ptr }
-        stepperSync = GcWrapper(chelper.steppersync_alloc(connection.serial.ptr,
-            stepQueuePtrs.toCValues(),
-            stepQueuePtrs.size,
-            (config.moveCount.toInt() - configuration.reservedMoves))) {
-            steppersync_free(it)
-        }
+        stepperSync = StepperSync(connection, configuration.stepQueues, config.moveCount.toInt() - configuration.reservedMoves)
     }
 
     private suspend fun restartFirmware() {
@@ -231,10 +229,11 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
 
     fun updateClocks(frequency: Double, convTime: Double, convClock: ULong, lastClock: McuClock) {
         connection.setClockEstimate(frequency, convTime, convClock, lastClock)
-        stepperSync?.let { stepperSync ->
-            chelper.steppersync_set_time(stepperSync.ptr, convTime, frequency)
-        }
+        stepperSync?.setTime(convTime, frequency)
     }
+
+    private val isRunning: Boolean
+        get() = _state.value == McuState.RUNNING
 }
 
 data class ResponseConfig(val isConfig: Boolean, val crc: UInt, val isShutdown: Boolean, val moveCount: MoveQueueId): McuResponse
