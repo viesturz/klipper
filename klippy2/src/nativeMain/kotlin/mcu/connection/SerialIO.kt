@@ -6,7 +6,7 @@ import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.set
-import mcu.ConfigurationException
+import machine.ConfigurationException
 import platform.posix.*
 
 private val logger = KotlinLogging.logger("SerialIO")

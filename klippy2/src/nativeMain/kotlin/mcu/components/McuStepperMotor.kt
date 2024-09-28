@@ -3,6 +3,7 @@ package mcu.components
 import MachineTime
 import config.StepperPins
 import io.github.oshai.kotlinlogging.KotlinLogging
+import mcu.StepperDriver
 import mcu.StepperMotor
 import mcu.impl.McuComponent
 import mcu.impl.McuConfigure
@@ -11,7 +12,6 @@ import mcu.impl.McuObjectResponse
 import mcu.impl.McuRuntime
 import mcu.impl.ObjectId
 import mcu.impl.ResponseParser
-import parts.drivers.StepperDriver
 
 class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, override val driver: StepperDriver, configuration: McuConfigure) : StepperMotor, McuComponent {
     val id = configuration.makeOid()

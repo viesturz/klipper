@@ -5,23 +5,24 @@ import kotlinx.coroutines.flow.StateFlow
 import MachineTime
 import Resistance
 import Voltage
-import machine.impl.Reactor
-import mcu.connection.StepQueue
-import mcu.impl.McuComponent
-import parts.drivers.StepperDriver
+import config.DigitalInPin
+import config.McuConfig
+import config.StepperPins
+import config.UartPins
+import machine.Reactor
 
 typealias McuClock = ULong
 typealias McuDuration = Long
 
 interface McuSetup {
-    val config: config.McuConfig
+    val config: McuConfig
 
-    fun addButton(pin: config.DigitalInPin): Button
+    fun addButton(pin: DigitalInPin): Button
     fun addDigitalPin(config: config.DigitalOutPin): DigitalOutPin
     fun addAnalogPin(pin: config.AnalogInPin): AnalogInPin
     fun addPwmPin(config: config.DigitalOutPin): PwmPin
-    fun addTmcUart(config: config.UartPins): MessageBus
-    fun addStepperMotor(config: config.StepperPins, driver: StepperDriver): StepperMotor
+    fun addTmcUart(config: UartPins): MessageBus
+    fun addStepperMotor(config: StepperPins, driver: StepperDriver): StepperMotor
 //    fun addPulseCounter(pin: config.DigitalInPin): PulseCounter
 //    fun addI2C(config: config.I2CPins): MessageBus
 //    fun addSpi(config: config.SpiPins): MessageBus
@@ -33,9 +34,8 @@ interface McuSetup {
 }
 
 interface Mcu {
-    val config: config.McuConfig
+    val config: McuConfig
     val state: StateFlow<McuState>
-    val components: List<McuComponent>
     val stateReason: String
     /** Generates all commanded moves up to this time. */
     fun flushMoves(time: MachineTime, clearHistoryTime: MachineTime)
@@ -48,9 +48,6 @@ enum class McuState {
     ERROR,
     SHUTDOWN,
 }
-
-class NeedsRestartException(msg: String): RuntimeException(msg)
-class ConfigurationException(msg: String): RuntimeException(msg)
 
 // Inputs
 typealias ButtonListener = suspend (b: Button) -> Unit
@@ -70,7 +67,8 @@ interface AnalogInPin {
         val time: MachineTime,
         // Raw ADC value in the range of 0..1
         val value: Double,
-        val config: config.AnalogInPin) {
+        val config: config.AnalogInPin
+    ) {
         val voltage: Voltage
             get() = config.toVoltage(value)
         val resistance: Resistance
@@ -123,6 +121,20 @@ interface Endstop {
         PAST_END_TIME(id = 4u),
     }
 }
+
+interface StepperDriver {
+    val microsteps: Int
+    val stepBothEdges: Boolean
+    val pulseDuration: Double
+
+    val enabled: Boolean
+    /** Configure motor's steps per mm to reference speed dependant driver thresholds.
+     * To be called during configuration phase. */
+    fun configureForStepper(stepsPerMM: Double)
+    suspend fun enable(time: MachineTime ,enabled: Boolean)
+}
+
+
 interface StepperMotor {
     val mcu: Mcu
     val stepQueue: StepQueue
@@ -131,6 +143,9 @@ interface StepperMotor {
     fun step(startTime: MachineTime, direction: Int)
     fun setPosition(time: MachineTime, pos: Long)
     suspend fun getPosition(): Long
+
+    /** TODO: maybe something more specific? */
+    interface StepQueue
 }
 
 interface MessageBus{

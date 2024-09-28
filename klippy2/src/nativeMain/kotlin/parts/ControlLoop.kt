@@ -5,8 +5,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import machine.MachineBuilder
 import machine.MachineRuntime
-import machine.impl.PartLifecycle
-import platform.posix.log
+import machine.PartLifecycle
 
 fun MachineBuilder.ControlLoop(
     name: String,

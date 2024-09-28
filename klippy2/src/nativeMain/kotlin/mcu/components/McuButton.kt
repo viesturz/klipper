@@ -1,7 +1,7 @@
 package mcu.components
 
-import kotlinx.coroutines.launch
-import machine.impl.Reactor
+import config.DigitalInPin
+import machine.Reactor
 import mcu.Button
 import mcu.ButtonListener
 import mcu.Mcu
@@ -12,7 +12,7 @@ import mcu.impl.McuRuntime
 import mcu.impl.ObjectId
 import mcu.impl.ResponseParser
 
-class McuButton(override val mcu: Mcu, val config: config.DigitalInPin, configure: McuConfigure) : Button,
+class McuButton(override val mcu: Mcu, val config: DigitalInPin, configure: McuConfigure) : Button,
     McuComponent {
     private val id = configure.makeOid()
     private var listener: ButtonListener? = null

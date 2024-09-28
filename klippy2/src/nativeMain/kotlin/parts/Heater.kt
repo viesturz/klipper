@@ -4,8 +4,9 @@ import MachineTime
 import Temperature
 import celsius
 import config.DigitalOutPin
+import config.PID
 import config.TemperatureSensor
-import config.ValueSensor
+import config.Watermark
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kelvins
 import kotlinx.coroutines.flow.dropWhile
@@ -16,7 +17,7 @@ import machine.MachineBuilder
 import machine.MachinePart
 import machine.MachineRuntime
 import machine.addLocal
-import machine.impl.PartLifecycle
+import machine.PartLifecycle
 import kotlin.math.absoluteValue
 import kotlin.math.sign
 
@@ -40,7 +41,7 @@ interface Heater: MachinePart {
     fun setTarget(queue: CommandQueue, t: Temperature)
     fun setTarget(t: Temperature)
     fun setControl(control: TemperatureControl): TemperatureControl
-    fun setControl(config: config.PID) = setControl(makeControl(config))
+    fun setControl(config: PID) = setControl(makeControl(config))
     suspend fun waitForStable()
 }
 
@@ -55,7 +56,8 @@ private class HeaterImpl(
     override val name: String,
     private val loop: HeaterLoop,
     override val sensor: TemperatureSensor,
-    setup: MachineBuilder): PartLifecycle, Heater {
+    setup: MachineBuilder
+): PartLifecycle, Heater {
 
     var _target: Temperature = 0.kelvins
     override val target: Temperature
@@ -72,7 +74,9 @@ private class HeaterImpl(
     }
 
     override suspend fun onStart(runtime: MachineRuntime) {
-        runtime.reactor.launch { loop.runLoop() }
+        runtime.reactor.launch {
+            setTarget(50.celsius)
+            loop.runLoop() }
     }
 
     override fun setTarget(queue: CommandQueue, t: Temperature) {
@@ -107,11 +111,12 @@ private class HeaterImpl(
 
 /** Heater control loop. */
 private class HeaterLoop(name: String,
-                        val sensor: TemperatureSensor,
+                         val sensor: TemperatureSensor,
                          pinConfig: DigitalOutPin,
                          var control: TemperatureControl,
                          /** Temp delta to consider as stable. */
-                         val maxPower: Double, setup: MachineBuilder) {
+                         val maxPower: Double, setup: MachineBuilder
+) {
     val logger = KotlinLogging.logger("Heater $name")
     val heater = setup.setupMcu(pinConfig.mcu).addPwmPin(pinConfig)
     var power = 0.0
@@ -143,11 +148,11 @@ private class HeaterLoop(name: String,
 }
 
 private fun makeControl(config: config.TemperatureControl): TemperatureControl = when(config) {
-    is config.Watermark -> ControlWatermark(config)
-    is config.PID -> ControlPID(config)
+    is Watermark -> ControlWatermark(config)
+    is PID -> ControlPID(config)
 }
 
-class ControlWatermark(val config: config.Watermark): TemperatureControl {
+class ControlWatermark(val config: Watermark): TemperatureControl {
     // Watermark is neve really stable, but to have something to wait for.
     var stable = false
 
@@ -168,7 +173,7 @@ class ControlWatermark(val config: config.Watermark): TemperatureControl {
 }
 
 // Positional (PID) control alg from https://github.com/DangerKlippers/danger-klipper/pull/210
-class ControlPID(val config: config.PID): TemperatureControl {
+class ControlPID(val config: PID): TemperatureControl {
     var previousTemp = 0.celsius
     var previousError = 0.0
     var previousDer = 0.0

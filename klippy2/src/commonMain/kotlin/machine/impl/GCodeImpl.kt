@@ -1,57 +1,31 @@
 package machine.impl
 
-import Temperature
-import celsius
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
+import machine.ConfigurationException
+import machine.FailedToParseParamsException
+import machine.GCode
+import machine.GCodeCommand
 import machine.GCodeHandler
+import machine.GCodeOutputSink
 import machine.GCodeRunner
+import machine.InvalidGcodeException
 import machine.MachineRuntime
-import machine.getPartByName
-import mcu.ConfigurationException
 
-class CommandException(cmd: String) : RuntimeException(cmd)
-class InvalidGcodeException(cmd: String) : RuntimeException(cmd)
-class MissingRequiredParameterException(cmd: String) : RuntimeException(cmd)
-class FailedToParseParamsException(cmd: String) : RuntimeException(cmd)
-
-class GCodeCommand(val raw: String,
-                   val name: String,
-                   val params: Map<String, String>,
-                   val runtime: MachineRuntime,
-                   val queue: CommandQueue,
-                   val runner: GCodeRunner,
-) {
-    fun get(name: String, default: String? = null) =
-        params[name] ?: default ?: throw MissingRequiredParameterException(name)
-    fun getInt(name: String, default: Int? = null) =
-        params[name]?.toInt() ?: default ?: throw MissingRequiredParameterException(name)
-    fun getFloat(name: String, default: Float? = null) =
-        params[name]?.toFloat() ?: default ?: throw MissingRequiredParameterException(name)
-    fun getDouble(name: String, default: Double? = null) =
-        params[name]?.toDouble() ?: default ?: throw MissingRequiredParameterException(name)
-    fun getCelsius(name: String, default: Temperature? = null) =
-        params[name]?.toDouble()?.celsius ?: default ?: throw MissingRequiredParameterException(name)
-    inline fun <reified PartType> getPartByName(param: String) = runtime.getPartByName<PartType>(get(param)) ?:
-        throw InvalidGcodeException("${PartType::class.simpleName} with name ${get(param)} not found")
-    fun respond(msg: String) = runner.respond(msg)
-}
-
-typealias GCodeOutputSink = (message: String) -> Unit
 private val logger = KotlinLogging.logger("Gcode")
 
-class GCode {
+class GCodeImpl: GCode {
     data class CommandHandler(val name: String, val rawText: Boolean, val impl: GCodeHandler)
     internal val commands = HashMap<String, CommandHandler>()
     internal val muxCommands = HashMap<String, MuxCommandHandler>()
 
-    fun registerCommand(name: String, rawText: Boolean = false, code: GCodeHandler) {
+    override fun registerCommand(name: String, rawText: Boolean, code: GCodeHandler) {
         if (commands.containsKey(name)) {
             throw ConfigurationException("Command $name already registered")
         }
         commands[name] = CommandHandler(name, rawText, code)
     }
-    fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler) {
+    override fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler) {
         var muxer = muxCommands[command]
         if (muxer == null) {
             muxer = MuxCommandHandler(muxParam)
@@ -66,10 +40,11 @@ class GCode {
         muxer.handlers[muxValue] = handler
     }
 
-    fun runner(commandQueue: CommandQueue, machineRuntime: MachineRuntime, outputHandler: GCodeOutputSink): GCodeRunner = GCodeRunnerImpl(commandQueue, this, machineRuntime, outputHandler)
+    override fun runner(commandQueue: CommandQueue, machineRuntime: MachineRuntime, outputHandler: GCodeOutputSink): GCodeRunner = GCodeRunnerImpl(commandQueue, this, machineRuntime, outputHandler)
 }
 
-class GCodeRunnerImpl(val commandQueue: CommandQueue, val gCode: GCode, val machineRuntime: MachineRuntime, val outputHandler: GCodeOutputSink): GCodeRunner {
+class GCodeRunnerImpl(val commandQueue: CommandQueue, val gCode: GCodeImpl, val machineRuntime: MachineRuntime, val outputHandler: GCodeOutputSink):
+    GCodeRunner {
     override fun respond(msg: String) = outputHandler(msg)
 
     override suspend fun gcode(cmd: String) {

@@ -6,12 +6,13 @@ import celsius
 import config.DigitalOutPin
 import machine.MachineBuilder
 import machine.MachinePart
-import machine.impl.PartLifecycle
+import machine.PartLifecycle
 
 fun MachineBuilder.Fan(
     name: String,
     maxPower: Double = 1.0,
-    pin: DigitalOutPin): Fan = FanImpl(name, maxPower, pin, this).also { addPart(it) }
+    pin: DigitalOutPin
+): Fan = FanImpl(name, maxPower, pin, this).also { addPart(it) }
 
 fun MachineBuilder.HeaterFan(
     name: String,

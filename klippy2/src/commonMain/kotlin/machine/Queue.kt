@@ -3,7 +3,6 @@ package machine
 import MachineTime
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
-import machine.impl.Reactor
 
 interface QueueManager {
     /** Start a new queue, starting as soon as possible. */
@@ -26,8 +25,9 @@ interface CommandQueue {
      * It has has 0 run time and does not interrupt planned commands. */
     fun add(block: (time: MachineTime) -> Unit)
     /** Adds a planned command. Planned commands take some time to execute and are dependant on
-     * adjacent commands. */
-    fun <T> addPlanned(planner: Planner<T>, data: T)
+     * adjacent commands.
+     * Each planner's commands are sequential and do not overlap, even if scheduled in different queues. */
+    fun <T: Any> addPlanned(planner: Planner<T>, data: T)
     /** Wait until specific machine time. This flushes any planned commands. */
     fun wait(time: MachineTime) = wait(CompletableDeferred(time))
     /** Wait until deferred completes.
@@ -54,5 +54,7 @@ interface CommandQueue {
 fun CommandQueue.addLocal(block: () -> Unit) = add { time ->  reactor.scheduleOrdered(time, block) }
 
 interface Planner<Data> {
-    fun tryPlan(startTime: MachineTime, cmd: Data, followupCommands: List<Data>, force: Boolean): MachineTime?
+    /** Plan as many commands as possible.
+     *  Return end time for each planned command. */
+    fun tryPlan(startTime: MachineTime, commands: List<Data>, force: Boolean): List<MachineTime>?
 }

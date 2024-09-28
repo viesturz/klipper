@@ -1,17 +1,15 @@
 package parts
 
-import config.TemperatureSensor
 import config.ValueSensor
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
-import machine.MachinePart
 import machine.MachineRuntime
+import machine.PartLifecycle
 import machine.getPartsImplementing
-import machine.impl.PartLifecycle
 import utils.format
 import kotlin.time.Duration.Companion.seconds
 
-class Stats: MachinePart, PartLifecycle {
+class Stats: PartLifecycle {
     override val name = "Stats"
     val logger = KotlinLogging.logger("Stats")
 

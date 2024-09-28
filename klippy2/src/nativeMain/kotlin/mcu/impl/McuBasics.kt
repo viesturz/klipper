@@ -6,8 +6,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 class McuBasics(val mcu: McuImpl, val configure: McuConfigure): McuComponent {
     private val logger = KotlinLogging.logger(mcu.config.name)
 
-
-    override fun configure(configure: McuConfigure) {
+    init {
         configure.responseHandler(responseStatsParser, 0u, this::onStats)
         configure.responseHandler(responseShutdownParser, 0u, this::onShutdown)
     }

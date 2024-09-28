@@ -5,7 +5,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
 import MachineTime
 import kotlinx.coroutines.launch
-import machine.impl.Reactor
+import machine.Reactor
 import mcu.McuClock
 import mcu.connection.CommandQueue
 import mcu.connection.McuConnection

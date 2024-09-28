@@ -1,19 +1,22 @@
 package parts.drivers
 
 import MachineTime
+import config.DigitalOutPin
+import config.TmcAddressUartPins
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.MachineBuilder
 import machine.MachineRuntime
-import machine.impl.PartLifecycle
+import machine.PartLifecycle
+import mcu.StepperDriver
 
-fun  MachineBuilder.TMC2209(
+fun MachineBuilder.TMC2209(
     name: String,
-    pins: config.TmcAddressUartPins,
+    pins: TmcAddressUartPins,
     senseResistor: Double, // Typically 0.11 ohms, but check your board.
     runCurrent: Double,
     microsteps: Int = 1,
     interpolate: Boolean = true,
-    enablePin: config.DigitalOutPin? = null,
+    enablePin: DigitalOutPin? = null,
     idleCurrent: Double = runCurrent,
     maxStealthchopSpeed: Int = 999999999,
 ): StepperDriver {
@@ -49,7 +52,7 @@ class TMC2209Impl(
     override val enabled: Boolean
         get() = _enabled
 
-    override fun configureStepsPerMM(stepsPerMM: Double) {
+    override fun configureForStepper(stepsPerMM: Double) {
         this.stepsPerMM = stepsPerMM
     }
 

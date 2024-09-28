@@ -5,6 +5,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toCValues
 import mcu.McuClock
+import mcu.StepperMotor
 import mcu.impl.CommandBuffer
 import mcu.impl.CommandBuilder
 import mcu.impl.FirmwareConfig
@@ -13,7 +14,7 @@ import mcu.impl.ObjectId
 
 /** Queue for sending commands to MCU. */
 @OptIn(ExperimentalForeignApi::class)
-class StepQueue(firmware: FirmwareConfig, var connection: McuConnection?, val id: ObjectId) {
+class StepQueueImpl(firmware: FirmwareConfig, var connection: McuConnection?, val id: ObjectId): StepperMotor.StepQueue {
     @OptIn(ExperimentalForeignApi::class)
     val stepcompress = GcWrapper(chelper.stepcompress_alloc(id.toUInt())) { chelper.stepcompress_free(it) }
     private val logger = KotlinLogging.logger("StepQueue $id ")

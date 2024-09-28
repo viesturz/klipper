@@ -1,8 +1,7 @@
-package machine.impl
+package machine
 
 import MachineTime
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -34,7 +33,7 @@ class Reactor {
     fun launch(block: suspend CoroutineScope.() -> Unit)  = scope.launch( block = block )
 
     val now: MachineTime
-        get() = Reactor.now
+        get() = getNow()
 
     fun shutdown() {
         logger.info { "Shutdown" }
@@ -103,13 +102,9 @@ class Reactor {
             }
         }
     }
-    companion object {
-        @OptIn(ExperimentalForeignApi::class)
-        val now: MachineTime
-            get() = chelper.get_monotonic()
-    }
-
 }
 
+expect fun getNow(): MachineTime
+
 suspend fun waitUntil(time: MachineTime) =
-    delay(max(0.0, time - Reactor.now).seconds)
+    delay(max(0.0, time - getNow()).seconds)
