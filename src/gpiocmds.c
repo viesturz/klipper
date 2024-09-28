@@ -29,7 +29,8 @@ enum {
     DF_ON=1<<0, DF_TOGGLING=1<<1, DF_CHECK_END=1<<2, DF_DEFAULT_ON=1<<4
 };
 
-static uint_fast8_t digital_load_event(struct timer *timer);
+static uint_fast8_t digital_load_during_toggle(struct digital_out_s *d, uint32_t curtime);
+static uint_fast8_t process_digital_load_event(struct digital_out_s *d, uint32_t on_duration);
 
 // Software PWM toggle event
 static uint_fast8_t
@@ -38,17 +39,61 @@ digital_toggle_event(struct timer *timer)
     struct digital_out_s *d = container_of(timer, struct digital_out_s, timer);
     gpio_out_toggle_noirq(d->pin);
     d->flags ^= DF_ON;
-    uint32_t waketime = d->timer.waketime;
+    uint32_t curtime = d->timer.waketime;
+    uint32_t waketime = curtime;
     if (d->flags & DF_ON)
         waketime += d->on_duration;
     else
         waketime += d->off_duration;
     if (d->flags & DF_CHECK_END && !timer_is_before(waketime, d->end_time)) {
-        // End of normal pulsing - next event loads new pwm settings
-        d->timer.func = digital_load_event;
-        waketime = d->end_time;
+        return digital_load_during_toggle(d, curtime);
     }
     d->timer.waketime = waketime;
+    return SF_RESCHEDULE;
+}
+
+// Load next pin output setting without rescheduling the timer.
+static uint_fast8_t
+digital_load_during_toggle(struct digital_out_s *d, uint32_t curtime)
+{
+    // Apply next update and remove it from queue
+    if (move_queue_empty(&d->mq))
+        shutdown("Missed scheduling of next digital out event");
+    struct move_node *mn = move_queue_pop(&d->mq);
+    struct digital_move *m = container_of(mn, struct digital_move, node);
+    uint32_t on_duration = m->on_duration;
+    int32_t off_duration = d->cycle_time - on_duration;
+    move_free(m);
+    if (on_duration <= 0 && off_duration <= 0) {
+        // Need a full load
+        return process_digital_load_event(d, on_duration);
+    }
+    // Just a PWM update.
+    uint32_t waketime;
+    if (d->flags & DF_ON) {
+        // We just switched to on, set the new time.
+        waketime = curtime + on_duration;
+    } else {
+        // We just switched to off, keep the old off time to preserve cycle length.
+        waketime = curtime + d->off_duration;
+    }
+    uint32_t end_time = 0;
+    // Process check_end
+    if (!move_queue_empty(&d->mq)) {
+        struct move_node *nn = move_queue_first(&d->mq);
+        end_time = container_of(nn, struct digital_move, node)->waketime;
+        if (timer_is_before(d->end_time, end_time))
+            shutdown("Scheduled digital out event will exceed max_duration");
+    } else if (d->max_duration) {
+        end_time = curtime + d->max_duration;
+    } else {
+        // Clear check end
+        d->flags &= ~DF_CHECK_END;
+    }
+    d->timer.waketime = waketime;
+    d->end_time = end_time;
+    d->on_duration = on_duration;
+    d->off_duration = off_duration;
     return SF_RESCHEDULE;
 }
 
@@ -63,9 +108,16 @@ digital_load_event(struct timer *timer)
     struct move_node *mn = move_queue_pop(&d->mq);
     struct digital_move *m = container_of(mn, struct digital_move, node);
     uint32_t on_duration = m->on_duration;
+    move_free(m);
+    return process_digital_load_event(d, on_duration);
+}
+
+// Load next pin output setting
+static uint_fast8_t
+process_digital_load_event(struct digital_out_s *d, uint32_t on_duration)
+{
     uint8_t flags = on_duration ? DF_ON : 0;
     gpio_out_write(d->pin, flags);
-    move_free(m);
 
     // Calculate next end_time and flags
     uint32_t end_time = 0;
@@ -201,13 +253,22 @@ command_update_digital_out_pwm(uint32_t *args)
     irq_disable();
     if (!move_queue_empty(&d->mq))
         shutdown("Can not set soft pwm cycle on_ticks while updates pending");
-    sched_del_timer(&d->timer);
     uint32_t on_duration = args[1];
+    int32_t off_duration =  d->cycle_time - on_duration;
+    if ((d->flags & DF_TOGGLING) && on_duration > 0 && off_duration > 0) {
+        // Keep existing toggle loop, just update the cycle
+        d->on_duration = on_duration;
+        d->off_duration = off_duration;
+        irq_enable();
+        return;
+    }
+    // Recalculate everything.
+    sched_del_timer(&d->timer);
     uint8_t flags = d->flags & DF_DEFAULT_ON; // Clear all fags except default on
     gpio_out_write(d->pin, on_duration > 0);
     if (on_duration == 0) {
         // Always off
-    } else if (on_duration >= d->cycle_time) {
+    } else if (off_duration <= 0) {
         // Constant on
         flags |= DF_ON;
     } else {
@@ -223,7 +284,7 @@ command_update_digital_out_pwm(uint32_t *args)
     d->flags = flags;
     if (flags & DF_TOGGLING) {
         d->on_duration = on_duration;
-        d->off_duration = d->cycle_time - on_duration;
+        d->off_duration = off_duration;
         d->timer.waketime = timer_read_time() + on_duration;
         d->timer.func = digital_toggle_event;
         sched_add_timer(&d->timer);
