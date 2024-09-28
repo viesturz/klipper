@@ -1,8 +1,15 @@
 out
 *.so
+*.iml
 *.pyc
+.kotlin
 .config
 .config.old
 .gradle
+.idea
 klippy/.version
 klippy/.build
+klippy/build
+local.properties
+klippy2/build
+klippy2/klippy.log
