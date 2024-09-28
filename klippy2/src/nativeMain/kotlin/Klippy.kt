@@ -6,12 +6,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import logging.LogFormatter
 import logging.LogWriter
+import machine.ConfigurationException
 import machine.Machine
-import machine.impl.InvalidGcodeException
+import machine.InvalidGcodeException
 import machine.impl.MachineImpl
-import mcu.ConfigurationException
-import platform.posix.log
-
 
 suspend fun gcodeFromCommandline(machine: MachineImpl) {
     val queue = machine.queueManager.newQueue()

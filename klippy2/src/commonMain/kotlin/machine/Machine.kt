@@ -1,7 +1,6 @@
 package machine
 
 import kotlinx.coroutines.flow.StateFlow
-import machine.impl.GCode
 
 interface Machine {
     suspend fun start()

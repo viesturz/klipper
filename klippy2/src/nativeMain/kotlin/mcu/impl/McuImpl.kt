@@ -12,14 +12,14 @@ import config.DigitalInPin
 import config.DigitalOutPin
 import config.StepperPins
 import config.UartPins
-import kotlinx.cinterop.ExperimentalForeignApi
-import machine.impl.Reactor
+import machine.NeedsRestartException
+import machine.Reactor
 import mcu.Mcu
 import mcu.McuClock
 import mcu.McuSetup
 import mcu.McuState
-import mcu.NeedsRestartException
 import mcu.PwmPin
+import mcu.StepperDriver
 import mcu.StepperMotor
 import mcu.components.McuAnalogPin
 import mcu.components.McuButton
@@ -30,9 +30,9 @@ import mcu.components.McuStepperMotor
 import mcu.components.TmcUartBus
 import mcu.connection.CommandQueue
 import mcu.connection.McuConnection
-import mcu.connection.StepQueue
+import mcu.connection.StepQueueImpl
 import mcu.connection.StepperSync
-import parts.drivers.StepperDriver
+import platform.posix.log
 import kotlin.time.Duration.Companion.milliseconds
 
 /** Step 0 - API for adding all the parts to MCU. */
@@ -71,7 +71,7 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
     internal val restartCommands = ArrayList<UByteArray>()
     internal val responseHandlers = HashMap<Pair<ResponseParser<McuResponse>, ObjectId>, suspend (message: McuResponse) -> Unit>()
     internal val commandQueues = ArrayList<CommandQueue>()
-    internal val stepQueues = ArrayList<StepQueue>()
+    internal val stepQueues = ArrayList<StepQueueImpl>()
     val components = ArrayList<McuComponent>()
     override val firmware: FirmwareConfig
         get() = cmd.identify
@@ -89,8 +89,8 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
         return result
     }
 
-    override fun makeStepQueue(id: ObjectId): StepQueue {
-        val result = StepQueue(firmware, null, id)
+    override fun makeStepQueue(id: ObjectId): StepQueueImpl {
+        val result = StepQueueImpl(firmware, null, id)
         stepQueues.add(result)
         return result
     }
@@ -110,9 +110,10 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
 data class QueryCommand(val signature: String, val block: CommandBuilder.(clock: McuClock32)->Unit)
 
 /** Step 2 - the MCU runtime. */
-class McuImpl(override val config: McuConfig, val connection: McuConnection, val configuration: McuConfigureImpl): Mcu {
+class McuImpl(override val config: McuConfig, val connection: McuConnection, val configuration: McuConfigureImpl):
+    Mcu {
     private val defaultQueue = CommandQueue(connection, "MCU ${config.name} DefaultQueue")
-    override val components: List<McuComponent> = configuration.components
+    private val components: List<McuComponent> = configuration.components
     private val clocksync = ClockSync(this, connection)
     private val _state = MutableStateFlow(McuState.STARTING)
     private var _stateReason = ""
@@ -204,9 +205,12 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         }
         // Run initial commands
         configuration.initCommands.forEach { defaultQueue.send(it) }
+        // Flush the queue and get the new config.
+        config = defaultQueue.sendWithResponse("get_config", responseConfigParser)
         val configureStartOffset = 0.5
         configuration.queryCommands.forEach { builder ->
-            val clock = clocksync.estimate.timeToClock(reactor.now + configureStartOffset).toUInt()
+            val time = reactor.now + configureStartOffset
+            val clock = clocksync.estimate.timeToClock(time).toUInt()
             val cmd = defaultQueue.build(builder.signature) {
                 builder.block(this, clock)
             }
@@ -214,7 +218,6 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
             defaultQueue.sendWaitAck(cmd)
         }
         // Configure the stepper queues.
-        config = defaultQueue.sendWithResponse("get_config", responseConfigParser)
         if (configuration.reservedMoves > config.moveCount.toInt())
             throw RuntimeException("Mcu ${this.config.name}, moves buffer not enough, has ${config.moveCount}, need ${configuration.reservedMoves}")
         stepperSync = StepperSync(connection, configuration.stepQueues, config.moveCount.toInt() - configuration.reservedMoves)

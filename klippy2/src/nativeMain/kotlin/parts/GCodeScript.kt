@@ -3,7 +3,7 @@ package parts
 import machine.GCodeHandler
 import machine.MachineBuilder
 import machine.MachineRuntime
-import machine.impl.PartLifecycle
+import machine.PartLifecycle
 
 fun MachineBuilder.GCodeScript(
     name: String,

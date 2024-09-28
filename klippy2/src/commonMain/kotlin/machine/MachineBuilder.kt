@@ -1,17 +1,7 @@
 package machine
 
 import config.McuConfig
-import machine.impl.GCode
-import machine.impl.GCodeCommand
-import machine.impl.PartLifecycle
-import machine.impl.Reactor
 import mcu.McuSetup
-
-typealias GCodeHandler = suspend GCodeRunner.(cmd: GCodeCommand) -> Unit
-interface GCodeRunner {
-    suspend fun gcode(cmd: String)
-    fun respond(msg: String)
-}
 
 typealias ActionBlock = suspend (m: MachineRuntime) -> Unit
 
@@ -37,6 +27,16 @@ interface MachineRuntime {
 /** Base class for all parts. */
 interface MachinePart {
     val name: String
+}
+
+/** API for part lifecycle management. */
+interface PartLifecycle: MachinePart {
+    fun status(): Map<String, Any> = mapOf()
+    // Called when all MCUs are configured and parts components initialized.
+    suspend fun onStart(runtime: MachineRuntime){}
+    // Called when printer session is over and it enters idle state.
+    fun onSessionEnd(){}
+    fun shutdown(){}
 }
 
 inline fun <reified PartType> MachineRuntime.getPartByName(name: String): PartType? =

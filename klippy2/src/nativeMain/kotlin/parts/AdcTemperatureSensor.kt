@@ -11,8 +11,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import machine.MachineBuilder
 import machine.MachineRuntime
-import machine.impl.PartLifecycle
-import machine.impl.waitUntil
+import machine.PartLifecycle
+import machine.waitUntil
 
 fun MachineBuilder.AdcTemperatureSensor(
     name: String,
@@ -20,7 +20,7 @@ fun MachineBuilder.AdcTemperatureSensor(
     sensor: TemperatureCalibration,
     minTemp: Temperature = 0.celsius,
     maxTemp: Temperature = 300.celsius,
-): TemperatureSensor  = AdcTemperatureSensorImpl(
+): TemperatureSensor = AdcTemperatureSensorImpl(
         name,pin,sensor,minTemp,maxTemp,this).also { addPart(it) }
 
 private class AdcTemperatureSensorImpl(
@@ -29,7 +29,8 @@ private class AdcTemperatureSensorImpl(
     val sensor: TemperatureCalibration,
     override val minValue: Temperature,
     override val maxValue: Temperature,
-    setup: MachineBuilder): PartLifecycle, TemperatureSensor {
+    setup: MachineBuilder
+): PartLifecycle, TemperatureSensor {
     val adc = setup.setupMcu(pinConfig.mcu).addAnalogPin(pinConfig.validResistanceRange(sensor.tempToResistance(minValue), sensor.tempToResistance(maxValue)))
     val logger = KotlinLogging.logger("AdcTemperatureSensorImpl $name")
     var _value = ValueSensor.Measurement(0.0, 0.celsius)

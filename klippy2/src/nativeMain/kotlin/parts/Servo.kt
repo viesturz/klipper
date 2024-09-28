@@ -5,7 +5,9 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
 import machine.MachineBuilder
 import machine.MachinePart
-import machine.impl.PartLifecycle
+import machine.PartLifecycle
+import machine.Reactor
+import machine.getNow
 import utils.deinterp
 import utils.interpolate
 

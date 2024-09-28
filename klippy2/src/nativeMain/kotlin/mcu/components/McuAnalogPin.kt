@@ -1,8 +1,8 @@
 package mcu.components
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import machine.ConfigurationException
 import mcu.AnalogInPin
-import mcu.ConfigurationException
 import mcu.Mcu
 import mcu.impl.McuComponent
 import mcu.impl.McuConfigure

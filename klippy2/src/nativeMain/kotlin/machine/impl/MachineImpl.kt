@@ -2,11 +2,11 @@ package machine.impl
 
 import MachineTime
 import machine.MachineBuilder
-import machine.MachinePart
 import machine.MachineRuntime
 import config.McuConfig
 import config.SerialConnection
 import buildMachine
+import config.Connection
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +15,9 @@ import kotlinx.coroutines.runBlocking
 import machine.GCodeHandler
 import machine.Machine
 import machine.Machine.State
+import machine.PartLifecycle
 import machine.QueueManager
+import machine.Reactor
 import mcu.Mcu
 import mcu.McuSetup
 import mcu.McuState
@@ -26,23 +28,13 @@ import parts.Stats
 
 private val logger = KotlinLogging.logger("MachineImpl")
 
-/** API for part lifecycle management. */
-interface PartLifecycle: MachinePart {
-    fun status(): Map<String, Any> = mapOf()
-    // Called when all MCUs are configured and parts components initialized.
-    suspend fun onStart(runtime: MachineRuntime){}
-    // Called when printer session is over and it enters idle state.
-    fun onSessionEnd(){}
-    fun shutdown(){}
-}
-
 class MachineImpl : Machine, MachineRuntime, MachineBuilder {
     private var _state = MutableStateFlow(State.NEW)
     override val state: StateFlow<State>
         get() = _state
 
     override val reactor = Reactor()
-    override val gCode = GCode()
+    override val gCode = GCodeImpl()
     override val queueManager: QueueManager = QueueManagerImpl(reactor)
     var _shutdownReason = ""
     override val shutdownReason: String
@@ -131,7 +123,7 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
         gCode.registerMuxCommand(command, muxParam, muxValue, handler)
     }
 
-    private fun acquireConnection(config: config.Connection): McuConnection {
+    private fun acquireConnection(config: Connection): McuConnection {
         logger.debug { "Acquire connection $config" }
         val connection = when (config) {
             is SerialConnection -> McuConnection(connectSerial(config.file, config.baud), reactor)

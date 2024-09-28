@@ -1,8 +1,9 @@
 package parts.drivers
 
 import MachineTime
+import config.DigitalOutPin
 import machine.MachineBuilder
-import machine.impl.PartLifecycle
+import machine.PartLifecycle
 import kotlin.math.min
 import kotlin.math.sqrt
 
@@ -60,7 +61,7 @@ class TmcMicrosteps(var microsteps: Int, var interpolate: Boolean) {
 //
 //}
 
-class TmcEnableTracking(val fields: TmcFields, enablePin: config.DigitalOutPin?, setup: MachineBuilder):
+class TmcEnableTracking(val fields: TmcFields, enablePin: DigitalOutPin?, setup: MachineBuilder):
     PartLifecycle {
     override val name = "TmcEnableTracking"
     val pin = if (enablePin == null) null else setup.setupMcu(enablePin.mcu).addDigitalPin(enablePin.copy(watchdogDuration = 0.0))

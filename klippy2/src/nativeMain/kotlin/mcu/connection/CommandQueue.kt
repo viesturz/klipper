@@ -1,6 +1,5 @@
 package mcu.connection
 
-import MachineTime
 import chelper.serialqueue_alloc_commandqueue
 import chelper.serialqueue_free_commandqueue
 import chelper.steppersync_free
@@ -16,8 +15,6 @@ import mcu.impl.GcWrapper
 import mcu.impl.McuResponse
 import mcu.impl.ObjectId
 import mcu.impl.ResponseParser
-import kotlin.math.max
-import kotlin.math.min
 import kotlin.time.Duration.Companion.seconds
 
 /** Queue for sending commands to MCU. */
@@ -83,7 +80,7 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
 }
 
 @OptIn(ExperimentalForeignApi::class)
-class StepperSync(connection: McuConnection, stepQueues: List<StepQueue>, moveCount: Int) {
+class StepperSync(connection: McuConnection, stepQueues: List<StepQueueImpl>, moveCount: Int) {
     val stepperSync = GcWrapper(chelper.steppersync_alloc(connection.serial.ptr,
         stepQueues.map { it.stepcompress.ptr }.toCValues(),
         stepQueues.size,

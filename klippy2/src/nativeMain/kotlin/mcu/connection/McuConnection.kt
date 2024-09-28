@@ -15,7 +15,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
-import machine.impl.Reactor
+import machine.Reactor
 import mcu.McuClock
 import mcu.impl.Commands
 import mcu.impl.GcWrapper
@@ -25,7 +25,6 @@ import mcu.impl.McuResponse
 import mcu.impl.ObjectId
 import mcu.impl.ResponseParser
 import platform.posix.close
-import platform.posix.log
 import kotlin.concurrent.AtomicLong
 
 private val logger = KotlinLogging.logger("McuConnection")

@@ -2,10 +2,10 @@ package mcu.impl
 
 import MachineDuration
 import MachineTime
-import machine.impl.Reactor
+import machine.Reactor
 import mcu.McuClock
 import mcu.connection.CommandQueue
-import mcu.connection.StepQueue
+import mcu.connection.StepQueueImpl
 
 /** McuComponent controls a specific hardware feature in the MCU
  * It's tightly coupled with the MCU code and provides provides an API to the low level
@@ -32,7 +32,7 @@ interface McuConfigure {
      * Can only be used after start. */
     fun makeCommandQueue(name:String, numCommands: Int): CommandQueue
     /** Create a new stepper command queue */
-    fun makeStepQueue(id: ObjectId): StepQueue
+    fun makeStepQueue(id: ObjectId): StepQueueImpl
     /** Add a configuration command for the MCU */
     fun configCommand(signature: String, block: CommandBuilder.()->Unit)
     /** On soft restart, restart commands are used instead of configuration. */

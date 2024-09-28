@@ -3,13 +3,14 @@ package parts
 import MachineTime
 import Temperature
 import celsius
+import config.PID
 import io.github.oshai.kotlinlogging.KLogger
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.MachineBuilder
 import machine.MachinePart
-import machine.impl.CommandException
-import machine.impl.PartLifecycle
-import machine.impl.waitUntil
+import machine.CommandException
+import machine.PartLifecycle
+import machine.waitUntil
 import kotlin.math.PI
 import kotlin.math.absoluteValue
 import kotlin.math.max
@@ -21,7 +22,7 @@ fun MachineBuilder.PidCalibrate(
     name: String = ""): PidCalibrate = PidCalibrateImpl(name, this).also { addPart(it) }
 
 interface PidCalibrate: MachinePart {
-    suspend fun calibrate(heater: Heater, target: Temperature, tolerance: Double = 0.02): config.PID
+    suspend fun calibrate(heater: Heater, target: Temperature, tolerance: Double = 0.02): PID
 }
 
 private class PidCalibrateImpl(override val name: String, setup: MachineBuilder) : PidCalibrate, PartLifecycle {
@@ -37,7 +38,7 @@ private class PidCalibrateImpl(override val name: String, setup: MachineBuilder)
         }
     }
 
-    override suspend fun calibrate(heater: Heater, target: Temperature, tolerance: Double): config.PID {
+    override suspend fun calibrate(heater: Heater, target: Temperature, tolerance: Double): PID {
         logger.info { "Pid calibrate start, target=$target, tolerance=$tolerance" }
         val calibrator = CalibrateControl(logger, target, heater.maxPower, tolerance)
         val prevControl = heater.setControl(calibrator)
@@ -193,7 +194,7 @@ private class CalibrateControl(
         return maxP - minP
     }
 
-    fun calculateResult(): config.PID {
+    fun calculateResult(): PID {
         val samples = relevantSamples()
         logger.info { "Calculating result from $samples" }
         var tempDiff = 0.0
@@ -231,7 +232,7 @@ private class CalibrateControl(
         val Ki = Kp / Ti
         val Kd = Kp * Td
         logger.info { "Calculated kP=$Kp, kI=$Ki, kD=$Kd" }
-        return config.PID(Kp, Ki, Kd)
+        return PID(Kp, Ki, Kd)
     }
 
     fun hasEnoughSamples() = samples.size >= SAMPLES + 1

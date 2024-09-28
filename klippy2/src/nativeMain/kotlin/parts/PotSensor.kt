@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import machine.MachineBuilder
 import machine.MachineRuntime
-import machine.impl.PartLifecycle
+import machine.PartLifecycle
 import utils.format
 
 /** A potentiometer sensor. Returns a value in range 0 = minResistance, 1 = maxResistance. */
@@ -29,7 +29,8 @@ private class PotSensorImpl(
     pinConfig: AnalogInPin,
     val minResistance: Resistance,
     val maxResistance: Resistance,
-    setup: MachineBuilder): PartLifecycle, ValueSensor<Resistance> {
+    setup: MachineBuilder
+): PartLifecycle, ValueSensor<Resistance> {
     val logger = KotlinLogging.logger("PotSensor $name")
 
     val adc = setup.setupMcu(pinConfig.mcu).addAnalogPin(pinConfig)

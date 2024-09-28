@@ -3,6 +3,7 @@ package mcu.components
 import MachineDuration
 import io.github.oshai.kotlinlogging.KotlinLogging
 import MachineTime
+import config.DigitalOutPin
 import mcu.Mcu
 import mcu.PwmPin
 import mcu.impl.McuClock32
@@ -11,7 +12,7 @@ import mcu.impl.McuConfigure
 import mcu.impl.McuRuntime
 import kotlin.math.max
 
-class McuPwmPin(override val mcu: Mcu, val config: config.DigitalOutPin, initialize: McuConfigure) : PwmPin,
+class McuPwmPin(override val mcu: Mcu, val config: DigitalOutPin, initialize: McuConfigure) : PwmPin,
     McuComponent {
     val id = initialize.makeOid()
     val queue = initialize.makeCommandQueue("McuPwmPin ${config.pin}", 3)

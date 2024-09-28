@@ -9,6 +9,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import machine.CommandQueue
 import machine.Planner
 import machine.QueueManager
+import machine.Reactor
 
 /** Time it takes for a queue to start */
 private const val QUEUE_START_TIME = 0.2
@@ -52,6 +53,7 @@ class PlannerQueue<Data>(val planner: Planner<Data>) {
     val generationWindow: MachineDuration = 10.0
     val commands = ArrayList<PlannedCommand<Data>>()
     val data = ArrayList<Data>()
+    val generated = ArrayList<MachineTime>()
     internal fun addCommand(c: PlannedCommand<Data>) {
         commands.add(c)
         data.add(c.data)
@@ -73,8 +75,13 @@ class PlannerQueue<Data>(val planner: Planner<Data>) {
         if (cmd != peek()) return null
         if (cmd.queue.reactor.now + generationWindow < time) return null
         // TODO: check for gaps in the sequence
-        val rest = data.subList(1, data.size)
-        return planner.tryPlan(time, cmd.data, rest, force)
+        if (generated.isNotEmpty()) {
+            return generated.removeFirst()
+        }
+        val planned = planner.tryPlan(time, data, force)
+        if (planned.isNullOrEmpty()) return null
+        generated.addAll(planned)
+        return generated.removeFirst()
     }
 }
 
@@ -88,7 +95,7 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
     override val reactor: Reactor
         get() = manager.reactor
 
-    override fun <T> addPlanned(planner: Planner<T>, data: T) {
+    override fun <T: Any> addPlanned(planner: Planner<T>, data: T) {
         require(!closed) { "Adding command to closed queue" }
         val plannerQueue = manager.plannerQueueFor(planner)
         val cmd = PlannedCommand(this, plannerQueue, data)
@@ -108,6 +115,7 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
     }
 
     override fun wait(deferred: Deferred<MachineTime>) {
+        commands.add(WaitForCommand{ deferred })
         require(!closed) { "Adding command to closed queue" }
         commands.add(WaitForCommand{ deferred })
         tryGenerate()

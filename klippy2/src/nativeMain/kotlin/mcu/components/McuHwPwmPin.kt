@@ -1,6 +1,7 @@
 package mcu.components
 
 import MachineDuration
+import config.DigitalOutPin
 import io.github.oshai.kotlinlogging.KotlinLogging
 import mcu.Mcu
 import mcu.PwmPin
@@ -10,7 +11,7 @@ import mcu.impl.McuRuntime
 
 class McuHwPwmPin(
     override val mcu: Mcu,
-    val config: config.DigitalOutPin,
+    val config: DigitalOutPin,
     val configure: McuConfigure
 ) : PwmPin,
     McuComponent {

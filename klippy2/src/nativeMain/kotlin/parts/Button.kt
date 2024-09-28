@@ -7,7 +7,7 @@ import machine.ActionBlock
 import machine.MachineBuilder
 import machine.MachinePart
 import machine.MachineRuntime
-import machine.impl.PartLifecycle
+import machine.PartLifecycle
 
 fun MachineBuilder.Button(
     name: String,
@@ -23,7 +23,8 @@ private class ButtonImpl(
     override val name: String,
     pinConfig: DigitalInPin,
     val onClicked: ActionBlock,
-    setup: MachineBuilder): PartLifecycle, Button {
+    setup: MachineBuilder
+): PartLifecycle, Button {
     private val button = setup.setupMcu(pinConfig.mcu).addButton(pinConfig)
     val _state = MutableStateFlow(false)
     override val state: StateFlow<Boolean>
