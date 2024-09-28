@@ -29,8 +29,10 @@ enum {
     DF_ON=1<<0, DF_TOGGLING=1<<1, DF_CHECK_END=1<<2, DF_DEFAULT_ON=1<<4
 };
 
-static uint_fast8_t digital_load_during_toggle(struct digital_out_s *d, uint32_t curtime);
-static uint_fast8_t process_digital_load_event(struct digital_out_s *d, uint32_t on_duration);
+static uint_fast8_t digital_load_during_toggle(
+    struct digital_out_s *d, uint32_t curtime);
+static uint_fast8_t process_digital_load_event(
+    struct digital_out_s *d, uint32_t on_duration);
 
 // Software PWM toggle event
 static uint_fast8_t
@@ -65,29 +67,30 @@ digital_load_during_toggle(struct digital_out_s *d, uint32_t curtime)
     int32_t off_duration = d->cycle_time - on_duration;
     move_free(m);
     if (on_duration <= 0 && off_duration <= 0) {
-        // Need a full load
+        // Need a full reload
         return process_digital_load_event(d, on_duration);
     }
     // Just a PWM update.
     uint32_t waketime;
     if (d->flags & DF_ON) {
-        // We just switched to on, set the new time.
+        // Switched to on, set the new time.
         waketime = curtime + on_duration;
     } else {
-        // We just switched to off, keep the old off time to preserve cycle length.
+        // Switched to off, keep the old off time to preserve cycle length.
         waketime = curtime + d->off_duration;
     }
-    uint32_t end_time = 0;
-    // Process check_end
+    uint32_t end_time;
+    int32_t watchdog_time = curtime + d->max_duration;
     if (!move_queue_empty(&d->mq)) {
         struct move_node *nn = move_queue_first(&d->mq);
         end_time = container_of(nn, struct digital_move, node)->waketime;
-        if (timer_is_before(d->end_time, end_time))
+        if (d->max_duration && timer_is_before(watchdog_time, end_time))
             shutdown("Scheduled digital out event will exceed max_duration");
     } else if (d->max_duration) {
-        end_time = curtime + d->max_duration;
+        end_time = watchdog_time;
     } else {
-        // Clear check end
+        // No end time, clear check end.
+        end_time = 0;
         d->flags &= ~DF_CHECK_END;
     }
     d->timer.waketime = waketime;
@@ -259,6 +262,9 @@ command_update_digital_out_pwm(uint32_t *args)
         // Keep existing toggle loop, just update the cycle
         d->on_duration = on_duration;
         d->off_duration = off_duration;
+        if (d->max_duration) {
+            d->end_time = timer_read_time() + d->max_duration;
+        }
         irq_enable();
         return;
     }
