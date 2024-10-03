@@ -25,7 +25,8 @@ interface PidCalibrate: MachinePart {
     suspend fun calibrate(heater: Heater, target: Temperature, tolerance: Double = 0.02): PID
 }
 
-private class PidCalibrateImpl(override val name: String, setup: MachineBuilder) : PidCalibrate, PartLifecycle {
+private class PidCalibrateImpl(override val name: String, setup: MachineBuilder) : PidCalibrate,
+    PartLifecycle {
     private val logger = KotlinLogging.logger("PidCalibrate $name")
     init {
         setup.registerCommand("PID_CALIBRATE") { params ->

@@ -33,7 +33,7 @@ enum class HomingDirection {
 }
 
 data class LinearSpeeds(
-    var maxSpeed: Double = Double.MAX_VALUE,
+    var speed: Double = Double.MAX_VALUE,
     var accel: Double = Double.MAX_VALUE,
     var minCruiseRatio: Double = 0.5,
     var squareCornerVelocity: Double = 5.0,
