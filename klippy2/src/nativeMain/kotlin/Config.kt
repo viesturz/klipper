@@ -4,13 +4,9 @@ import config.mcus.SkrMiniE3V2
 import machine.MachineBuilder
 import parts.*
 import parts.drivers.TMC2209
-import parts.kinematics.CoreXYKinematics
-import parts.kinematics.Homing
-import parts.kinematics.HomingDirection
 import parts.kinematics.LinearRange
 import parts.kinematics.LinearSpeeds
 import parts.kinematics.MotionPlanner
-import parts.kinematics.PinTrigger
 
 fun MachineBuilder.buildMachine() {
     val mcu =
@@ -74,14 +70,14 @@ fun MachineBuilder.buildMachine() {
         pins = mcu.stepper0,
         driver = aDriver,
         rotationDistance = 40.0,
-        speed = LinearSpeeds(maxSpeed = 400.0)
+        speed = LinearSpeeds(speed = 400.0)
     )
     val bStepper = LinearStepper(
         name = "stepperB",
         pins = mcu.stepper1,
         driver = bDriver,
         rotationDistance = 40.0,
-        speed = LinearSpeeds(maxSpeed = 400.0)
+        speed = LinearSpeeds(speed = 400.0)
     )
     val zStepper = LinearStepper(
         name = "stepperZ",
@@ -89,7 +85,7 @@ fun MachineBuilder.buildMachine() {
         driver = zDriver,
         stepsPerRotation = 200,
         rotationDistance = 40.0,
-        speed = LinearSpeeds(maxSpeed = 40.0, accel = 100.0),
+        speed = LinearSpeeds(speed = 40.0, accel = 100.0),
         range = LinearRange(
             positionMin = 0.0,
             positionMax = 125.0),

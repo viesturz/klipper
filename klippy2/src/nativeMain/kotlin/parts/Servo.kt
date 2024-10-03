@@ -6,8 +6,6 @@ import machine.CommandQueue
 import machine.MachineBuilder
 import machine.MachinePart
 import machine.PartLifecycle
-import machine.Reactor
-import machine.getNow
 import utils.deinterp
 import utils.interpolate
 

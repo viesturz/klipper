@@ -32,7 +32,6 @@ import mcu.connection.CommandQueue
 import mcu.connection.McuConnection
 import mcu.connection.StepQueueImpl
 import mcu.connection.StepperSync
-import platform.posix.log
 import kotlin.time.Duration.Companion.milliseconds
 
 /** Step 0 - API for adding all the parts to MCU. */

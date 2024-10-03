@@ -26,7 +26,22 @@ class MotionPlannerImplTest {
     }
 
     @Test
-    fun testMinNotAllAxis() {
+    fun testMovePlan() {
+        config.axis('x', FakeActuator(speeds = LinearSpeeds(5.0, 1.0)))
+        val planner = MotionPlannerImpl(config)
+        planner.move(queue, KinMove(axis = "x", position = listOf(10.0), speed = null))
+        assertEquals(1, queue.plannedCommands.size)
+        val cmd = queue.plannedCommands[0] as MovePlan
+
+        val results = planner.tryPlan(0.0, listOf(cmd), true)
+
+        assertEquals(1, results?.size)
+
+
+    }
+
+    @Test
+    fun testNotAllAxis() {
         config.axis("xy", FakeActuator(size = 2, speeds = LinearSpeeds(5.0, 1.0)))
         val planner = MotionPlannerImpl(config)
 
