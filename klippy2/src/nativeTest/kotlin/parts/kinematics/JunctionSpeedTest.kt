@@ -8,16 +8,14 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class JunctionSpeedTest {
-    val speeds0 = LinearSpeeds(speed = 10.0, accel = 500.0, squareCornerVelocity = 2.0)
-    val speeds1 = LinearSpeeds(speed = 20.0, accel = 500.0, squareCornerVelocity = 4.0)
+    val speeds0 = MoveSpeeds(speedPerMm = 1.0, accelPerMm = 500.0, squareCornerVelocity = 2.0, minCruiseRatio = 0.0 )
+    val speeds1 = MoveSpeeds(speedPerMm = 2.0, accelPerMm = 500.0, squareCornerVelocity = 4.0, minCruiseRatio = 0.0)
 
     @Test
     fun zeroSegments() {
         val speedSq = calculateJunctionSpeedSq(
             listOf(0.0),
             listOf(10.0),
-            prevDistance = 0.0,
-            nextDistance = 10.0,
             prevSpeeds = speeds0,
             nextSpeeds = speeds1)
 
@@ -29,8 +27,6 @@ class JunctionSpeedTest {
         val speedSq = calculateJunctionSpeedSq(
             listOf(10.0),
             listOf(10.0),
-            prevDistance = 10.0,
-            nextDistance = 10.0,
             prevSpeeds = speeds0,
             nextSpeeds = speeds1)
 
@@ -42,12 +38,10 @@ class JunctionSpeedTest {
         val speedSq = calculateJunctionSpeedSq(
             listOf(10.0, 2.0),
             listOf(10.0, 2.0),
-            prevDistance = 10.0,
-            nextDistance = 10.0,
             prevSpeeds = speeds0,
             nextSpeeds = speeds1)
 
-        assertEquals(10.0.squared(), speedSq)
+        assertEquals(104.0, speedSq, precision = 1e-5)
     }
 
     @Test
@@ -55,8 +49,6 @@ class JunctionSpeedTest {
         val speedSq = calculateJunctionSpeedSq(
             listOf(10.0, 0.0),
             listOf(5*sqrt(3.0), 5.0),
-            prevDistance = 10.0,
-            nextDistance = 10.0,
             prevSpeeds = speeds0,
             nextSpeeds = speeds0)
 
@@ -68,8 +60,6 @@ class JunctionSpeedTest {
         val speedSq = calculateJunctionSpeedSq(
             listOf(10.0, 0.0),
             listOf(5.0, 5*sqrt(3.0)),
-            prevDistance = 10.0,
-            nextDistance = 10.0,
             prevSpeeds = speeds0,
             nextSpeeds = speeds0)
 
@@ -81,8 +71,6 @@ class JunctionSpeedTest {
         val speedSq = calculateJunctionSpeedSq(
             listOf(10.0, 0.0),
             listOf(0.0, 10.0),
-            prevDistance = 10.0,
-            nextDistance = 10.0,
             prevSpeeds = speeds0,
             nextSpeeds = speeds0)
 
@@ -94,8 +82,6 @@ class JunctionSpeedTest {
         val speedSq = calculateJunctionSpeedSq(
             listOf(10.0, 0.0),
             listOf(-5.0, 5*sqrt(3.0)),
-            prevDistance = 10.0,
-            nextDistance = 10.0,
             prevSpeeds = speeds0,
             nextSpeeds = speeds0)
 
@@ -107,8 +93,6 @@ class JunctionSpeedTest {
         val speedSq = calculateJunctionSpeedSq(
             listOf(10.0, 0.0),
             listOf(-5*sqrt(3.0), 5.0),
-            prevDistance = 10.0,
-            nextDistance = 10.0,
             prevSpeeds = speeds0,
             nextSpeeds = speeds0)
 
@@ -120,8 +104,6 @@ class JunctionSpeedTest {
         val speedSq = calculateJunctionSpeedSq(
             listOf(10.0, 0.0),
             listOf(-10.0, 0.0),
-            prevDistance = 10.0,
-            nextDistance = 10.0,
             prevSpeeds = speeds0,
             nextSpeeds = speeds0)
 

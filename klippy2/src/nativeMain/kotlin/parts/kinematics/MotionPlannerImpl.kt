@@ -5,9 +5,11 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
 import machine.Planner
 import machine.PartLifecycle
+import utils.distanceTo
 import utils.magnitude
+import utils.sqrt
 import utils.squared
-import kotlin.math.sqrt
+import kotlin.math.abs
 
 /**
  * The move planner.
@@ -18,7 +20,7 @@ import kotlin.math.sqrt
  * Step3: compute actual speeds for a given move queue, determine number of flushable moves.
  * Step4: write out the flushable moves.
  * */
-class MotionPlannerImpl(val config: MotionPlannerConfig): MotionPlanner, PartLifecycle,
+class MotionPlannerImpl(val config: MotionPlannerConfig) : MotionPlanner, PartLifecycle,
     Planner<MovePlan> {
     private val logger = KotlinLogging.logger("MotionPlanner")
     override val name = "MotionPlanner"
@@ -28,9 +30,15 @@ class MotionPlannerImpl(val config: MotionPlannerConfig): MotionPlanner, PartLif
     private val axisMapping = HashMap<Char, AxisMapping>()
     private val actuatorLastMove = HashMap<MotionActuator, MovePlanActuator>()
 
-    data class AxisMapping(val axis: Char, val actuator: MotionActuator, val actuatorAxis: String, val index: Int)
+    data class AxisMapping(
+        val axis: Char,
+        val actuator: MotionActuator,
+        val actuatorAxis: String,
+        val index: Int
+    )
 
-    override fun axisPosition(axis: Char) = axisMapping.getValue(axis).let { it.actuator.commandedPosition[it.index] }
+    override fun axisPosition(axis: Char) =
+        axisMapping.getValue(axis).let { it.actuator.commandedPosition[it.index] }
 
     init {
         val axisBuilder = StringBuilder()
@@ -54,7 +62,8 @@ class MotionPlannerImpl(val config: MotionPlannerConfig): MotionPlanner, PartLif
         for (i in axis.indices) {
             val mapping = axisMapping[axis[i]] ?: throw RuntimeException("No axis for $axis")
             val value = position[i]
-            mapping.actuator.commandedPosition = mapping.actuator.commandedPosition.mapIndexed { index,current -> if (index == mapping.index) value else current }
+            mapping.actuator.commandedPosition =
+                mapping.actuator.commandedPosition.mapIndexed { index, current -> if (index == mapping.index) value else current }
             // TODO: schedule position set after all the moves.
         }
     }
@@ -62,13 +71,11 @@ class MotionPlannerImpl(val config: MotionPlannerConfig): MotionPlanner, PartLif
     override fun move(queue: CommandQueue, vararg moves: KinMove) {
         if (moves.isEmpty()) return
         val plan = createPlan(moves)
-        applyMaxSpeeds(plan)
         if (plan.minDuration == 0.0) {
             logger.info { "Ignoring zero distance move" }
             return
         }
         linkMovePlan(plan)
-        calcMaxJunctionSpeed(plan)
         queue.addPlanned(this, plan)
     }
 
@@ -91,118 +98,128 @@ class MotionPlannerImpl(val config: MotionPlannerConfig): MotionPlanner, PartLif
         return result
     }
 
-    /** Create a basic move plan structure. */
+    /** Map the moves to the configured axis. Pull in the start positions and create a basic move plan. */
     private fun createPlan(moves: Array<out KinMove>): MovePlan {
-        val kinMoves = ArrayList<MovePlanKin>(moves.size)
-        val plan = MovePlan(kinMoves)
+        val actuators = ArrayList<MovePlanActuator>(moves.size + 2)
+        val kinMoves = ArrayList<List<MovePlanActuator>>(moves.size)
+        val plan = MovePlan(actuators, kinMoves)
         for (kMove in moves) {
+            // Validate the inputs.
             if (kMove.axis.isEmpty()) throw IllegalArgumentException("Empty axis for $kMove")
-            val actuators = ArrayList<MovePlanActuator>(1)
-            val planKin = MovePlanKin(
-                actuators,
-                speeds = LinearSpeeds(speed = kMove.speed ?: Double.MAX_VALUE,
-                accel = Double.MAX_VALUE,
-                minCruiseRatio = 0.0,
-                squareCornerVelocity = 1e10,
-            ))
-            kinMoves.add(planKin)
+            kMove.axis.indices.forEach { i ->
+                val axis = axisMapping[kMove.axis[i]]
+                    ?: throw IllegalArgumentException("Axis ${kMove.axis[i]} not configured")
+                val actuator = axis.actuator
+                val start = actuator.commandedPosition[axis.index]
+                val end = kMove.position[i]
+                if (!start.isFinite()) {
+                    throw IllegalArgumentException("Invalid start position for $axis = $start")
+                }
+                if (!end.isFinite()) {
+                    throw IllegalArgumentException("Invalid target position for $axis = $end")
+                }
+            }
+            val kActuatorMoves = ArrayList<MovePlanActuator>(kMove.axis.length)
             for (i in kMove.axis.indices) {
                 val axis = kMove.axis[i]
-                val axisMapping = axisMapping[axis] ?: throw IllegalArgumentException("Axis $axis not configured")
+                val axisMapping =
+                    axisMapping[axis] ?: throw IllegalArgumentException("Axis $axis not configured")
                 val actuator = axisMapping.actuator
-                val moveActuator = if (actuator.size == 1) {
+                val startPosition = actuator.commandedPosition
+                val endPosition = ArrayList<Double>(startPosition.size)
+                var distance: Double
+                if (actuator.size == 1) {
                     // Simple case of one axis
-                    val start = actuator.commandedPosition[0]
                     val end = kMove.position[i]
-                    if (!start.isFinite()) {
-                        throw IllegalArgumentException("Invalid start position for $axis = $start")
-                    }
-                    if (!end.isFinite()) {
-                        throw IllegalArgumentException("Invalid target position for $axis = $end")
-                    }
-                    MovePlanActuator(
-                        movePlan = plan,
-                        kin = planKin,
-                        actuator = actuator,
-                        startPosition = listOf(start),
-                        endPosition = listOf(end),
-                    )
+                    endPosition.add(end)
+                    distance = abs(startPosition[0] - end)
                 } else {
                     // Check if already added
                     if (actuators.find { it.actuator == actuator } != null) continue
                     // Build a full set of axis for this actuator.
-                    val startPosition = actuator.commandedPosition
-                    val endPosition = ArrayList<Double>(axisMapping.actuatorAxis.length)
                     for (actuatorIndex in axisMapping.actuatorAxis.indices) {
                         val axis = axisMapping.actuatorAxis[actuatorIndex]
                         val start = startPosition[actuatorIndex]
-                        if (!start.isFinite()) {
-                            throw IllegalArgumentException("Invalid start position for $axis = $start")
-                        }
                         val moveIndex = kMove.axis.indexOf(axis)
                         val end = if (moveIndex == -1) {
                             // No position specified, use existing position.
                             start
                         } else {
                             // We have a new position, use it
-                            kMove.position[moveIndex].also {
-                                if (!it.isFinite()) throw IllegalArgumentException("Invalid target position for $axis = $it")
-                            }
+                            kMove.position[moveIndex]
                         }
                         endPosition.add(end)
                     }
-                    MovePlanActuator(
-                        movePlan = plan,
-                        kin = planKin,
-                        actuator = actuator,
-                        startPosition = startPosition,
-                        endPosition = endPosition,
-                    )
+                    distance = endPosition.distanceTo(startPosition)
                 }
-                actuators.add(moveActuator)
+                val aSpeeds = actuator.checkMove(startPosition, endPosition)
+                val aMoveSpeeds = MoveSpeeds(
+                        speedPerMm = if (distance > 0) (aSpeeds.speed.coerceAtMost(kMove.speed ?: Double.MAX_VALUE) / distance) else Double.MAX_VALUE,
+                        accelPerMm = if (distance > 0) aSpeeds.accel / distance else Double.MAX_VALUE,
+                        minCruiseRatio = aSpeeds.minCruiseRatio,
+                        squareCornerVelocity = aSpeeds.squareCornerVelocity,
+                    )
+                val actuatorPlan = MovePlanActuator(
+                    movePlan = plan,
+                    actuator = actuator,
+                    speeds = aMoveSpeeds,
+                    startPosition = startPosition,
+                    endPosition = endPosition,
+                    distance = distance,
+                )
+                actuators.add(actuatorPlan)
+                kActuatorMoves.add(actuatorPlan)
             }
+            kinMoves.add(kActuatorMoves)
+        }
+
+        // Find common minimum speed for all moves.
+        val commonSpeeds = actuators.fold(MoveSpeeds.unlimited()) { acc, act -> acc.limitTo(act.speeds) }
+        if (commonSpeeds.speedPerMm > 0) {
+            plan.minDuration = 1.0/commonSpeeds.speedPerMm
+        }
+        for (aMove in actuators) {
+            aMove.speeds = aMove.speeds.limitTo(commonSpeeds)
+        }
+        // Compute the junction speeds.
+        for (kMove in kinMoves) {
+            calcMaxJunctionSpeed(kMove)
         }
         return plan
     }
 
-    private fun linkMovePlan(plan: MovePlan) {
-        plan.kinMoves.forEach { kinMove -> kinMove.actuatorMoves.forEach { move ->
-                val actuator = move.actuator
-                val previous = actuatorLastMove[actuator]
-                move.previous = previous
-                previous?.next = move
-                actuatorLastMove[actuator] = move
+    /** Calculate maximum junction speed for a kin move. */
+    private fun calcMaxJunctionSpeed(actuatorMoves: List<MovePlanActuator>) {
+        val v1 = ArrayList<Double>(2)
+        val v2 = ArrayList<Double>(2)
+        val prevMoveSpeeds = MoveSpeeds.unlimited()
+        val nextMoveSpeeds = MoveSpeeds.unlimited()
+        for (aMove in actuatorMoves) {
+            v2.addAll(aMove.startPosition.zip(aMove.endPosition) { s, e -> e - s })
+            val prev = aMove.previous
+            if (prev != null && prev.distance > 0.0) {
+                v1.addAll(prev.startPosition.zip(aMove.startPosition) { s, e -> e - s })
+                prevMoveSpeeds.limitTo(prev.speeds)
+                nextMoveSpeeds.limitTo(aMove.speeds)
+            } else {
+                v1.addAll(aMove.startPosition)
             }
+        }
+        val distance = v2.magnitude()
+        val maxJunctionSpeedPerMm = calculateJunctionSpeedSq(v1, v2, prevMoveSpeeds, nextMoveSpeeds).sqrt() / distance
+        for (aMove in actuatorMoves) {
+            aMove.maxJunctionSpeedSq = (maxJunctionSpeedPerMm * aMove.distance).squared()
         }
     }
 
-    /** Apply maximum speeds and accelerations. */
-    private fun applyMaxSpeeds(plan: MovePlan) {
-        var minDuration = 0.0
-        for (move in plan.kinMoves) {
-            var distanceSq = 0.0
-            // Get total distance
-            for (aMove in move.actuatorMoves) {
-                var adistanceSq = 0.0
-                for (i in aMove.startPosition.indices) {
-                    adistanceSq += (aMove.startPosition[i] - aMove.endPosition[i]).squared()
-                }
-                aMove.distance = sqrt(adistanceSq)
-                distanceSq += adistanceSq
-            }
-            move.distance = sqrt(distanceSq)
-            // Query for limits
-            for (aMove in move.actuatorMoves) {
-                val speeds = aMove.actuator.checkMove(aMove.startPosition, aMove.endPosition)
-                if (aMove.distance < MIN_DISTANCE) continue
-                move.speeds.limit(speeds.scale(aMove.distance / move.distance))
-                // TODO: handle angular speeds separately.
-            }
-            if (move.distance < MIN_DISTANCE) continue
-            move.minDuration = move.distance / move.speeds.speed
-            minDuration = minDuration.coerceAtLeast(move.minDuration)
+    private fun linkMovePlan(plan: MovePlan) {
+        plan.actuatorMoves.forEach { move ->
+            val actuator = move.actuator
+            val previous = actuatorLastMove[actuator]
+            move.previous = previous
+            previous?.next = move
+            actuatorLastMove[actuator] = move
         }
-        plan.minDuration = minDuration
     }
 
     /** Calculate end speeds for each move assuming full stop at the end of the moves.
@@ -215,60 +232,34 @@ class MotionPlannerImpl(val config: MotionPlannerConfig): MotionPlanner, PartLif
         return 0
     }
 
-    /** Calculate maximum junction speed for each kin move. */
-    internal fun calcMaxJunctionSpeed(plan: MovePlan) {
-        for (move in plan.kinMoves) {
-            val v1 = ArrayList<Double>(2)
-            val v2 = ArrayList<Double>(2)
-            val prevMoveSpeeds = LinearSpeeds()
-            for (aMove in move.actuatorMoves) {
-                v2.addAll(aMove.startPosition.zip(aMove.endPosition) { s, e -> e-s})
-                val prev = aMove.previous
-                if (prev != null && prev.distance > 0.0) {
-                    v1.addAll(prev.startPosition.zip(aMove.startPosition) { s, e -> e-s})
-                    prevMoveSpeeds.limit( prev.kin.speeds.scale(prev.distance / prev.kin.distance) )
-                } else {
-                    v1.addAll(aMove.startPosition)
-                }
-            }
-            move.maxJunctionSpeedSq = calculateJunctionSpeedSq(v1, v2, v1.magnitude(), move.distance, prevMoveSpeeds, move.speeds)
-            for (aMove in move.actuatorMoves) {
-                aMove.kin.maxJunctionSpeedSq = move.maxJunctionSpeedSq * aMove.distance / move.distance
-            }
-        }
-    }
-
     /** Calculate junction speeds for the move, processing backwards from end to start. */
     internal fun calcSpeedsBackwards(plan: MovePlan) {
         var endSpeed = 1e10
         var startSpeed = 1e10
-        for (move in plan.kinMoves) {
-            if (move.distance == 0.0) {
-                continue
+        var endSpeedSq = 0.0
+        for (aMove in plan.actuatorMoves) {
+            val next = aMove.next
+            if (next != null && next.distance > 0) {
+                aMove.endSpeedSq = next.startSpeedSq
+                endSpeedSq += next.startSpeedSq
+            } else {
+                aMove.endSpeedSq = 0.0
             }
-            var kEndSpeedSq = 0.0
-            for (aMove in move.actuatorMoves) {
-                val next = aMove.next
-                if (next != null && next.distance > 0) {
-                    aMove.endSpeedSq = next.startSpeedSq
-                    kEndSpeedSq += next.startSpeedSq
-                }
-                // TODO: the actuator end speeds need to be aligned to match overall speed proportion.
-            }
-
-            move.endSpeedSq = kEndSpeedSq
-            move.startSpeedSq = (kEndSpeedSq + 2.0 * move.distance * move.speeds.accel)
-                .coerceAtMost(move.speeds.speed.squared())
-                .coerceAtMost(move.maxJunctionSpeedSq)
-
-            endSpeed += move.endSpeedSq * move.distance
-            startSpeedSq += move.startSpeedSq * move.distance
+            // TODO: the actuator end speeds need to be aligned to match overall speed proportion.
         }
 
-        // Align the speeds to sync the axis.
-        for (move in plan.kinMoves) {
+//        move.endSpeedSq = kEndSpeedSq
+//        move.startSpeedSq = (kEndSpeedSq + 2.0 * move.distance * move.speeds.accel)
+//            .coerceAtMost(move.speeds.speed.squared())
+//            .coerceAtMost(move.maxJunctionSpeedSq)
+//
+//        endSpeed += move.endSpeedSq * move.distance
+//        startSpeedSq += move.startSpeedSq * move.distance
 
-        }
+      // Align the speeds to sync the axis.
+//        for (move in plan.kinMoves) {
+//
+//        }
     }
 
     private fun outputMove(startTime: Double, move: MovePlan): MachineTime {
@@ -304,52 +295,59 @@ class MotionPlannerImpl(val config: MotionPlannerConfig): MotionPlanner, PartLif
     }
 }
 
-private fun LinearSpeeds.scale(scale: Double) = LinearSpeeds(
-    speed = speed * scale,
-    accel = accel * scale,
-    minCruiseRatio = minCruiseRatio,
-    squareCornerVelocity = squareCornerVelocity,
-)
-
-private fun LinearSpeeds.limit(speeds: LinearSpeeds) {
-    speed = speed.coerceAtMost(speeds.speed)
-    accel = accel.coerceAtMost(speeds.accel)
-    minCruiseRatio = minCruiseRatio.coerceAtLeast(speeds.minCruiseRatio)
-    squareCornerVelocity = squareCornerVelocity.coerceAtMost(speeds.squareCornerVelocity)
+data class MoveSpeeds(
+    /** Max move speed per distance to travel. To easier apply the speeds among actuators.
+     * speed = speedPerMm * distance
+     * Also the duration of the move in seconds = 1/speedPerMm.
+     */
+    val speedPerMm: Double,
+    /** Move acceleration per distance to travel. To easier apply the speeds among actuators.
+     * accel = accelPerMm * distance
+     */
+    val accelPerMm: Double,
+    val squareCornerVelocity: Double,
+    val minCruiseRatio: Double)
+{
+    fun limitTo(speeds: MoveSpeeds) = MoveSpeeds(
+       speedPerMm = speedPerMm.coerceAtMost(speeds.speedPerMm),
+       accelPerMm = accelPerMm.coerceAtMost(speeds.accelPerMm),
+       squareCornerVelocity = squareCornerVelocity,
+       minCruiseRatio = minCruiseRatio.coerceAtMost(speeds.minCruiseRatio),
+    )
+    companion object {
+        fun unlimited() = MoveSpeeds(
+            speedPerMm = Double.MAX_VALUE,
+            accelPerMm = Double.MAX_VALUE,
+            squareCornerVelocity = Double.MAX_VALUE,
+            minCruiseRatio = 1.0,
+        )
+    }
 }
 
 /** Storage class for planning a single move. */
 data class MovePlan(
-    var kinMoves: List<MovePlanKin>,
+    val actuatorMoves: List<MovePlanActuator>,
+    // Actuator moves, split by kinetic groups.
+    val kinMoves: List<List<MovePlanActuator>>,
     var minDuration: Double = 0.0,
     var startTime: Double = 0.0,
     var endTime: Double = 0.0,
 )
 
-data class MovePlanKin(
-    val actuatorMoves: List<MovePlanActuator>,
-    var speeds: LinearSpeeds,
-    var distance: Double = 0.0,
-    var minDuration: Double = 0.0,
-    /** Maximum cornering speed squared, assuming can accelerate to max cruise speed. */
-    var maxJunctionSpeedSq: Double = 0.0,
-    /** Move start and end speeds. */
-    var startSpeedSq: Double = 0.0,
-    var endSpeedSq: Double = 0.0,
-)
-
 data class MovePlanActuator(
     val movePlan: MovePlan,
-    val kin: MovePlanKin,
     val actuator: MotionActuator,
     val startPosition: List<Double>,
     val endPosition: List<Double>,
+    val distance: Double,
+    var speeds: MoveSpeeds,
 ) {
-    var distance: Double = 0.0
     var previous: MovePlanActuator? = null
     var next: MovePlanActuator? = null
+
     /** Maximum cornering speed squared, assuming can accelerate to max cruise speed. */
     var maxJunctionSpeedSq: Double = 0.0
+
     /** Move start and end speeds. */
     var startSpeedSq: Double = 0.0
     var endSpeedSq: Double = 0.0

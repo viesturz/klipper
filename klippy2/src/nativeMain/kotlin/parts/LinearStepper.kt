@@ -15,7 +15,7 @@ import parts.kinematics.LinearAxis
 import parts.kinematics.LinearAxisConfiguration
 import parts.kinematics.LinearRange
 import parts.kinematics.LinearSpeeds
-import parts.kinematics.PositionType
+import parts.kinematics.MotionType
 import platform.linux.free
 
 fun MachineBuilder.LinearStepper(
@@ -64,7 +64,7 @@ private class StepperImpl(
     var _speed: Double = 0.0
     var _time: Double = 0.0
     override val size = 1
-    override val positionTypes = listOf(PositionType.LINEAR)
+    override val positionTypes = listOf(MotionType.LINEAR)
     override var commandedPosition: List<Double>
         get() = _position
         set(value) { _position = value }

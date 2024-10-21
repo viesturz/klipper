@@ -35,8 +35,8 @@ enum class HomingDirection {
 data class LinearSpeeds(
     var speed: Double = Double.MAX_VALUE,
     var accel: Double = Double.MAX_VALUE,
-    var minCruiseRatio: Double = 0.5,
     var squareCornerVelocity: Double = 5.0,
+    var minCruiseRatio: Double = 0.5,
 )
 
 /** Add additional constraints to the axis */
@@ -49,15 +49,6 @@ fun CombineAxis(vararg axis: LinearAxis): LinearAxis {
     return axis[0]
 }
 
-enum class KinematicsType {
-    NONE,
-    COREXY,
-    DELTA,
-    POLAR,
-}
-
-data class Kinematics(val axis: List<LinearAxis>, val type: KinematicsType)
-
 fun CoreXYKinematics(
     a: LinearAxis,
     b: LinearAxis,
@@ -67,10 +58,6 @@ fun CoreXYKinematics(
     yHoming: Homing,
     xSpeed: LinearSpeeds? = null,
     ySpeed: LinearSpeeds? = null,
-): Kinematics {
-//    return Kinematics(
-//        val xAxis =
-//
-//        axis = mapOf('x' to xAxis, 'y' to yAxis)
-    return Kinematics(axis = listOf(a, b), type = KinematicsType.COREXY)
+): MotionActuator {
+    TODO("Implement this")
 }

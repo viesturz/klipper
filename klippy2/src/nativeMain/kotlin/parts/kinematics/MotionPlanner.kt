@@ -50,7 +50,7 @@ interface MotionPlanner {
  *  Which means that the speed will be distributed and junction speeds estimated jointly. */
 data class KinMove(val axis: String, val position: Position, var speed: Double?)
 
-enum class PositionType {
+enum class MotionType {
     OTHER,
     LINEAR,
     ROTATION,
@@ -61,7 +61,7 @@ enum class PositionType {
 interface MotionActuator {
     // Number of coordinates
     val size: Int
-    val positionTypes: List<PositionType>
+    val positionTypes: List<MotionType>
     var commandedPosition: List<Double>
 
     /** Check move validity and return speed restrictions for the move. */

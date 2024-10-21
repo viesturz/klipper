@@ -36,8 +36,6 @@ class MotionPlannerImplTest {
         val results = planner.tryPlan(0.0, listOf(cmd), true)
 
         assertEquals(1, results?.size)
-
-
     }
 
     @Test
@@ -49,9 +47,8 @@ class MotionPlannerImplTest {
 
         assertEquals(queue.plannedCommands.size, 1)
         val cmd = queue.plannedCommands[0] as MovePlan
-        assertEquals(1, cmd.kinMoves.size)
-        assertEquals(1, cmd.kinMoves[0].actuatorMoves.size)
-        val move = cmd.kinMoves[0].actuatorMoves[0]
+        assertEquals(1, cmd.actuatorMoves.size)
+        val move = cmd.actuatorMoves[0]
         assertEquals(listOf(0.0,0.0), move.startPosition)
         assertEquals(listOf(10.0,0.0), move.endPosition)
     }
@@ -99,7 +96,7 @@ class FakeQueue: CommandQueue {
 class FakeActuator(
     override val size: Int = 1,
     var speeds: LinearSpeeds = LinearSpeeds(100.0, 100.0),
-    override val positionTypes: List<PositionType> = List(size) { PositionType.LINEAR},
+    override val positionTypes: List<MotionType> = List(size) { MotionType.LINEAR},
     override var commandedPosition: List<Double> = List(size) { 0.0 }
 ) : MotionActuator {
     val moves = ArrayList<Move>()
