@@ -112,7 +112,8 @@ class JunctionSpeedTest {
 
 }
 
-fun assertEquals(expected: Double, actual: Double, precision: Double) {
+fun assertEquals(expected: Double, actual: Double, precision: Double, message: String? = null) {
     val delta = (expected - actual).absoluteValue
-    assertTrue(delta <= precision, "Expected $expected, got $actual, delta $delta > precision $precision")
+    val m = message ?: "Failed"
+    assertTrue(delta <= precision, "$m expected $expected, got $actual, delta $delta > precision $precision")
 }

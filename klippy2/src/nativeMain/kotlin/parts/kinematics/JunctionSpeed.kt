@@ -14,7 +14,8 @@ fun calculateJunctionSpeedSq(
     val nextDistance = nextVector.magnitude()
     val prevAccel = prevSpeeds.accelPerMm * prevDistance
     val nextAccel = nextSpeeds.accelPerMm * nextDistance
-    if (prevDistance == 0.0 || nextDistance == 0.0) return min(prevSpeeds.squareCornerVelocity, nextSpeeds.squareCornerVelocity).squared()
+    // TODO: add instantaneous speed change.
+    if (prevDistance == 0.0 || nextDistance == 0.0) return 0.0
     val straightSpeed = min(prevSpeeds.speedPerMm*prevDistance, nextSpeeds.speedPerMm*nextDistance).squared()
     val cosTheta = dotProduct(prevVector, nextVector) / (prevDistance * nextDistance)
     if (cosTheta > 0.999999) {
@@ -24,7 +25,7 @@ fun calculateJunctionSpeedSq(
         // 180 flip
         return 0.0
     }
-    // TODO: lifed off from toolhead.py, validate this.
+    // lifed off from toolhead.py
     val sinThetaD2 = sqrt(0.5*(1.0+cosTheta))
     val R_jd = sinThetaD2 / (1.0 - sinThetaD2)
     // Approximated circle must contact moves no further away than mid-move

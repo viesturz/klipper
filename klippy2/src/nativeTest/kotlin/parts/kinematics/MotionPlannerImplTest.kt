@@ -15,7 +15,7 @@ class MotionPlannerImplTest {
 
     @Test
     fun testMinDuration() {
-        config.axis('x', FakeActuator(speeds = LinearSpeeds(5.0, 1.0)))
+        config.axis('x', MotionActuatorFake(1, speeds = LinearSpeeds(5.0, 1.0)))
         val planner = MotionPlannerImpl(config)
 
         planner.move(queue, KinMove(axis = "x", position = listOf(10.0), speed = null))
@@ -27,7 +27,7 @@ class MotionPlannerImplTest {
 
     @Test
     fun testMovePlan() {
-        config.axis('x', FakeActuator(speeds = LinearSpeeds(5.0, 1.0)))
+        config.axis('x', MotionActuatorFake(1, speeds = LinearSpeeds(5.0, 1.0)))
         val planner = MotionPlannerImpl(config)
         planner.move(queue, KinMove(axis = "x", position = listOf(10.0), speed = null))
         assertEquals(1, queue.plannedCommands.size)
@@ -40,7 +40,7 @@ class MotionPlannerImplTest {
 
     @Test
     fun testNotAllAxis() {
-        config.axis("xy", FakeActuator(size = 2, speeds = LinearSpeeds(5.0, 1.0)))
+        config.axis("xy", MotionActuatorFake(size = 2, speeds = LinearSpeeds(5.0, 1.0)))
         val planner = MotionPlannerImpl(config)
 
         planner.move(queue, KinMove(axis = "x", position = listOf(10.0), speed = null))
@@ -91,25 +91,4 @@ class FakeQueue: CommandQueue {
     }
 
     override suspend fun flush() = 0.0
-}
-
-class FakeActuator(
-    override val size: Int = 1,
-    var speeds: LinearSpeeds = LinearSpeeds(100.0, 100.0),
-    override val positionTypes: List<MotionType> = List(size) { MotionType.LINEAR},
-    override var commandedPosition: List<Double> = List(size) { 0.0 }
-) : MotionActuator {
-    val moves = ArrayList<Move>()
-
-    data class Move(val time: MachineTime, val position: List<Double>, val speed: Double)
-    override fun checkMove(start: List<Double>, end: List<Double>) = speeds
-    override fun initializePosition(time: MachineTime, position: List<Double>) {
-        // Nothing here.
-    }
-    override fun moveTo(endTime: MachineTime, endPosition: List<Double>, endSpeed: Double) {
-        moves.add(Move(endTime, endPosition, endSpeed))
-    }
-    override fun flush(time: MachineTime) {
-        // Nothing here
-    }
 }

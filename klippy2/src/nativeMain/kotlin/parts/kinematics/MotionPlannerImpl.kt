@@ -6,9 +6,6 @@ import machine.CommandQueue
 import machine.Planner
 import machine.PartLifecycle
 import utils.distanceTo
-import utils.magnitude
-import utils.sqrt
-import utils.squared
 import kotlin.math.abs
 
 /**
@@ -71,6 +68,7 @@ class MotionPlannerImpl(val config: MotionPlannerConfig) : MotionPlanner, PartLi
     override fun move(queue: CommandQueue, vararg moves: KinMove) {
         if (moves.isEmpty()) return
         val plan = createPlan(moves)
+        plan.calcJunctionSpeed()
         if (plan.minDuration == 0.0) {
             logger.info { "Ignoring zero distance move" }
             return
@@ -160,56 +158,20 @@ class MotionPlannerImpl(val config: MotionPlannerConfig) : MotionPlanner, PartLi
                         squareCornerVelocity = aSpeeds.squareCornerVelocity,
                     )
                 val actuatorPlan = MovePlanActuator(
-                    movePlan = plan,
+                    move = plan,
                     actuator = actuator,
                     speeds = aMoveSpeeds,
                     startPosition = startPosition,
                     endPosition = endPosition,
                     distance = distance,
                 )
+                actuatorPlan.previous = actuatorLastMove[actuator]
                 actuators.add(actuatorPlan)
                 kActuatorMoves.add(actuatorPlan)
             }
             kinMoves.add(kActuatorMoves)
         }
-
-        // Find common minimum speed for all moves.
-        val commonSpeeds = actuators.fold(MoveSpeeds.unlimited()) { acc, act -> acc.limitTo(act.speeds) }
-        if (commonSpeeds.speedPerMm > 0) {
-            plan.minDuration = 1.0/commonSpeeds.speedPerMm
-        }
-        for (aMove in actuators) {
-            aMove.speeds = aMove.speeds.limitTo(commonSpeeds)
-        }
-        // Compute the junction speeds.
-        for (kMove in kinMoves) {
-            calcMaxJunctionSpeed(kMove)
-        }
         return plan
-    }
-
-    /** Calculate maximum junction speed for a kin move. */
-    private fun calcMaxJunctionSpeed(actuatorMoves: List<MovePlanActuator>) {
-        val v1 = ArrayList<Double>(2)
-        val v2 = ArrayList<Double>(2)
-        val prevMoveSpeeds = MoveSpeeds.unlimited()
-        val nextMoveSpeeds = MoveSpeeds.unlimited()
-        for (aMove in actuatorMoves) {
-            v2.addAll(aMove.startPosition.zip(aMove.endPosition) { s, e -> e - s })
-            val prev = aMove.previous
-            if (prev != null && prev.distance > 0.0) {
-                v1.addAll(prev.startPosition.zip(aMove.startPosition) { s, e -> e - s })
-                prevMoveSpeeds.limitTo(prev.speeds)
-                nextMoveSpeeds.limitTo(aMove.speeds)
-            } else {
-                v1.addAll(aMove.startPosition)
-            }
-        }
-        val distance = v2.magnitude()
-        val maxJunctionSpeedPerMm = calculateJunctionSpeedSq(v1, v2, prevMoveSpeeds, nextMoveSpeeds).sqrt() / distance
-        for (aMove in actuatorMoves) {
-            aMove.maxJunctionSpeedSq = (maxJunctionSpeedPerMm * aMove.distance).squared()
-        }
     }
 
     private fun linkMovePlan(plan: MovePlan) {
@@ -225,41 +187,12 @@ class MotionPlannerImpl(val config: MotionPlannerConfig) : MotionPlanner, PartLi
     /** Calculate end speeds for each move assuming full stop at the end of the moves.
      *  Return the number of moves that are not speed limited by the stopping. */
     private fun calculateEndSpeeds(cmds: List<MovePlan>): Int {
+        // TODO: use the move tree, not the list.
         for (index in cmds.indices.reversed()) {
             val cmd = cmds[index]
-            calcSpeedsBackwards(cmd)
+            cmd.calcSpeedsBackwards()
         }
         return 0
-    }
-
-    /** Calculate junction speeds for the move, processing backwards from end to start. */
-    internal fun calcSpeedsBackwards(plan: MovePlan) {
-        var endSpeed = 1e10
-        var startSpeed = 1e10
-        var endSpeedSq = 0.0
-        for (aMove in plan.actuatorMoves) {
-            val next = aMove.next
-            if (next != null && next.distance > 0) {
-                aMove.endSpeedSq = next.startSpeedSq
-                endSpeedSq += next.startSpeedSq
-            } else {
-                aMove.endSpeedSq = 0.0
-            }
-            // TODO: the actuator end speeds need to be aligned to match overall speed proportion.
-        }
-
-//        move.endSpeedSq = kEndSpeedSq
-//        move.startSpeedSq = (kEndSpeedSq + 2.0 * move.distance * move.speeds.accel)
-//            .coerceAtMost(move.speeds.speed.squared())
-//            .coerceAtMost(move.maxJunctionSpeedSq)
-//
-//        endSpeed += move.endSpeedSq * move.distance
-//        startSpeedSq += move.startSpeedSq * move.distance
-
-      // Align the speeds to sync the axis.
-//        for (move in plan.kinMoves) {
-//
-//        }
     }
 
     private fun outputMove(startTime: Double, move: MovePlan): MachineTime {
@@ -293,64 +226,6 @@ class MotionPlannerImpl(val config: MotionPlannerConfig) : MotionPlanner, PartLi
 //        plan.motion.moveTo(plan.endTime, plan.endPosition, plan.endSpeed)
 //        // axis.flush(time + totalDuration)
     }
-}
-
-data class MoveSpeeds(
-    /** Max move speed per distance to travel. To easier apply the speeds among actuators.
-     * speed = speedPerMm * distance
-     * Also the duration of the move in seconds = 1/speedPerMm.
-     */
-    val speedPerMm: Double,
-    /** Move acceleration per distance to travel. To easier apply the speeds among actuators.
-     * accel = accelPerMm * distance
-     */
-    val accelPerMm: Double,
-    val squareCornerVelocity: Double,
-    val minCruiseRatio: Double)
-{
-    fun limitTo(speeds: MoveSpeeds) = MoveSpeeds(
-       speedPerMm = speedPerMm.coerceAtMost(speeds.speedPerMm),
-       accelPerMm = accelPerMm.coerceAtMost(speeds.accelPerMm),
-       squareCornerVelocity = squareCornerVelocity,
-       minCruiseRatio = minCruiseRatio.coerceAtMost(speeds.minCruiseRatio),
-    )
-    companion object {
-        fun unlimited() = MoveSpeeds(
-            speedPerMm = Double.MAX_VALUE,
-            accelPerMm = Double.MAX_VALUE,
-            squareCornerVelocity = Double.MAX_VALUE,
-            minCruiseRatio = 1.0,
-        )
-    }
-}
-
-/** Storage class for planning a single move. */
-data class MovePlan(
-    val actuatorMoves: List<MovePlanActuator>,
-    // Actuator moves, split by kinetic groups.
-    val kinMoves: List<List<MovePlanActuator>>,
-    var minDuration: Double = 0.0,
-    var startTime: Double = 0.0,
-    var endTime: Double = 0.0,
-)
-
-data class MovePlanActuator(
-    val movePlan: MovePlan,
-    val actuator: MotionActuator,
-    val startPosition: List<Double>,
-    val endPosition: List<Double>,
-    val distance: Double,
-    var speeds: MoveSpeeds,
-) {
-    var previous: MovePlanActuator? = null
-    var next: MovePlanActuator? = null
-
-    /** Maximum cornering speed squared, assuming can accelerate to max cruise speed. */
-    var maxJunctionSpeedSq: Double = 0.0
-
-    /** Move start and end speeds. */
-    var startSpeedSq: Double = 0.0
-    var endSpeedSq: Double = 0.0
 }
 
 //val MOVE_BATCH_TIME = 0.500
