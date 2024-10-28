@@ -1,7 +1,9 @@
 package parts.kinematics
 
 import MachineTime
+import utils.distanceTo
 import utils.magnitude
+import utils.moveBy
 import utils.sqrt
 import utils.squared
 
@@ -154,6 +156,36 @@ data class MovePlan(
         cruiseDuration = cruiseDistPerMm / cruiseSpeedPerMm
         decelDuration = decelDistPerMm / ((endSpeedPerMm + cruiseSpeedPerMm) * 0.5)
         this.endTime = startTime + accelDuration + cruiseDuration + decelDuration
-        println("accel=$accel, cruise=$cruiseDistPerMm, decel=$decelDistPerMm")
+    }
+
+    fun writeMove() {
+        for(aMove in actuatorMoves) {
+            val distance = aMove.startPosition.distanceTo(aMove.endPosition)
+            if (distance == 0.0) continue
+            val invD = 1.0 / distance
+            val direction = aMove.endPosition.zip(aMove.startPosition) { s, e -> (e - s) * invD }
+            if (accelDuration > 0) {
+                aMove.actuator.moveTo(
+                    startTime,startTime + accelDuration,
+                    startSpeedPerMm * distance,
+                    cruiseSpeedPerMm * distance,
+                    aMove.startPosition.moveBy(direction,accelDistPerMm))
+            }
+            if (cruiseDuration > 0) {
+                aMove.actuator.moveTo(
+                    startTime + accelDuration, endTime - decelDuration,
+                    cruiseSpeedPerMm * distance,
+                    cruiseSpeedPerMm * distance,
+                    aMove.endPosition.moveBy(direction,-decelDistPerMm))
+            }
+            if (decelDuration > 0) {
+                aMove.actuator.moveTo(
+                    endTime - decelDuration, endTime,
+                    cruiseSpeedPerMm * distance,
+                    endSpeedPerMm * distance,
+                    aMove.endPosition)
+            }
+        }
     }
 }
+

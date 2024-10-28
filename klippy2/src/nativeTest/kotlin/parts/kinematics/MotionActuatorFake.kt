@@ -14,7 +14,14 @@ class MotionActuatorFake(
     override fun initializePosition(time: MachineTime, position: List<Double>) {
         commandedPosition = position
     }
-    override fun moveTo(endTime: MachineTime, endPosition: List<Double>, endSpeed: Double) {
+
+    override fun moveTo(
+        startTime: MachineTime,
+        endTime: MachineTime,
+        startSpeed: Double,
+        endSpeed: Double,
+        endPosition: List<Double>
+    ) {
         moves.add(MoveHistory(endTime, endPosition, endSpeed))
     }
     override fun flush(time: MachineTime) {}

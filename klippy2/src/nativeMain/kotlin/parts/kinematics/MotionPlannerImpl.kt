@@ -196,35 +196,9 @@ class MotionPlannerImpl(val config: MotionPlannerConfig) : MotionPlanner, PartLi
     }
 
     private fun outputMove(startTime: Double, move: MovePlan): MachineTime {
-        return startTime
-    }
-
-    private fun outputActuator(plan: MovePlan, aPlan: MovePlanActuator) {
-        val motion = aPlan.actuator
-        if (aPlan.startPosition != motion.commandedPosition) {
-            motion.initializePosition(plan.startTime, aPlan.startPosition)
-        }
-//
-//        // Do a basic trapezoid
-//        val distance = aPlan.distance
-//        val duration = plan.endTime - plan.startTime
-//        val accel = aPlan.accel
-//        val speed = min(aPlan.speed, distance / accel)
-//        val accelDuration = speed / accel
-//        val accelDist = accelDuration * accel * 0.5
-//        val coastDist = distance.absoluteValue - accelDist * 2
-//        plan.motion.moveTo(
-//            plan.startTime + accelDuration,
-//            plan.startPosition + distance.sign * accelDist,
-//            speed
-//        )
-//        plan.motion.moveTo(
-//            plan.endTime - accelDuration,
-//            plan.endPosition - distance.sign * accelDist,
-//            speed
-//        )
-//        plan.motion.moveTo(plan.endTime, plan.endPosition, plan.endSpeed)
-//        // axis.flush(time + totalDuration)
+        move.planMove(startTime)
+        move.writeMove()
+        return move.endTime
     }
 }
 
