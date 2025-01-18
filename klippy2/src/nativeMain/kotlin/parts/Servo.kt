@@ -30,9 +30,9 @@ fun MachineBuilder.Servo(
 
 interface Servo: MachinePart {
     val angle: Double
-    /** Queues an angle change, the reported ange with change immediately. */
+    /** Queues an angle change, the reported angle changes immediately. */
     fun queueAngle(queue: CommandQueue, angle: Double)
-    /** Sets speed immediately. */
+    /** Sets angle immediately. */
     fun setAngle(angle: Double)
 }
 

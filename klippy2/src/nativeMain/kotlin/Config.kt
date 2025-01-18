@@ -156,13 +156,13 @@ fun MachineBuilder.buildMachine() {
 
     val potSensor = PotSensor(
         name = "POT",
-        pin = mcu.bedTemp.copy(reportInterval = 0.1, sampleCount = 6u),
+        pin = mcu.bedTemp.copy(reportInterval = 0.03, sampleCount = 6u),
         minResistance = 500.ohms,
         maxResistance = 9_500.ohms,
     )
     val servo = Servo(
         name = "Servo",
-        pin = mcu.zProbeServo.copy(hardwarePwm = false, cycleTime = 0.01),
+        pin = mcu.zProbeServo.copy(hardwarePwm = true, cycleTime = 0.01),
         minPulse = 0.000_5,
         maxPulse = 0.002_3,
         minAngle = 0.0,

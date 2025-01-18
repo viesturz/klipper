@@ -75,7 +75,6 @@ private class HeaterImpl(
 
     override suspend fun onStart(runtime: MachineRuntime) {
         runtime.reactor.launch {
-            setTarget(50.celsius)
             loop.runLoop() }
     }
 
