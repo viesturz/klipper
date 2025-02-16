@@ -79,18 +79,18 @@ class MotionPlannerImpl(val config: MotionPlannerConfig) : MotionPlanner, PartLi
 
     override fun tryPlan(
         startTime: MachineTime,
-        cmds: List<MovePlan>,
+        commands: List<MovePlan>,
         force: Boolean
     ): List<MachineTime>? {
-        var movesReady = calculateEndSpeeds(cmds)
-        if (force) movesReady = cmds.size
+        var movesReady = calculateEndSpeeds(commands)
+        if (force) movesReady = commands.size
 
         if (movesReady == 0) return null
         val result = ArrayList<MachineTime>(movesReady)
 
         var time = startTime
         for (i in 0..<movesReady) {
-            time = outputMove(time, cmds[i])
+            time = outputMove(time, commands[i])
             result.add(time)
         }
         return result
@@ -136,9 +136,9 @@ class MotionPlannerImpl(val config: MotionPlannerConfig) : MotionPlanner, PartLi
                     if (actuators.find { it.actuator == actuator } != null) continue
                     // Build a full set of axis for this actuator.
                     for (actuatorIndex in axisMapping.actuatorAxis.indices) {
-                        val axis = axisMapping.actuatorAxis[actuatorIndex]
+                        val axis1 = axisMapping.actuatorAxis[actuatorIndex]
                         val start = startPosition[actuatorIndex]
-                        val moveIndex = kMove.axis.indexOf(axis)
+                        val moveIndex = kMove.axis.indexOf(axis1)
                         val end = if (moveIndex == -1) {
                             // No position specified, use existing position.
                             start
@@ -187,12 +187,14 @@ class MotionPlannerImpl(val config: MotionPlannerConfig) : MotionPlanner, PartLi
     /** Calculate end speeds for each move assuming full stop at the end of the moves.
      *  Return the number of moves that are not speed limited by the stopping. */
     private fun calculateEndSpeeds(cmds: List<MovePlan>): Int {
+        val movesReady = 0
         // TODO: use the move tree, not the list.
         for (index in cmds.indices.reversed()) {
             val cmd = cmds[index]
-            cmd.calcSpeedsBackwards()
+            val status = cmd.calcSpeedsBackwards()
+            if (status == MovePlan.MoveSpeedStatus.NOT_LIMITED) movesReady.coerceAtLeast(index + 1)
         }
-        return 0
+        return movesReady
     }
 
     private fun outputMove(startTime: Double, move: MovePlan): MachineTime {

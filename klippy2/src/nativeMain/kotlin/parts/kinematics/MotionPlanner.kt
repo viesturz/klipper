@@ -6,6 +6,49 @@ import MachineBuilder
 
 typealias Position = List<Double>
 
+fun MachineBuilder.MotionPlanner(block: MotionPlannerConfig.()-> Unit): MotionPlanner {
+    val config = MotionPlannerConfig()
+    block(config)
+    return MotionPlannerImpl(config).also{addPart(it)}
+}
+
+class MotionPlannerConfig {
+    val mapping = HashMap<String, MotionActuator>()
+    fun axis(name: Char, motion: MotionActuator) {
+        mapping[name.toString()] = motion
+    }
+    fun axis(name: String, value: MotionActuator) {
+        mapping[name] = value
+    }
+}
+
+/** A motion actuator.
+ * PositionT can be either Double or DoubleArray. */
+interface MotionActuator {
+    // Number of coordinates
+    val size: Int
+    val positionTypes: List<MotionType>
+    /** The position requested by the commands.  */
+    var commandedPosition: List<Double>
+
+    /** Check move validity and return speed restrictions for the move. */
+    fun checkMove(start: List<Double>, end: List<Double>): LinearSpeeds
+
+    /** Sets a homed position for the actuator. Should not perform any moves. */
+    fun initializePosition(time: MachineTime, position: List<Double>)
+    /* A constant-acceleration move to a new position. */
+    fun moveTo(startTime: MachineTime, endTime: MachineTime,
+               startSpeed: Double, endSpeed: Double,
+               endPosition: List<Double>)
+    fun flush(time: MachineTime)
+}
+
+enum class MotionType {
+    OTHER,
+    LINEAR,
+    ROTATION,
+}
+
 interface MotionPlanner {
     /** Currently configured axis, uppercase letters. */
     val axis: String
@@ -49,46 +92,3 @@ interface MotionPlanner {
 /** A move where all the axis are kinematically linked and orthogonal to each other.
  *  Which means that the speed will be distributed and junction speeds estimated jointly. */
 data class KinMove(val axis: String, val position: Position, var speed: Double?)
-
-enum class MotionType {
-    OTHER,
-    LINEAR,
-    ROTATION,
-}
-
-/** A motion actuator.
- * PositionT can be either Double or DoubleArray. */
-interface MotionActuator {
-    // Number of coordinates
-    val size: Int
-    val positionTypes: List<MotionType>
-    /** The position requested by the commands.  */
-    var commandedPosition: List<Double>
-
-    /** Check move validity and return speed restrictions for the move. */
-    fun checkMove(start: List<Double>, end: List<Double>): LinearSpeeds
-
-    /** Sets a homed position for the actuator. Should not perform any moves. */
-    fun initializePosition(time: MachineTime, position: List<Double>)
-    /* A constant-acceleration move to a new position. */
-    fun moveTo(startTime: MachineTime, endTime: MachineTime,
-               startSpeed: Double, endSpeed: Double,
-               endPosition: List<Double>)
-    fun flush(time: MachineTime)
-}
-
-fun MachineBuilder.MotionPlanner(block: MotionPlannerConfig.()-> Unit): MotionPlanner {
-    val config = MotionPlannerConfig()
-    block(config)
-    return MotionPlannerImpl(config).also{addPart(it)}
-}
-
-class MotionPlannerConfig {
-    val mapping = HashMap<String, MotionActuator>()
-    fun axis(name: Char, motion: MotionActuator) {
-        mapping[name.toString()] = motion
-    }
-    fun axis(name: String, value: MotionActuator) {
-        mapping[name] = value
-    }
-}

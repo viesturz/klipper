@@ -117,7 +117,7 @@ data class MovePlan(
     }
 
     /** Calculate max start and end speeds for the move, processing backwards from end to start. */
-    fun calcSpeedsBackwards() {
+    fun calcSpeedsBackwards(): MoveSpeedStatus {
         endSpeedPerMm = actuatorMoves.minOfOrNull { aMove ->
             val next = aMove.next
             when {
@@ -125,8 +125,15 @@ data class MovePlan(
             next == null -> 0.0
             else -> next.move.startSpeedPerMm * next.distance / aMove.distance
         }} ?: 0.0
-        startSpeedPerMm = maxJunctionSpeedPerMm.coerceAtMost((endSpeedPerMm.squared() + speeds.accelPerMm).sqrt())
+        val maxJunctionSpToGetEndSpeedPerMm = (endSpeedPerMm.squared() + speeds.accelPerMm).sqrt()
+        if (maxJunctionSpToGetEndSpeedPerMm < maxJunctionSpeedPerMm) {
+            startSpeedPerMm = maxJunctionSpToGetEndSpeedPerMm
+            return MoveSpeedStatus.END_SPEED_LIMITED
+        }
+        return MoveSpeedStatus.NOT_LIMITED
     }
+
+    enum class MoveSpeedStatus { NOT_LIMITED, END_SPEED_LIMITED  }
 
     /** Forward pass, limit the start and end speeds to what is achievable with the given
      * initial speed and acceleration.
