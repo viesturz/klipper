@@ -3,11 +3,11 @@ package parts
 import config.DigitalInPin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import machine.ActionBlock
-import machine.MachineBuilder
-import machine.MachinePart
-import machine.MachineRuntime
-import machine.PartLifecycle
+import ActionBlock
+import MachineBuilder
+import MachinePart
+import MachineRuntime
+import PartLifecycle
 
 fun MachineBuilder.Button(
     name: String,

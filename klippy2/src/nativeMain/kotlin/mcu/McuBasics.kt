@@ -1,4 +1,4 @@
-package mcu.impl
+package mcu
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 

@@ -2,8 +2,8 @@ package parts.drivers
 
 import MachineTime
 import config.DigitalOutPin
-import machine.MachineBuilder
-import machine.PartLifecycle
+import MachineBuilder
+import PartLifecycle
 import kotlin.math.min
 import kotlin.math.sqrt
 

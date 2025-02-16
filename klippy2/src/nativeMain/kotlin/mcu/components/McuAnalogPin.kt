@@ -2,14 +2,14 @@ package mcu.components
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.ConfigurationException
-import mcu.AnalogInPin
-import mcu.Mcu
-import mcu.impl.McuComponent
-import mcu.impl.McuConfigure
-import mcu.impl.McuObjectResponse
-import mcu.impl.McuRuntime
-import mcu.impl.ObjectId
-import mcu.impl.ResponseParser
+import AnalogInPin
+import Mcu
+import mcu.McuComponent
+import mcu.McuConfigure
+import mcu.McuObjectResponse
+import mcu.McuRuntime
+import mcu.ObjectId
+import mcu.ResponseParser
 
 class McuAnalogPin(override val mcu: Mcu, val config: config.AnalogInPin, configure: McuConfigure): McuComponent,
     AnalogInPin {

@@ -1,4 +1,4 @@
-package mcu.impl
+package mcu
 
 import MachineDuration
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -6,7 +6,7 @@ import kotlinx.coroutines.delay
 import MachineTime
 import kotlinx.coroutines.launch
 import machine.Reactor
-import mcu.McuClock
+import McuClock
 import mcu.connection.CommandQueue
 import mcu.connection.McuConnection
 import kotlin.math.pow

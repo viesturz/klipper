@@ -6,10 +6,10 @@ import celsius
 import config.PID
 import io.github.oshai.kotlinlogging.KLogger
 import io.github.oshai.kotlinlogging.KotlinLogging
-import machine.MachineBuilder
-import machine.MachinePart
+import MachineBuilder
+import MachinePart
 import machine.CommandException
-import machine.PartLifecycle
+import PartLifecycle
 import machine.waitUntil
 import kotlin.math.PI
 import kotlin.math.absoluteValue

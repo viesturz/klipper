@@ -1,7 +1,7 @@
 package parts.kinematics
 
 import config.DigitalInPin
-import machine.MachineBuilder
+import MachineBuilder
 
 interface Trigger {
     val triggered: Boolean

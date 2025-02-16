@@ -9,15 +9,15 @@ import config.ValueSensor
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import machine.MachineBuilder
-import machine.MachineRuntime
-import machine.PartLifecycle
+import MachineBuilder
+import MachineRuntime
+import PartLifecycle
 import machine.waitUntil
 
 fun MachineBuilder.AdcTemperatureSensor(
-    name: String,
     pin: AnalogInPin,
     sensor: TemperatureCalibration,
+    name: String = defaultName("AdcTemperatureSensor"),
     minTemp: Temperature = 0.celsius,
     maxTemp: Temperature = 300.celsius,
 ): TemperatureSensor = AdcTemperatureSensorImpl(

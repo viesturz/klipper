@@ -13,18 +13,18 @@ import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import machine.CommandQueue
-import machine.MachineBuilder
-import machine.MachinePart
-import machine.MachineRuntime
+import MachineBuilder
+import MachinePart
+import MachineRuntime
 import machine.addLocal
-import machine.PartLifecycle
+import PartLifecycle
 import kotlin.math.absoluteValue
 import kotlin.math.sign
 
 fun MachineBuilder.Heater(
-    name: String,
     pin: DigitalOutPin,
     sensor: TemperatureSensor,
+    name: String = defaultName("Heater"),
     maxPower: Double = 1.0,
     stableDelta: Temperature = 1.celsius,
     control: config.TemperatureControl,

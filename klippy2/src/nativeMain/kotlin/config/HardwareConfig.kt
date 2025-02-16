@@ -13,6 +13,16 @@ data class CanbusConnection(val uid: String, val iface: String = "can0"): Connec
 
 data class McuConfig(val connection: Connection, val name: String)
 
+// Helper class to define MCU templates
+open class McuTemplate(val mcu: McuConfig) {
+    fun analogPin(pin: String)= AnalogInPin(mcu, pin)
+    fun digitalPin(pin: String)= DigitalInPin(mcu, pin)
+    fun digitalOutPin(pin: String, invert: Boolean = false) = DigitalOutPin(mcu, pin, invert)
+    fun analogOutPin(pin: String) = AnalogOutPin(mcu, pin)
+    fun stepperPins(enablePin: DigitalOutPin, stepPin: DigitalOutPin, dirPin: DigitalOutPin) = StepperPins(mcu, enablePin, stepPin, dirPin)
+    fun uartPins(rxPin: DigitalOutPin, txPin: DigitalOutPin, baudRate: Int = 40_000, pullup: Boolean = false) = UartPins(mcu, rxPin, txPin, baudRate, pullup)
+}
+
 // Base pin configs
 data class DigitalInPin(val mcu: McuConfig, val pin: String, val invert: Boolean = false, val pullup: Int = 0, val shared: Boolean = false)
 data class DigitalOutPin(val mcu: McuConfig,
@@ -77,13 +87,3 @@ data class UartPins(val mcu: McuConfig, val rxPin: DigitalOutPin, val txPin: Dig
 data class TmcAddressUartPins(val uartPins: UartPins, val address: Int)
 data class I2CPins(val mcu: McuConfig, val csPin: DigitalOutPin, val clkPin: DigitalOutPin, val mosiPin: DigitalOutPin, val misoPin: DigitalOutPin)
 data class SpiPins(val mcu: McuConfig, val csPin: DigitalOutPin, val clkPin: DigitalOutPin, val mosiPin: DigitalOutPin, val misoPin: DigitalOutPin)
-
-// Helper class to define MCU templates
-open class McuTemplate(val mcu: McuConfig) {
-    fun analogPin(pin: String)= AnalogInPin(mcu, pin)
-    fun digitalPin(pin: String)= DigitalInPin(mcu, pin)
-    fun digitalOutPin(pin: String, invert: Boolean = false) = DigitalOutPin(mcu, pin, invert)
-    fun analogOutPin(pin: String) = AnalogOutPin(mcu, pin)
-    fun stepperPins(enablePin: DigitalOutPin, stepPin: DigitalOutPin, dirPin: DigitalOutPin) = StepperPins(mcu, enablePin, stepPin, dirPin)
-    fun uartPins(rxPin: DigitalOutPin, txPin: DigitalOutPin, baudRate: Int = 40_000, pullup: Boolean = false) = UartPins(mcu, rxPin, txPin, baudRate, pullup)
-}

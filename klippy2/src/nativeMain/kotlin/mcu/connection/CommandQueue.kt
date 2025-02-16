@@ -9,12 +9,13 @@ import kotlinx.cinterop.toCValues
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
-import mcu.McuClock
-import mcu.impl.CommandBuilder
-import mcu.impl.GcWrapper
-import mcu.impl.McuResponse
-import mcu.impl.ObjectId
-import mcu.impl.ResponseParser
+import McuClock
+import chelper.steppersync_alloc
+import mcu.CommandBuilder
+import mcu.GcWrapper
+import mcu.McuResponse
+import mcu.ObjectId
+import mcu.ResponseParser
 import kotlin.time.Duration.Companion.seconds
 
 /** Queue for sending commands to MCU. */
@@ -81,10 +82,12 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
 
 @OptIn(ExperimentalForeignApi::class)
 class StepperSync(connection: McuConnection, stepQueues: List<StepQueueImpl>, moveCount: Int) {
-    val stepperSync = GcWrapper(chelper.steppersync_alloc(connection.serial.ptr,
+    val stepperSync = GcWrapper(
+        steppersync_alloc(connection.serial.ptr,
         stepQueues.map { it.stepcompress.ptr }.toCValues(),
         stepQueues.size,
-        moveCount)) {
+        moveCount)
+    ) {
         steppersync_free(it)
     }
 

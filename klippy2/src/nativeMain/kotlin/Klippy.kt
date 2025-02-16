@@ -7,7 +7,6 @@ import kotlinx.coroutines.runBlocking
 import logging.LogFormatter
 import logging.LogWriter
 import machine.ConfigurationException
-import machine.Machine
 import machine.InvalidGcodeException
 import machine.impl.MachineImpl
 

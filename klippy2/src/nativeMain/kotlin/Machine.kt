@@ -1,7 +1,10 @@
-package machine
-
 import config.McuConfig
-import mcu.McuSetup
+import kotlinx.coroutines.flow.StateFlow
+import machine.CommandQueue
+import machine.GCode
+import machine.GCodeHandler
+import machine.QueueManager
+import machine.Reactor
 
 typealias ActionBlock = suspend (m: MachineRuntime) -> Unit
 
@@ -10,6 +13,7 @@ typealias ActionBlock = suspend (m: MachineRuntime) -> Unit
 interface MachineBuilder
 {
     fun setupMcu(config: McuConfig): McuSetup
+    fun defaultName(className: String): String
     fun addPart(part: PartLifecycle)
     fun registerCommand(command: String, rawText: Boolean = false, handler: GCodeHandler)
     fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler)
@@ -17,11 +21,17 @@ interface MachineBuilder
 
 /** API available at the run time.  */
 interface MachineRuntime {
-    fun flushMoves(machineTime: Double)
     val parts: List<MachinePart>
     val reactor: Reactor
     val gCode: GCode
-    val queueManager: QueueManager
+
+    /** Start a new queue, starting as soon as possible. */
+    fun newQueue(): CommandQueue
+    /** Create a new queue that will be started on Join with another queue.
+     *  Aiming to complete together with the join point.
+     *  Note that if this queue takes longer than remaining commands in the target queue,
+     *  it may stall it until this queue completes. */
+    fun newBackdatingQueue(): CommandQueue
 }
 
 /** Base class for all parts. */
@@ -44,3 +54,27 @@ inline fun <reified PartType> MachineRuntime.getPartByName(name: String): PartTy
 
 /** Get a list of all parts implementing a specific API. */
 inline fun <reified PartApi> MachineRuntime.getPartsImplementing() = parts.filterIsInstance<PartApi>()
+
+interface Machine {
+    suspend fun start()
+    fun shutdown(reason: String)
+
+    val shutdownReason: String
+    val status: Map<String, String>
+    val state: StateFlow<State>
+    val queueManager: QueueManager
+    val gCode: GCode
+
+    enum class State {
+        /** New machine */
+        NEW,
+        /** The configuration is being established */
+        CONFIGURING,
+        /** The parts are starting. */
+        STARTING,
+        /** All parts report up and running. */
+        RUNNING,
+        STOPPING,
+        SHUTDOWN,
+    }
+}

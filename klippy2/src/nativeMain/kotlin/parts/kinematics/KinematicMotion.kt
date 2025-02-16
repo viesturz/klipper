@@ -1,11 +1,14 @@
 package parts.kinematics
 
 import MachineTime
+import chelper.cartesian_stepper_alloc
+import chelper.trapq_alloc
+import chelper.trapq_free
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.pointed
 import machine.ConfigurationException
 import mcu.connection.StepQueueImpl
-import mcu.impl.GcWrapper
+import mcu.GcWrapper
 import parts.LinearStepper
 import platform.linux.free
 import utils.distanceTo
@@ -16,10 +19,10 @@ private class KinematicMotion3(
     override val configuration: LinearAxisConfiguration,
 ) : LinearAxis {
     val kinematics = listOf(
-        GcWrapper(chelper.cartesian_stepper_alloc('x'.code.toByte())) { free(it) },
-        GcWrapper(chelper.cartesian_stepper_alloc('y'.code.toByte())) { free(it) },
-        GcWrapper(chelper.cartesian_stepper_alloc('z'.code.toByte())) { free(it) })
-    val trapq = GcWrapper(chelper.trapq_alloc()) { chelper.trapq_free(it) }
+        GcWrapper(cartesian_stepper_alloc('x'.code.toByte())) { free(it) },
+        GcWrapper(cartesian_stepper_alloc('y'.code.toByte())) { free(it) },
+        GcWrapper(cartesian_stepper_alloc('z'.code.toByte())) { free(it) })
+    val trapq = GcWrapper(trapq_alloc()) { trapq_free(it) }
     var _position: List<Double> = listOf(0.0, 0.0, 0.0)
     var _time: Double = 0.0
     override val size = 3

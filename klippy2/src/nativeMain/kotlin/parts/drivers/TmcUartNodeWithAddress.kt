@@ -3,7 +3,7 @@ package parts.drivers
 import MachineTime
 import config.TmcAddressUartPins
 import io.github.oshai.kotlinlogging.KotlinLogging
-import mcu.MessageBus
+import MessageBus
 import utils.crc8
 
 private val NODE_SYNC: UByte = 0x05u

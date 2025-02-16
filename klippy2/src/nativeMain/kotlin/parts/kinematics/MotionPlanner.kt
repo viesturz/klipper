@@ -2,7 +2,7 @@ package parts.kinematics
 
 import MachineTime
 import machine.CommandQueue
-import machine.MachineBuilder
+import MachineBuilder
 
 typealias Position = List<Double>
 

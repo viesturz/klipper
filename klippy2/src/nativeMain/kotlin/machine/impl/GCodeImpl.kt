@@ -10,7 +10,7 @@ import machine.GCodeHandler
 import machine.GCodeOutputSink
 import machine.GCodeRunner
 import machine.InvalidGcodeException
-import machine.MachineRuntime
+import MachineRuntime
 
 private val logger = KotlinLogging.logger("Gcode")
 

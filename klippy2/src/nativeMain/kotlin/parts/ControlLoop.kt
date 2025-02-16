@@ -3,9 +3,9 @@ package parts
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import machine.MachineBuilder
-import machine.MachineRuntime
-import machine.PartLifecycle
+import MachineBuilder
+import MachineRuntime
+import PartLifecycle
 
 fun MachineBuilder.ControlLoop(
     name: String,

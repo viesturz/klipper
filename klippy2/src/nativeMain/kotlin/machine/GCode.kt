@@ -1,7 +1,9 @@
 package machine
 
+import MachineRuntime
 import Temperature
 import celsius
+import getPartByName
 
 interface GCode {
     fun registerCommand(name: String, rawText: Boolean = false, code: GCodeHandler)

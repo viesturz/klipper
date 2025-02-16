@@ -1,4 +1,4 @@
-package mcu.impl
+package mcu
 
 import MachineDuration
 import config.McuConfig
@@ -14,13 +14,13 @@ import config.StepperPins
 import config.UartPins
 import machine.NeedsRestartException
 import machine.Reactor
-import mcu.Mcu
-import mcu.McuClock
-import mcu.McuSetup
-import mcu.McuState
-import mcu.PwmPin
-import mcu.StepperDriver
-import mcu.StepperMotor
+import Mcu
+import McuClock
+import McuSetup
+import McuState
+import PwmPin
+import StepperDriver
+import StepperMotor
 import mcu.components.McuAnalogPin
 import mcu.components.McuButton
 import mcu.components.McuDigitalPin
@@ -62,7 +62,7 @@ class McuSetupImpl(override val config: McuConfig, val connection: McuConnection
 
 /** Step 1 - API to configure each part. */
 class McuConfigureImpl(var cmd: Commands): McuConfigure {
-    internal var numIds:ObjectId = 0u
+    internal var numIds: ObjectId = 0u
     internal var reservedMoves: Int = 0
     internal val configCommands = ArrayList<UByteArray>()
     internal val initCommands = ArrayList<UByteArray>()
@@ -96,7 +96,9 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
 
     override fun configCommand(signature: String, block: CommandBuilder.()->Unit) { configCommands.add(cmd.build(signature, block)) }
     override fun initCommand(signature: String, block: CommandBuilder.()->Unit) { initCommands.add(cmd.build(signature, block)) }
-    override fun queryCommand(signature: String, block: CommandBuilder.(clock: McuClock32)->Unit) { queryCommands.add(QueryCommand(signature, block)) }
+    override fun queryCommand(signature: String, block: CommandBuilder.(clock: McuClock32)->Unit) { queryCommands.add(
+        QueryCommand(signature, block)
+    ) }
     override fun restartCommand(signature: String, block: CommandBuilder.()->Unit) { restartCommands.add(cmd.build(signature, block))}
 
     @Suppress("UNCHECKED_CAST")
@@ -140,7 +142,7 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         advanceStateOrAbort(McuState.RUNNING)
     }
 
-    private fun makeRuntime(reactor: Reactor) = object :McuRuntime {
+    private fun makeRuntime(reactor: Reactor) = object : McuRuntime {
         override val firmware: FirmwareConfig
             get() = connection.commands.identify
         override val reactor: Reactor
@@ -238,6 +240,7 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         get() = _state.value == McuState.RUNNING
 }
 
-data class ResponseConfig(val isConfig: Boolean, val crc: UInt, val isShutdown: Boolean, val moveCount: MoveQueueId): McuResponse
+data class ResponseConfig(val isConfig: Boolean, val crc: UInt, val isShutdown: Boolean, val moveCount: MoveQueueId):
+    McuResponse
 val responseConfigParser = ResponseParser("config is_config=%c crc=%u is_shutdown=%c move_count=%hu")
             { ResponseConfig(isConfig = parseB(), crc = parseU(), isShutdown = parseB(), moveCount = parseHU()) }

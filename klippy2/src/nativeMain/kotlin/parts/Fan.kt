@@ -4,12 +4,12 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
 import celsius
 import config.DigitalOutPin
-import machine.MachineBuilder
-import machine.MachinePart
-import machine.PartLifecycle
+import MachineBuilder
+import MachinePart
+import PartLifecycle
 
 fun MachineBuilder.Fan(
-    name: String,
+    name: String = defaultName("Fan"),
     maxPower: Double = 1.0,
     pin: DigitalOutPin
 ): Fan = FanImpl(name, maxPower, pin, this).also { addPart(it) }

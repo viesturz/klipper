@@ -1,4 +1,4 @@
-package mcu.impl
+package mcu
 
 import MachineDuration
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -43,7 +43,7 @@ data class FirmwareConfig @OptIn(ExperimentalSerializationApi::class) constructo
         config[name]?.long ?: default ?: throw RuntimeException("Missing MCU config $name")
     fun configString(name: String, default: String? = null): String =
         config[name]?.content ?: default ?: throw RuntimeException("Missing MCU config $name")
-    fun durationToTicks(duration: MachineDuration): McuClock32  = (clockFreq * duration).toUInt()
+    fun durationToTicks(duration: MachineDuration): McuClock32 = (clockFreq * duration).toUInt()
 
     fun enumerationIdToValue(name: String): Map<Int, String> = enumerationsIdToValue.getValue(name)
     fun enumerationValueToId(name: String): Map<String, Int> = enumerationsValueToId.getValue(name)

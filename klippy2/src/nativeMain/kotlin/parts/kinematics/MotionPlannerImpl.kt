@@ -4,7 +4,7 @@ import MachineTime
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
 import machine.Planner
-import machine.PartLifecycle
+import PartLifecycle
 import utils.distanceTo
 import kotlin.math.abs
 

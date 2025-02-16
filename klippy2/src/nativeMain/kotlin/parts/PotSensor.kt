@@ -6,14 +6,14 @@ import config.ValueSensor
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import machine.MachineBuilder
-import machine.MachineRuntime
-import machine.PartLifecycle
+import MachineBuilder
+import MachineRuntime
+import PartLifecycle
 import utils.format
 
 /** A potentiometer sensor. Returns a value in range 0 = minResistance, 1 = maxResistance. */
 fun MachineBuilder.PotSensor(
-    name: String,
+    name: String = defaultName("PotSensor"),
     pin: AnalogInPin,
     minResistance: Resistance,
     maxResistance: Resistance,

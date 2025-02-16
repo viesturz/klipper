@@ -3,17 +3,18 @@ package mcu.components
 import MachineTime
 import config.StepperPins
 import io.github.oshai.kotlinlogging.KotlinLogging
-import mcu.StepperDriver
-import mcu.StepperMotor
-import mcu.impl.McuComponent
-import mcu.impl.McuConfigure
-import mcu.impl.McuImpl
-import mcu.impl.McuObjectResponse
-import mcu.impl.McuRuntime
-import mcu.impl.ObjectId
-import mcu.impl.ResponseParser
+import StepperDriver
+import StepperMotor
+import mcu.McuComponent
+import mcu.McuConfigure
+import mcu.McuImpl
+import mcu.McuObjectResponse
+import mcu.McuRuntime
+import mcu.ObjectId
+import mcu.ResponseParser
 
-class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, override val driver: StepperDriver, configuration: McuConfigure) : StepperMotor, McuComponent {
+class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, override val driver: StepperDriver, configuration: McuConfigure) : StepperMotor,
+    McuComponent {
     val id = configuration.makeOid()
     override val stepQueue = configuration.makeStepQueue(id)
     private lateinit var runtime: McuRuntime
@@ -54,7 +55,8 @@ class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, overri
     }
 }
 
-data class ResponseStepperGetPosition(override val id: ObjectId, val time: MachineTime, val position: Long) : McuObjectResponse
+data class ResponseStepperGetPosition(override val id: ObjectId, val time: MachineTime, val position: Long) :
+    McuObjectResponse
 val responseStepperGetPositionParser = ResponseParser("stepper_position oid=%c pos=%i") {
     ResponseStepperGetPosition(parseC(), receiveTime, parseL())
 }

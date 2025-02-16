@@ -16,14 +16,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
 import machine.Reactor
-import mcu.McuClock
-import mcu.impl.Commands
-import mcu.impl.GcWrapper
-import mcu.impl.FirmwareConfig
-import mcu.impl.McuObjectResponse
-import mcu.impl.McuResponse
-import mcu.impl.ObjectId
-import mcu.impl.ResponseParser
+import McuClock
+import mcu.Commands
+import mcu.GcWrapper
+import mcu.FirmwareConfig
+import mcu.McuObjectResponse
+import mcu.McuResponse
+import mcu.ObjectId
+import mcu.ResponseParser
 import platform.posix.close
 import kotlin.concurrent.AtomicLong
 

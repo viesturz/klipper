@@ -1,10 +1,4 @@
-package mcu
-
-import MachineDuration
 import kotlinx.coroutines.flow.StateFlow
-import MachineTime
-import Resistance
-import Voltage
 import config.DigitalInPin
 import config.McuConfig
 import config.StepperPins
@@ -89,7 +83,9 @@ interface PulseCounter {
 }
 interface PwmPin{
     val mcu: Mcu
+    // Duty cycle, 0..1 range
     val dutyCycle: Double
+    // Milliseconds each cycle takes
     val cycleTime: MachineDuration
     fun set(time: MachineTime, dutyCycle: Double, cycleTime: MachineDuration? = null)
     fun setNow(dutyCycle: Double, cycleTime: MachineDuration? = null)
@@ -133,7 +129,6 @@ interface StepperDriver {
     fun configureForStepper(stepsPerMM: Double)
     suspend fun enable(time: MachineTime ,enabled: Boolean)
 }
-
 
 interface StepperMotor {
     val mcu: Mcu

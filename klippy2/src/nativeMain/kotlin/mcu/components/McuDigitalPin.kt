@@ -2,11 +2,11 @@ package mcu.components
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import MachineTime
-import mcu.DigitalOutPin
-import mcu.Mcu
-import mcu.impl.McuComponent
-import mcu.impl.McuConfigure
-import mcu.impl.McuRuntime
+import DigitalOutPin
+import Mcu
+import mcu.McuComponent
+import mcu.McuConfigure
+import mcu.McuRuntime
 import kotlin.math.max
 
 class McuDigitalPin(override val mcu: Mcu, val config: config.DigitalOutPin, initialize: McuConfigure) : DigitalOutPin,

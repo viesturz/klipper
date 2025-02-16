@@ -4,12 +4,12 @@ import MachineDuration
 import io.github.oshai.kotlinlogging.KotlinLogging
 import MachineTime
 import config.DigitalOutPin
-import mcu.Mcu
-import mcu.PwmPin
-import mcu.impl.McuClock32
-import mcu.impl.McuComponent
-import mcu.impl.McuConfigure
-import mcu.impl.McuRuntime
+import Mcu
+import PwmPin
+import mcu.McuClock32
+import mcu.McuComponent
+import mcu.McuConfigure
+import mcu.McuRuntime
 import kotlin.math.max
 
 class McuPwmPin(override val mcu: Mcu, val config: DigitalOutPin, initialize: McuConfigure) : PwmPin,

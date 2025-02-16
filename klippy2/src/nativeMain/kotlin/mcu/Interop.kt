@@ -1,4 +1,4 @@
-package mcu.impl
+package mcu
 
 import kotlinx.cinterop.CPointed
 import kotlinx.cinterop.CPointer

@@ -5,7 +5,7 @@ import Temperature
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.count
 import kotlinx.coroutines.flow.takeWhile
-import machine.MachinePart
+import MachinePart
 
 
 sealed interface TemperatureControl

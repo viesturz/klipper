@@ -3,9 +3,9 @@ package parts
 import config.ValueSensor
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
-import machine.MachineRuntime
-import machine.PartLifecycle
-import machine.getPartsImplementing
+import MachineRuntime
+import PartLifecycle
+import getPartsImplementing
 import utils.format
 import kotlin.time.Duration.Companion.seconds
 

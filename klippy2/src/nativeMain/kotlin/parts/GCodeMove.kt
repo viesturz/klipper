@@ -1,9 +1,9 @@
 package parts
 
 import machine.CommandQueue
-import machine.MachineBuilder
+import MachineBuilder
 import machine.GCodeCommand
-import machine.PartLifecycle
+import PartLifecycle
 import machine.waitUntil
 import parts.kinematics.MotionPlanner
 import parts.kinematics.KinMove

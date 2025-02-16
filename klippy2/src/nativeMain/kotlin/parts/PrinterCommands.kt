@@ -1,7 +1,7 @@
 package parts
 
-import machine.MachineBuilder
-import machine.PartLifecycle
+import MachineBuilder
+import PartLifecycle
 
 fun MachineBuilder.PrinterCommands(
 ): PrinterCommands = PrinterCommandsImpl(this).also { addPart(it) }

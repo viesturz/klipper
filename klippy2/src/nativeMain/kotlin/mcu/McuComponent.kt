@@ -1,9 +1,9 @@
-package mcu.impl
+package mcu
 
 import MachineDuration
 import MachineTime
 import machine.Reactor
-import mcu.McuClock
+import McuClock
 import mcu.connection.CommandQueue
 import mcu.connection.StepQueueImpl
 

@@ -1,7 +1,6 @@
 import config.NTC100K
 import config.PID
 import config.mcus.SkrMiniE3V2
-import machine.MachineBuilder
 import parts.*
 import parts.drivers.TMC2209
 import parts.kinematics.LinearRange
@@ -11,15 +10,10 @@ import parts.kinematics.MotionPlanner
 fun MachineBuilder.buildMachine() {
     val mcu =
         SkrMiniE3V2(serial = "/dev/serial/by-id/usb-Klipper_stm32f103xe_31FFD7053030473538690543-if00")
-    Fan(
-        name = "partFan",
-        pin = mcu.fan1,
-    )
+    val fan1 = Fan(pin = mcu.fan1)
     val he0 = Heater(
-        name = "extruder",
         pin = mcu.heaterE0,
         sensor = AdcTemperatureSensor(
-            name = "extruder",
             pin = mcu.tempE0,
             sensor = NTC100K,
             minTemp = 0.celsius,
@@ -33,7 +27,6 @@ fun MachineBuilder.buildMachine() {
         maxPower = 0.6,
     ))
     val aDriver = TMC2209(
-        name = "driverX",
         pins = mcu.stepper0Uart,
         enablePin = mcu.stepper0.enablePin,
         microsteps = 16,
@@ -41,7 +34,6 @@ fun MachineBuilder.buildMachine() {
         senseResistor = 0.110.ohms
     )
     val bDriver = TMC2209(
-        name = "driverY",
         pins = mcu.stepper1Uart,
         enablePin = mcu.stepper1.enablePin,
         microsteps = 16,
@@ -49,7 +41,6 @@ fun MachineBuilder.buildMachine() {
         senseResistor = 0.110.ohms
     )
     val zDriver = TMC2209(
-        name = "driverZ",
         pins = mcu.stepper2Uart,
         enablePin = mcu.stepper2.enablePin,
         microsteps = 1,
@@ -58,7 +49,6 @@ fun MachineBuilder.buildMachine() {
         senseResistor = 0.110.ohms
     )
     val eDriver = TMC2209(
-        name = "driverE",
         pins = mcu.stepper3Uart,
         enablePin = mcu.stepper3.enablePin,
         microsteps = 16,
@@ -66,21 +56,18 @@ fun MachineBuilder.buildMachine() {
         senseResistor = 0.110.ohms
     )
     val aStepper = LinearStepper(
-        name = "stepperA",
         pins = mcu.stepper0,
         driver = aDriver,
         rotationDistance = 40.0,
         speed = LinearSpeeds(speed = 400.0)
     )
     val bStepper = LinearStepper(
-        name = "stepperB",
         pins = mcu.stepper1,
         driver = bDriver,
         rotationDistance = 40.0,
         speed = LinearSpeeds(speed = 400.0)
     )
     val zStepper = LinearStepper(
-        name = "stepperZ",
         pins = mcu.stepper2,
         driver = zDriver,
         stepsPerRotation = 200,
@@ -100,7 +87,6 @@ fun MachineBuilder.buildMachine() {
     )
 
     val eStepper = LinearStepper(
-        name = "stepperE",
         pins = mcu.stepper3,
         driver = eDriver,
         rotationDistance = 50.0,
@@ -155,24 +141,28 @@ fun MachineBuilder.buildMachine() {
     }
 
     val potSensor = PotSensor(
-        name = "POT",
-        pin = mcu.bedTemp.copy(reportInterval = 0.03, sampleCount = 6u),
+        pin = mcu.bedTemp.copy(reportInterval = 0.3, sampleCount = 6u),
         minResistance = 500.ohms,
         maxResistance = 9_500.ohms,
     )
     val servo = Servo(
-        name = "Servo",
         pin = mcu.zProbeServo.copy(hardwarePwm = true, cycleTime = 0.01),
         minPulse = 0.000_5,
-        maxPulse = 0.002_3,
+        maxPulse = 0.002_5,
         minAngle = 0.0,
         maxAngle = 180.0,
     )
 
-    ControlLoop("Servo + POT") { runtime ->
-        val queue = runtime.queueManager.newQueue()
-        potSensor.flow.collect { m ->
-            servo.setAngle(m.value * 180)
+    ControlLoop("Fan + POT") {
+        potSensor.flow.collect {
+            fan1.setSpeed(it.value)
+            servo.setAngle(180.0 * it.value)
         }
     }
+//    ControlLoop("Servo") {
+//        while (true) {
+//            servo.setAngle(180.0 * Random.nextDouble())
+//            delay(5000)
+//        }
+//    }
 }

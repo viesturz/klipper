@@ -1,8 +1,8 @@
 package machine.impl
 
 import MachineTime
-import machine.MachineBuilder
-import machine.MachineRuntime
+import MachineBuilder
+import MachineRuntime
 import config.McuConfig
 import config.SerialConnection
 import buildMachine
@@ -13,17 +13,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import machine.GCodeHandler
-import machine.Machine
-import machine.Machine.State
-import machine.PartLifecycle
+import Machine
+import Machine.State
+import PartLifecycle
 import machine.QueueManager
 import machine.Reactor
-import mcu.Mcu
-import mcu.McuSetup
-import mcu.McuState
+import Mcu
+import McuSetup
+import McuState
 import mcu.connection.McuConnection
 import mcu.connection.connectSerial
-import mcu.impl.McuSetupImpl
+import mcu.McuSetupImpl
 import parts.Stats
 
 private val logger = KotlinLogging.logger("MachineImpl")
@@ -44,6 +44,7 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
         get() = partsList
     val mcuList = ArrayList<Mcu>()
     val mcuSetups = HashMap<McuConfig, McuSetup>()
+    private val nameGenerator = HashMap<String, Int>()
 
     override suspend fun start() {
         _state.value = State.CONFIGURING
@@ -104,13 +105,21 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
     val STEPCOMPRESS_FLUSH_TIME = 0.050
     val SDS_CHECK_TIME = 0.001 // step+dir+step filter in stepcompress.c
 
-    override fun flushMoves(machineTime: MachineTime) {
+    fun flushMoves(machineTime: MachineTime) {
         val flushDelay = STEPCOMPRESS_FLUSH_TIME + SDS_CHECK_TIME
         val flushTime = machineTime - flushDelay
         val clearHistoryTime = flushTime - 30.0
         for (mcu in mcuList) {
             mcu.flushMoves(flushTime, clearHistoryTime);
         }
+    }
+
+    override fun newQueue() = queueManager.newQueue()
+    override fun newBackdatingQueue() = queueManager.newBackdatingQueue()
+    override fun defaultName(className: String): String {
+        val num = nameGenerator.getOrElse(className) {0} + 1
+        nameGenerator[className] = num
+        return "${className}{$num}"
     }
 
     override fun addPart(part: PartLifecycle) {

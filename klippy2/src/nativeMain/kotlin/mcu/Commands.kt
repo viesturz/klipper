@@ -1,8 +1,9 @@
-package mcu.impl
+package mcu
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.cinterop.ExperimentalForeignApi
 import MachineTime
+import chelper.MESSAGE_HEADER_SIZE
 import machine.ConfigurationException
 import kotlin.experimental.and
 
@@ -13,7 +14,7 @@ typealias McuClock32 = UInt
 private val logger = KotlinLogging.logger("Commands")
 
 interface McuResponse
-interface McuObjectResponse: McuResponse{
+interface McuObjectResponse: McuResponse {
     val id: ObjectId
 }
 data class ResponseParser<Type: McuResponse>(val signature: String, val block : ParserContext.()->Type)
@@ -25,7 +26,7 @@ class Commands(val identify: FirmwareConfig){
 
     fun parse(data: ByteArray, sentTime: MachineTime, receiveTime: MachineTime): Pair<String, McuResponse>? {
         if (data.size <= chelper.MESSAGE_HEADER_SIZE + chelper.MESSAGE_TRAILER_SIZE) return null
-        val buffer = ParserContext(data, chelper.MESSAGE_HEADER_SIZE, sentTime, receiveTime)
+        val buffer = ParserContext(data, MESSAGE_HEADER_SIZE, sentTime, receiveTime)
         val name = responses.get(buffer.parseI()) ?: return null
         val parser = RESPONSES_MAP[name]
         if (parser == null) {
@@ -61,7 +62,7 @@ class Commands(val identify: FirmwareConfig){
     fun dumpResponse(data: ByteArray) = dumpMessage(data, responses)
     fun dumpMessage(data: ByteArray, commands: Map<Int, String>): String {
         val seq = data[chelper.MESSAGE_POS_SEQ]
-        val buffer = ParserContext(data, chelper.MESSAGE_HEADER_SIZE, 0.0, 0.0)
+        val buffer = ParserContext(data, MESSAGE_HEADER_SIZE, 0.0, 0.0)
         return buildString {
             append("seq: 0x${(seq and 0x0f).toHexString()} ")
             while (buffer.pos < data.size - chelper.MESSAGE_TRAILER_SIZE) {
@@ -173,4 +174,4 @@ data class ParserContext(val array: ByteArray, var pos: Int = 0, val sentTime: M
 }
 
 /** A global map of parsers, populated using commands.registerParser. */
-private val RESPONSES_MAP = HashMap<String, ParserContext.()->McuResponse>()
+private val RESPONSES_MAP = HashMap<String, ParserContext.()-> McuResponse>()

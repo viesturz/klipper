@@ -4,13 +4,13 @@ import MachineTime
 import config.DigitalOutPin
 import config.TmcAddressUartPins
 import io.github.oshai.kotlinlogging.KotlinLogging
-import machine.MachineBuilder
-import machine.MachineRuntime
-import machine.PartLifecycle
-import mcu.StepperDriver
+import MachineBuilder
+import MachineRuntime
+import PartLifecycle
+import StepperDriver
 
 fun MachineBuilder.TMC2209(
-    name: String,
+    name: String = defaultName("TMC2209_"),
     pins: TmcAddressUartPins,
     senseResistor: Double, // Typically 0.11 ohms, but check your board.
     runCurrent: Double,

@@ -3,11 +3,11 @@ package mcu.components
 import MachineDuration
 import config.DigitalOutPin
 import io.github.oshai.kotlinlogging.KotlinLogging
-import mcu.Mcu
-import mcu.PwmPin
-import mcu.impl.McuComponent
-import mcu.impl.McuConfigure
-import mcu.impl.McuRuntime
+import Mcu
+import PwmPin
+import mcu.McuComponent
+import mcu.McuConfigure
+import mcu.McuRuntime
 
 class McuHwPwmPin(
     override val mcu: Mcu,

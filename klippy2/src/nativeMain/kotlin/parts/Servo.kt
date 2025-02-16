@@ -3,16 +3,16 @@ package parts
 import config.DigitalOutPin
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
-import machine.MachineBuilder
-import machine.MachinePart
-import machine.PartLifecycle
+import MachineBuilder
+import MachinePart
+import PartLifecycle
 import utils.deinterp
 import utils.interpolate
 
 /** A basic geared servo motor with ~180 degree rotation, driven by a standard 1..2 ms PWM signal.
  *  */
 fun MachineBuilder.Servo(
-    name: String,
+    name: String = defaultName("Servo"),
     pin: DigitalOutPin,
     minPulse: Double = 0.001, // 1ms pulse for min angle
     maxPulse: Double = 0.002, // 2ms pulse for max angle

@@ -5,11 +5,14 @@ import config.StepperPins
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.pointed
 import machine.ConfigurationException
-import machine.MachineBuilder
-import machine.PartLifecycle
-import mcu.StepperDriver
+import MachineBuilder
+import PartLifecycle
+import StepperDriver
+import chelper.cartesian_stepper_alloc
+import chelper.trapq_alloc
+import chelper.trapq_free
 import mcu.connection.StepQueueImpl
-import mcu.impl.GcWrapper
+import mcu.GcWrapper
 import parts.kinematics.Homing
 import parts.kinematics.LinearAxis
 import parts.kinematics.LinearAxisConfiguration
@@ -21,7 +24,7 @@ import kotlin.math.absoluteValue
 import kotlin.math.sign
 
 fun MachineBuilder.LinearStepper(
-    name: String,
+    name: String = defaultName("LinearStepper"),
     pins: StepperPins,
     driver: StepperDriver,
     stepsPerRotation: Int = 200,
@@ -61,8 +64,8 @@ private class StepperImpl(
 ) : PartLifecycle, LinearStepper {
     val motor = builder.setupMcu(pins.mcu).addStepperMotor(pins, driver)
     override val stepQueue = motor.stepQueue as StepQueueImpl
-    val kinematics = GcWrapper(chelper.cartesian_stepper_alloc('x'.code.toByte())) { free(it) }
-    val trapq = GcWrapper(chelper.trapq_alloc()) { chelper.trapq_free(it) }
+    val kinematics = GcWrapper(cartesian_stepper_alloc('x'.code.toByte())) { free(it) }
+    val trapq = GcWrapper(trapq_alloc()) { trapq_free(it) }
     var _position: List<Double> = listOf(0.0)
     var _time: Double = 0.0
     override val size = 1
