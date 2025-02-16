@@ -21,6 +21,7 @@ import McuState
 import PwmPin
 import StepperDriver
 import StepperMotor
+import config.RestartMethod
 import mcu.components.McuAnalogPin
 import mcu.components.McuButton
 import mcu.components.McuDigitalPin
@@ -32,6 +33,7 @@ import mcu.connection.CommandQueue
 import mcu.connection.McuConnection
 import mcu.connection.StepQueueImpl
 import mcu.connection.StepperSync
+import platform.posix.log
 import kotlin.time.Duration.Companion.milliseconds
 
 /** Step 0 - API for adding all the parts to MCU. */
@@ -124,6 +126,8 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         get() = _state
     override val stateReason: String
         get() = _stateReason
+    private val isRunning: Boolean
+        get() = _state.value == McuState.RUNNING
 
     suspend fun start(reactor: Reactor) {
         logger.info { "Starting" }
@@ -131,7 +135,15 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         clocksync.start(reactor)
         logger.info { "Configuring ${components.size} components" }
         components.forEach { it.configure(configuration) }
-        configure(reactor)
+        try {
+            configure(reactor)
+        } catch (e: NeedsRestartException) {
+            logger.info { "Restarting firmware for: ${e.message}" }
+            restartFirmware()
+            connection.disconnect()
+            logger.info { "Restarting complete" }
+            throw e
+        }
         // Unlock the command queues.
         configuration.commandQueues.forEach { it.connection = this.connection }
         configuration.stepQueues.forEach { it.connection = this.connection }
@@ -195,7 +207,7 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
 
         if (config.isConfig) {
             if (checksum != config.crc) {
-                logger.info { "Configure - config changed, restart needed" }
+                logger.info { "Configure - config changed, restart needed, existing CRC = ${config.crc}, new = ${checksum}" }
                 throw NeedsRestartException("Configuration changed")
             }
             logger.info { "Configure - reusing existing config" }
@@ -212,9 +224,7 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         configuration.queryCommands.forEach { builder ->
             val time = reactor.now + configureStartOffset
             val clock = clocksync.estimate.timeToClock(time).toUInt()
-            val cmd = defaultQueue.build(builder.signature) {
-                builder.block(this, clock)
-            }
+            val cmd = defaultQueue.build(builder.signature) { builder.block(this, clock) }
             // Wait for acks to throttle the query commands.
             defaultQueue.sendWaitAck(cmd)
         }
@@ -225,9 +235,19 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
     }
 
     private suspend fun restartFirmware() {
-        if (connection.commands.hasCommand("reset")) {
-            defaultQueue.send("reset")
-            delay(15.milliseconds)
+        when (config.restartMethod) {
+            RestartMethod.COMMAND -> {
+                if (connection.commands.hasCommand("config_reset")) {
+                    defaultQueue.send("config_reset")
+                    delay(15.milliseconds)
+                } else if (connection.commands.hasCommand("reset")) {
+                    defaultQueue.send("reset")
+                    delay(15.milliseconds)
+                } else {
+                    logger.error { "Cannot reset MCU ${config.name} via command - no supported command found." }
+                }
+            }
+            else -> throw NotImplementedError("Restart method ${config.restartMethod} not implemented")
         }
     }
 
@@ -235,9 +255,6 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         connection.setClockEstimate(frequency, convTime, convClock, lastClock)
         stepperSync?.setTime(convTime, frequency)
     }
-
-    private val isRunning: Boolean
-        get() = _state.value == McuState.RUNNING
 }
 
 data class ResponseConfig(val isConfig: Boolean, val crc: UInt, val isShutdown: Boolean, val moveCount: MoveQueueId):

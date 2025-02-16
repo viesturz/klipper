@@ -2,13 +2,16 @@ import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
 import io.github.oshai.kotlinlogging.Level
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import logging.LogFormatter
 import logging.LogWriter
 import machine.ConfigurationException
 import machine.InvalidGcodeException
+import machine.NeedsRestartException
 import machine.impl.MachineImpl
+import kotlin.time.Duration.Companion.seconds
 
 suspend fun gcodeFromCommandline(machine: MachineImpl) {
     val queue = machine.queueManager.newQueue()
@@ -34,13 +37,15 @@ fun main(args: Array<String>) = runBlocking {
     KotlinLoggingConfiguration.formatter = LogFormatter()
     KotlinLoggingConfiguration.appender = logWriter
 
-    try {
-        val machine = MachineImpl()
-        println("Setting up")
-        machine.start()
-        // Wait until running
-        machine.state.first { it == Machine.State.RUNNING }
-        println("Machine running")
+    var running = true
+    while (running) {
+        try {
+            val machine = MachineImpl()
+            println("Setting up")
+            machine.start()
+            // Wait until running
+            machine.state.first { it == Machine.State.RUNNING }
+            println("Machine running")
 //        gcodeFromCommandline(machine)
 //
 //            gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=0.3")
@@ -49,16 +54,31 @@ fun main(args: Array<String>) = runBlocking {
 //            gcode.run("SET_HEATER_TEMPERATURE HEATER='extruder' TARGET=150")
 //            gcode.run("TEMPERATURE_WAIT SENSOR='extruder' MINIMUM=150")
 
-        // Wait until shutdown.
-        machine.state.first { it == Machine.State.SHUTDOWN }
-        println("Shutdown detected, reason ${machine.shutdownReason}")
-    } catch (e: Exception) {
-        var isUnknown = false
-        when (e) {
-            is ConfigurationException -> println("Configuration error: ${e.message}")
-            else -> isUnknown = true
+            // Wait until shutdown.
+            machine.state.first { it == Machine.State.SHUTDOWN }
+            println("Shutdown detected, reason ${machine.shutdownReason}")
+            running = false
         }
-        runBlocking { logWriter.close() }
-        if (isUnknown) throw e
+        catch (e: Exception) {
+            when (e) {
+                is NeedsRestartException -> {
+                    println("Needs restart: ${e.message}")
+                    delay(2.seconds)
+                    running = true
+                }
+                is ConfigurationException -> {
+                    println("Configuration error: ${e.message}")
+                    running = false
+                }
+                else -> {
+                    running = false
+                }
+            }
+            if (!running) {
+                println("Exiting, $e")
+                runBlocking { logWriter.close() }
+                throw e
+            }
+        }
     }
 }

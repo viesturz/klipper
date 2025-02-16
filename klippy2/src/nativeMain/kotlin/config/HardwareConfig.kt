@@ -11,7 +11,17 @@ sealed interface Connection
 data class SerialConnection(val file: String, val baud: Int = 250000): Connection
 data class CanbusConnection(val uid: String, val iface: String = "can0"): Connection
 
-data class McuConfig(val connection: Connection, val name: String)
+data class McuConfig(
+    val connection: Connection,
+    val name: String,
+    val restartMethod: RestartMethod = RestartMethod.COMMAND)
+
+enum class RestartMethod {
+    COMMAND,
+    CHEETAH,
+    RPI_USB,
+    ARDUINO,
+}
 
 // Helper class to define MCU templates
 open class McuTemplate(val mcu: McuConfig) {

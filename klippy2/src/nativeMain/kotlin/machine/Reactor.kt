@@ -6,14 +6,13 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withTimeout
 import kotlin.math.max
 import kotlin.time.Duration.Companion.seconds
@@ -22,8 +21,7 @@ import kotlin.time.Duration.Companion.seconds
 class Reactor {
 
     private val logger = KotlinLogging.logger("Reactor")
-    @OptIn(ExperimentalCoroutinesApi::class, DelicateCoroutinesApi::class)
-    private val context = newSingleThreadContext("Reactor")
+    private val context = Dispatchers.IO.limitedParallelism(1, "Reactor")
     val scope = CoroutineScope(context)
 
     data class Event(var time: MachineTime, val block: suspend () -> Unit)

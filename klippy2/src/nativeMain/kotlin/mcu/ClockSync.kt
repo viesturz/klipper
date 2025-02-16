@@ -161,6 +161,10 @@ internal class ClockSync(val mcu: McuImpl, val connection: McuConnection) {
         set((1.0 - DECAY) * (get() + newValue * DECAY))
     }
 
+    fun abort() {
+
+    }
+
     companion object {
         const val DECAY = 1.0 / 30.0
         const val TRANSMIT_EXTRA = .001  // Send the messages out this earlier.

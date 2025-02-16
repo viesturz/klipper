@@ -48,20 +48,27 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
 
     override suspend fun start() {
         _state.value = State.CONFIGURING
-        buildMachine()
-        addCommonParts()
-        for (mSetup in mcuSetups.values){
-            logger.info { "Initializing MCU: ${mSetup.config.name}" }
-            val mcu = mSetup.start(reactor)
-            mcuList.add(mcu)
-            reactor.launch {
-                mcu.state.first { it == McuState.ERROR }
-                shutdown(mcu.stateReason)
+        try {
+            buildMachine()
+            addCommonParts()
+            for (mSetup in mcuSetups.values){
+                logger.info { "Initializing MCU: ${mSetup.config.name}" }
+                val mcu = mSetup.start(reactor)
+                mcuList.add(mcu)
+                // Monitor the MCU state and shutdown on error.
+                reactor.launch {
+                    mcu.state.first { it == McuState.ERROR }
+                    shutdown(mcu.stateReason)
+                }
+                logger.info { "Initializing MCU: ${mcu.config.name} done" }
             }
-            logger.info { "Initializing MCU: ${mcu.config.name} done" }
+            _state.value = State.STARTING
+            partsList.forEach { it.onStart(this@MachineImpl) }
+        } catch (e: Exception) {
+            logger.error(e) { "Machine start failed, ${e.message}" }
+            reactor.shutdown()
+            throw e
         }
-        _state.value = State.STARTING
-        partsList.forEach { it.onStart(this@MachineImpl) }
         if (state.value != State.STARTING) return
         _state.value = State.RUNNING
     }
@@ -119,7 +126,7 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
     override fun defaultName(className: String): String {
         val num = nameGenerator.getOrElse(className) {0} + 1
         nameGenerator[className] = num
-        return "${className}{$num}"
+        return "${className}${num}"
     }
 
     override fun addPart(part: PartLifecycle) {

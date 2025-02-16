@@ -56,6 +56,9 @@ inline fun <reified PartType> MachineRuntime.getPartByName(name: String): PartTy
 inline fun <reified PartApi> MachineRuntime.getPartsImplementing() = parts.filterIsInstance<PartApi>()
 
 interface Machine {
+    /** Starts the machine - this can take a few seconds to complete.
+     *  Will throw exception of the startup fails.
+     * */
     suspend fun start()
     fun shutdown(reason: String)
 
