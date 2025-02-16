@@ -8,37 +8,54 @@ import MachineRuntime
 import PartLifecycle
 
 fun MachineBuilder.ControlLoop(
-    name: String,
-    control: suspend (runtime: MachineRuntime) -> Unit
-): ControlLoop = LocalControlImpl(name, control).also { addPart(it) }
+    name: String = defaultName("ControlLoop"),
+    autostart: Boolean = true,
+    control: suspend (runtime: MachineRuntime) -> Unit,
+): ControlLoop = LocalControlImpl(name, control, autostart).also { addPart(it) }
 
 interface ControlLoop {
     val running: Boolean
+    fun start()
+    fun stop()
 }
 
 private class LocalControlImpl(
     override val name: String,
-    val control: suspend (runtime: MachineRuntime) -> Unit
+    val control: suspend (runtime: MachineRuntime) -> Unit,
+    val autostart: Boolean,
 ) : ControlLoop, PartLifecycle {
+    private lateinit var runtime: MachineRuntime
     private var job: Job? = null
     private val logger = KotlinLogging.logger("ControlLoop $name")
-    override val running = job?.isActive ?: false
+    override val running
+        get() = job != null
 
     override suspend fun onStart(runtime: MachineRuntime) {
+        this.runtime = runtime
+        if (autostart) start()
+    }
+
+    override fun start() {
         job = runtime.reactor.launch {
             try {
                 control(runtime)
             } catch (e: CancellationException) {
                 logger.info { "Cancelled" }
-            }
-            catch (e: Exception) {
+            } catch (e: Exception) {
                 logger.error(e) { "Crashed" }
+            } finally {
+                job = null
             }
         }
     }
 
-    override fun shutdown() {
+    override fun stop() {
         job?.cancel()
+        job = null
+    }
+
+    override fun shutdown() {
+        stop()
     }
 
     override fun status() = mapOf("running" to running)

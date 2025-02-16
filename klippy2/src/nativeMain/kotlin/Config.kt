@@ -153,7 +153,7 @@ fun MachineBuilder.buildMachine() {
         maxAngle = 180.0,
     )
 
-    ControlLoop("Fan + POT") {
+    ControlLoop {
         potSensor.flow.collect {
             fan1.setSpeed(it.value)
             servo.setAngle(180.0 * it.value)
