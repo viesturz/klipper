@@ -33,6 +33,7 @@ interface Mcu {
     val stateReason: String
     /** Generates all commanded moves up to this time. */
     fun flushMoves(time: MachineTime, clearHistoryTime: MachineTime)
+    fun emergencyStop(reason: String)
     fun shutdown(reason: String)
 }
 
@@ -139,7 +140,6 @@ interface StepperMotor {
     fun setPosition(time: MachineTime, pos: Long)
     suspend fun getPosition(): Long
 
-    /** TODO: maybe something more specific? */
     interface StepQueue
 }
 

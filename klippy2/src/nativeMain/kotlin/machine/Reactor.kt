@@ -6,6 +6,7 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
@@ -41,9 +42,10 @@ class Reactor {
 
     /** Schedules to run the code at expected time,
      * ensuring ordering is preserved for same time calls. */
-    fun scheduleOrdered(time: MachineTime, block: suspend () -> Unit) {
+    fun <ResultType> scheduleOrdered(time: MachineTime, block: suspend () -> ResultType): Deferred<ResultType> {
         logger.trace { "Scheduling event to $time" }
-        val event = Event(time, block)
+        val result = CompletableDeferred<ResultType>()
+        val event = Event(time) { result.complete(block()) }
         val index = orderedEvents.indexOfFirst { it.time > event.time }
         if (index == -1) {
             orderedEvents.add(event)
@@ -63,6 +65,7 @@ class Reactor {
                     }
                 }
         }
+        return result
     }
 
     /** Event pumping loop for scheduled events. */
@@ -97,7 +100,9 @@ class Reactor {
                     withTimeout(delayTime.seconds) {
                         poke.await()
                     }
-                } catch (e: TimeoutCancellationException) {}
+                } catch (e: TimeoutCancellationException) {
+                    // Pass
+                }
             }
         }
     }

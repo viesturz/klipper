@@ -28,6 +28,9 @@ interface CommandQueue {
      * adjacent commands.
      * Each planner's commands are sequential and do not overlap, even if scheduled in different queues. */
     fun <T: Any> addPlanned(planner: Planner<T>, data: T)
+    /** Adds a long running command. Long running commands have unpredictable run time and will cause
+     *  queued planned commands to be flushed before executing. */
+    fun addLongRunning(block: suspend () -> Unit)
     /** Wait until specific machine time. This flushes any planned commands. */
     fun wait(time: MachineTime) = wait(CompletableDeferred(time))
     /** Wait until deferred completes.

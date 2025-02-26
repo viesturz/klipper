@@ -34,7 +34,7 @@ class GCodeCommand(val raw: String,
         params[name]?.toFloat() ?: default ?: throw MissingRequiredParameterException(name)
     fun getDouble(name: String, default: Double? = null, above: Double? = null): Double {
         val x = params[name]?.toDouble() ?: default ?: throw MissingRequiredParameterException(name)
-        return validate<Double>(name, x, above = above)
+        return validate(name, x, above = above)
     }
 
     fun getCelsius(name: String, default: Temperature? = null) =

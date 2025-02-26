@@ -114,8 +114,18 @@ class QueueImpl(override val manager: QueueManagerImpl): CommandQueue {
         tryGenerate()
     }
 
+    override fun addLongRunning(block: suspend () -> Unit) {
+        require(!closed) { "Adding command to closed queue" }
+        commands.add(WaitForCommand{ time -> reactor.scheduleOrdered(time) {
+            // Run the block at scheduled time
+            block()
+            // No extra wait, can resume right now.
+            reactor.now
+        }})
+        tryGenerate()
+    }
+
     override fun wait(deferred: Deferred<MachineTime>) {
-        commands.add(WaitForCommand{ deferred })
         require(!closed) { "Adding command to closed queue" }
         commands.add(WaitForCommand{ deferred })
         tryGenerate()

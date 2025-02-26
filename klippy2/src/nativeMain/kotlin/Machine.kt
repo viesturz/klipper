@@ -19,11 +19,38 @@ interface MachineBuilder
     fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler)
 }
 
+interface Machine {
+    /** Starts the machine - this can take a few seconds to complete.
+     *  Will throw exception of the startup fails.
+     * */
+    suspend fun start()
+    fun emergencyStop(reason: String)
+    fun shutdown(reason: String)
+
+    val shutdownReason: String
+    val status: Map<String, String>
+    val state: StateFlow<State>
+    val queueManager: QueueManager
+    val gCode: GCode
+
+    enum class State {
+        /** New machine */
+        NEW,
+        /** The configuration is being established */
+        CONFIGURING,
+        /** The parts are starting. */
+        STARTING,
+        /** All parts report up and running. */
+        RUNNING,
+        STOPPING,
+        SHUTDOWN,
+    }
+}
+
 /** API available at the run time.  */
-interface MachineRuntime {
+interface MachineRuntime: Machine {
     val parts: List<MachinePart>
     val reactor: Reactor
-    val gCode: GCode
 
     /** Start a new queue, starting as soon as possible. */
     fun newQueue(): CommandQueue
@@ -54,30 +81,3 @@ inline fun <reified PartType> MachineRuntime.getPartByName(name: String): PartTy
 
 /** Get a list of all parts implementing a specific API. */
 inline fun <reified PartApi> MachineRuntime.getPartsImplementing() = parts.filterIsInstance<PartApi>()
-
-interface Machine {
-    /** Starts the machine - this can take a few seconds to complete.
-     *  Will throw exception of the startup fails.
-     * */
-    suspend fun start()
-    fun shutdown(reason: String)
-
-    val shutdownReason: String
-    val status: Map<String, String>
-    val state: StateFlow<State>
-    val queueManager: QueueManager
-    val gCode: GCode
-
-    enum class State {
-        /** New machine */
-        NEW,
-        /** The configuration is being established */
-        CONFIGURING,
-        /** The parts are starting. */
-        STARTING,
-        /** All parts report up and running. */
-        RUNNING,
-        STOPPING,
-        SHUTDOWN,
-    }
-}

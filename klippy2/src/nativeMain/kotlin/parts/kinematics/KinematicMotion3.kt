@@ -6,25 +6,33 @@ import chelper.trapq_alloc
 import chelper.trapq_free
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.pointed
-import machine.ConfigurationException
-import mcu.connection.StepQueueImpl
 import mcu.GcWrapper
 import parts.LinearStepper
 import platform.linux.free
 import utils.distanceTo
 
 @OptIn(ExperimentalForeignApi::class)
-private class KinematicMotion3(
+class CartesianKinematics(val x: LinearStepper, val y: LinearStepper, val z: LinearStepper): KinematicMotion3(
+    listOf(x, y, z),
+    listOf({ GcWrapper(cartesian_stepper_alloc('x'.code.toByte())) { free(it) }},
+        {GcWrapper(cartesian_stepper_alloc('y'.code.toByte())) { free(it) }},
+            {GcWrapper(cartesian_stepper_alloc('z'.code.toByte())) { free(it) }}),
+) {
+    override fun checkMove(start: List<Double>, end: List<Double>): LinearSpeeds {
+        // TODO: consider the move
+        return x.speeds.intersection(y.speeds).intersection(z.speeds)
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+abstract class KinematicMotion3(
     val motors: List<LinearStepper>,
-    override val configuration: LinearAxisConfiguration,
-) : LinearAxis {
-    val kinematics = listOf(
-        GcWrapper(cartesian_stepper_alloc('x'.code.toByte())) { free(it) },
-        GcWrapper(cartesian_stepper_alloc('y'.code.toByte())) { free(it) },
-        GcWrapper(cartesian_stepper_alloc('z'.code.toByte())) { free(it) })
+    kinProviders: List<() -> GcWrapper<chelper.stepper_kinematics>>,
+): MotionActuator {
     val trapq = GcWrapper(trapq_alloc()) { trapq_free(it) }
     var _position: List<Double> = listOf(0.0, 0.0, 0.0)
     var _time: Double = 0.0
+    val kinematics: List<GcWrapper<chelper.stepper_kinematics>>
     override val size = 3
     override val positionTypes = listOf(MotionType.LINEAR, MotionType.LINEAR, MotionType.LINEAR)
     override var commandedPosition: List<Double>
@@ -34,22 +42,26 @@ private class KinematicMotion3(
         }
 
     init {
-        for (i in kinematics.indices) {
-            val kin = kinematics[i]
-            val motor = motors[i]
-            chelper.itersolve_set_stepcompress(
-                kin.ptr,
-                (motor.stepQueue as StepQueueImpl).stepcompress.ptr,
-                motor.stepsPerMm,
-            )
-            chelper.itersolve_set_trapq(kin.ptr, trapq.ptr)
-            chelper.itersolve_set_position(kin.ptr, _position[0], _position[1], _position[2])
+        require(motors.size == 3)
+        require(kinProviders.size == 3)
+        kinematics = buildList {
+            for (i in kinProviders.indices) {
+                val motor = motors[i]
+                motor.assignToKinematics {
+                    val k = kinProviders[i].invoke()
+                    add(k)
+                    chelper.itersolve_set_trapq(k.ptr, trapq.ptr)
+                    chelper.itersolve_set_position(k.ptr, _position[0], _position[1], _position[2])
+                    return@assignToKinematics k
+                }
+            }
         }
+        chelper.trapq_set_position(trapq.ptr, 0.0, _position[0], _position[1], _position[2])
     }
 
     override fun initializePosition(time: MachineTime, position: List<Double>) {
         require(position.size == 3)
-        flush(time)
+        generate(time)
         if (_time > time) throw IllegalStateException("Time before last time")
         _position = position
         _time = time
@@ -57,11 +69,6 @@ private class KinematicMotion3(
             chelper.itersolve_set_position(kin.ptr, _position[0], _position[1], _position[2])
         }
         chelper.trapq_set_position(trapq.ptr, time, _position[0], _position[1], _position[2])
-    }
-
-    override fun checkMove(start: List<Double>, end: List<Double>): LinearSpeeds {
-        //TODO: Check bounds.
-        return configuration.speed ?: throw ConfigurationException("No speed configuration")
     }
 
     override fun moveTo(
@@ -95,7 +102,7 @@ private class KinematicMotion3(
         _time = endTime
     }
 
-    override fun flush(time: MachineTime) {
+    override fun generate(time: MachineTime) {
         for (kin in kinematics) {
             chelper.itersolve_generate_steps(kin.ptr, time).let { ret ->
                 if (ret != 0) throw RuntimeException("Internal error in stepcompress $ret")

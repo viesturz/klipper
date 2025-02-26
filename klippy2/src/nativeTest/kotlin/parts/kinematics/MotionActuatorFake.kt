@@ -24,7 +24,7 @@ class MotionActuatorFake(
     ) {
         moves.add(MoveHistory(endTime, endPosition, endSpeed))
     }
-    override fun flush(time: MachineTime) {}
+    override fun generate(time: MachineTime) {}
 
     data class MoveHistory(val endTime: MachineTime, val endPosition: List<Double>, val endSpeed: Double)
 }

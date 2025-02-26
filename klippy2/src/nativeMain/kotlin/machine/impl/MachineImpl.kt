@@ -28,7 +28,7 @@ import parts.Stats
 
 private val logger = KotlinLogging.logger("MachineImpl")
 
-class MachineImpl : Machine, MachineRuntime, MachineBuilder {
+class MachineImpl : MachineRuntime, MachineBuilder {
     private var _state = MutableStateFlow(State.NEW)
     override val state: StateFlow<State>
         get() = _state
@@ -75,6 +75,11 @@ class MachineImpl : Machine, MachineRuntime, MachineBuilder {
 
     private fun addCommonParts() {
         addPart(Stats())
+    }
+
+    override fun emergencyStop(reason: String) {
+        mcuList.reversed().forEach { it.emergencyStop(reason) }
+        shutdown(reason)
     }
 
     override fun shutdown(reason: String) {

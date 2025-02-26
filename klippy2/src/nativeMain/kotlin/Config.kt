@@ -1,11 +1,19 @@
 import config.NTC100K
 import config.PID
 import config.mcus.SkrMiniE3V2
+import kotlinx.coroutines.delay
 import parts.*
 import parts.drivers.TMC2209
+import parts.kinematics.CoreXYKinematics
+import parts.kinematics.Homing
+import parts.kinematics.HomingDirection
 import parts.kinematics.LinearRange
 import parts.kinematics.LinearSpeeds
 import parts.kinematics.MotionPlanner
+import parts.kinematics.PinTrigger
+import kotlin.math.roundToInt
+import kotlin.random.Random
+import kotlin.time.Duration.Companion.seconds
 
 fun MachineBuilder.buildMachine() {
     val mcu =
@@ -92,13 +100,13 @@ fun MachineBuilder.buildMachine() {
         rotationDistance = 50.0,
         gearRatio = 1.0 / 5,
     )
-//    val xyAxis = CoreXYKinematics(
-//        a = aStepper,
-//        b = bStepper,
-//        xRange = LinearRange(
-//            positionMin = 0.0,
-//            positionMax = 125.0,
-//        ),
+    val xyAxis = CoreXYKinematics(
+        railA = aStepper,
+        railB = bStepper,
+        xRange = LinearRange(
+            positionMin = 0.0,
+            positionMax = 125.0,
+        ),
 //        xHoming = Homing(
 //            endstopPosition = 120.0,
 //            endstopTrigger = PinTrigger(mcu.endstop0),
@@ -107,10 +115,10 @@ fun MachineBuilder.buildMachine() {
 //            secondSpeed = 3.0,
 //            retractDist = 3.0
 //        ),
-//        yRange = LinearRange(
-//            positionMin = 0.0,
-//            positionMax = 125.0,
-//        ),
+        yRange = LinearRange(
+            positionMin = 0.0,
+            positionMax = 125.0,
+        ),
 //        yHoming = Homing(
 //            endstopPosition = 120.0,
 //            endstopTrigger = PinTrigger(mcu.endstop1),
@@ -119,19 +127,23 @@ fun MachineBuilder.buildMachine() {
 //            secondSpeed = 3.0,
 //            retractDist = 3.0
 //        ),
-//        xSpeed = LinearSpeeds(maxSpeed = 300.0, accel = 8000.0),
-//        ySpeed = LinearSpeeds(maxSpeed = 300.0, accel = 8000.0),
-//    )
+        xSpeed = LinearSpeeds(speed = 300.0, accel = 8000.0),
+        ySpeed = LinearSpeeds(speed = 300.0, accel = 8000.0),
+    )
     GCodeMove(
         motion = MotionPlanner {
-//            axis("XY", xyAxis)
+            axis("XY", xyAxis)
             axis('Z', zStepper)
             axis('E', eStepper)
         },
         positionalAxis = "XYZ",
         extrudeAxis = "E",
     )
-
+    GCodePrinter(
+        heater = he0,
+        partFan = fan1,
+        bedHeater = null
+    )
     GCodeScript("PRINT_START") { params ->
         val bedTemp = params.getInt("BED_TEMP", 0)
         val nozzleTemp = params.getInt("TEMP", 0)
@@ -142,11 +154,11 @@ fun MachineBuilder.buildMachine() {
 
     val potSensor = PotSensor(
         pin = mcu.bedTemp.copy(reportInterval = 0.3, sampleCount = 6u),
-        minResistance = 500.ohms,
-        maxResistance = 9_500.ohms,
+        minResistance = 0.ohms,
+        maxResistance = 10_700.ohms,
     )
     val servo = Servo(
-        pin = mcu.zProbeServo.copy(hardwarePwm = true, cycleTime = 0.01),
+        pin = mcu.zProbeServo.copy(hardwarePwm = false, cycleTime = 0.01),
         minPulse = 0.000_5,
         maxPulse = 0.002_5,
         minAngle = 0.0,
@@ -154,9 +166,14 @@ fun MachineBuilder.buildMachine() {
     )
 
     ControlLoop {
+        val openDegrees = 43
+        val closedDegrees = 138
+        fan1.setSpeed(1.0)
         potSensor.flow.collect {
-            fan1.setSpeed(it.value)
-            servo.setAngle(180.0 * it.value)
+//            val value = (Random.nextDouble() * 10.0).roundToInt() / 10.0
+            val value = it.value
+            servo.setAngle(closedDegrees + (openDegrees - closedDegrees) * value)
+//            delay(1.seconds)
         }
     }
 //    ControlLoop("Servo") {

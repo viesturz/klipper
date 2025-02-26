@@ -28,6 +28,9 @@ class Stats: PartLifecycle {
                 for (sensor in runtime.getPartsImplementing<ValueSensor<*>>()) {
                     append("${sensor.name}=${sensor.value.value.format(0,3)}, ")
                 }
+                for (servo in runtime.getPartsImplementing<Servo>()) {
+                    append("${servo.name}=${servo.angle}")
+                }
             }
         }
     }

@@ -176,6 +176,10 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         stepperSync?.flushMoves(clocksync.estimate.timeToClock(time), clocksync.estimate.timeToClock(clearHistoryTime))
     }
 
+    override fun emergencyStop(reason: String) {
+        defaultQueue.send("emergency_stop")
+    }
+
     override fun shutdown(reason: String) {
         if (_state.value == McuState.ERROR || _state.value == McuState.SHUTDOWN) return
         logger.error { "MCU shutdown, $reason" }
