@@ -18,7 +18,7 @@ fun MachineBuilder.Servo(
     maxPulse: Double = 0.002, // 2ms pulse for max angle
     minAngle: Double = -90.0, //Angle at 1ms PWM
     maxAngle: Double = 90.0, //Angle at 2ms PWM
-    speed: Double = 200.0, // Speed in degrees/sec
+    speed: Double? = null, // Max speed in degrees/sec
 ): Servo = ServoImpl(
     name,
     pin,
@@ -43,7 +43,7 @@ private class ServoImpl(
     maxPulse: Double,
     val minAngle: Double,
     val maxAngle: Double,
-    val speed: Double,
+    val speed: Double?,
     setup: MachineBuilder,
 ) : PartLifecycle, Servo {
     val pin = setup.setupMcu(pin.mcu).addPwmPin(pin.copy(watchdogDuration = 0.0))
@@ -57,11 +57,13 @@ private class ServoImpl(
         get() = _angle
 
     override fun queueAngle(queue: CommandQueue, angle: Double) {
+        if (angle == _angle) return
         _angle = angle
         val duty = toDuty(angle)
         queue.add { time -> pin.set(time, duty) }
     }
     override fun setAngle(angle: Double) {
+        if (angle == _angle) return
         _angle = angle
         val duty = toDuty(angle)
         logger.debug { "SetAngle $angle, duty = $duty" }

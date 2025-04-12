@@ -15,7 +15,7 @@ fun MachineBuilder.Fan(
 ): Fan = FanImpl(name, maxPower, pin, this).also { addPart(it) }
 
 fun MachineBuilder.HeaterFan(
-    name: String,
+    name: String = defaultName("HeaterFan"),
     heater: Heater,
     fan: Fan) = ControlLoop(
     name = name,
