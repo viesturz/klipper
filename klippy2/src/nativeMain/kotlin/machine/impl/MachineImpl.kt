@@ -35,7 +35,7 @@ class MachineImpl : MachineRuntime, MachineBuilder {
 
     override val reactor = Reactor()
     override val gCode = GCodeImpl()
-    override val queueManager: QueueManager = QueueManagerImpl(reactor)
+    val queueManager: QueueManager = QueueManagerImpl(reactor)
     var _shutdownReason = ""
     override val shutdownReason: String
         get() = _shutdownReason
@@ -45,6 +45,7 @@ class MachineImpl : MachineRuntime, MachineBuilder {
     val mcuList = ArrayList<Mcu>()
     val mcuSetups = HashMap<McuConfig, McuSetup>()
     private val nameGenerator = HashMap<String, Int>()
+    private val commandsQueue = queueManager.newQueue()
 
     override suspend fun start() {
         _state.value = State.CONFIGURING
@@ -93,6 +94,10 @@ class MachineImpl : MachineRuntime, MachineBuilder {
             _state.value = State.SHUTDOWN
             reactor.shutdown()
         }
+    }
+
+    override suspend fun runGcode(command: String, responseHandler: ((String) -> Unit)) {
+        gCode.runner(commandsQueue, this, responseHandler).gcode(command)
     }
 
     override val status: Map<String, String>

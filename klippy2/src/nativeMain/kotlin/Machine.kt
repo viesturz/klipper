@@ -3,7 +3,6 @@ import kotlinx.coroutines.flow.StateFlow
 import machine.CommandQueue
 import machine.GCode
 import machine.GCodeHandler
-import machine.QueueManager
 import machine.Reactor
 
 typealias ActionBlock = suspend (m: MachineRuntime) -> Unit
@@ -19,19 +18,24 @@ interface MachineBuilder
     fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler)
 }
 
+/** External API to a machine */
 interface Machine {
     /** Starts the machine - this can take a few seconds to complete.
-     *  Will throw exception of the startup fails.
+     *  Will throw exception if the startup fails.
      * */
     suspend fun start()
     fun emergencyStop(reason: String)
     fun shutdown(reason: String)
 
+    /** Runs a gcode.
+     * Most gcodes schedule the moves and return immediately.
+     * But some may take significant time to complete, like wait for temperature.
+     * */
+    suspend fun runGcode(command: String, responseHandler: ((response: String) -> Unit) = {})
+
     val shutdownReason: String
     val status: Map<String, String>
     val state: StateFlow<State>
-    val queueManager: QueueManager
-    val gCode: GCode
 
     enum class State {
         /** New machine */
@@ -47,10 +51,11 @@ interface Machine {
     }
 }
 
-/** API available at the run time.  */
+/** API available to it's parts at the run time.  */
 interface MachineRuntime: Machine {
     val parts: List<MachinePart>
     val reactor: Reactor
+    val gCode: GCode
 
     /** Start a new queue, starting as soon as possible. */
     fun newQueue(): CommandQueue

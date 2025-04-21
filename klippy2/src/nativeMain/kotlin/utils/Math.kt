@@ -4,8 +4,10 @@ import kotlin.math.sqrt
 fun Double.squared() = this * this
 fun Double.sqrt() = sqrt(this)
 
+/** Linear interpolate 0.11 to the given range */
 fun Double.interpolate(to: ClosedFloatingPointRange<Double>): Double =
     this * (to.endInclusive - to.start) + to.start
+/** Calculate value as a fraction of linear range */
 fun Double.deinterp(from: ClosedFloatingPointRange<Double>): Double =
     (this - from.start) / (from.endInclusive - from.start)
 

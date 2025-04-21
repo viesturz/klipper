@@ -25,6 +25,9 @@ class Reactor {
     private val context = Dispatchers.IO.limitedParallelism(1, "Reactor")
     val scope = CoroutineScope(context)
 
+    /** Time to add to ensure reliable scheduling */
+    val SCHEDULING_TIME = 0.1
+
     data class Event(var time: MachineTime, val block: suspend () -> Unit)
     private val orderedEvents = ArrayList<Event>()
     private var poke = CompletableDeferred<Boolean>()
@@ -45,7 +48,10 @@ class Reactor {
     fun <ResultType> scheduleOrdered(time: MachineTime, block: suspend () -> ResultType): Deferred<ResultType> {
         logger.trace { "Scheduling event to $time" }
         val result = CompletableDeferred<ResultType>()
-        val event = Event(time) { result.complete(block()) }
+        val event = Event(time) {
+            if (result.isCancelled) return@Event
+            result.complete(block())
+        }
         val index = orderedEvents.indexOfFirst { it.time > event.time }
         if (index == -1) {
             orderedEvents.add(event)

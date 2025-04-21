@@ -13,14 +13,12 @@ import machine.NeedsRestartException
 import machine.impl.MachineImpl
 import kotlin.time.Duration.Companion.seconds
 
-suspend fun gcodeFromCommandline(machine: MachineImpl) {
-    val queue = machine.queueManager.newQueue()
-    val runner = machine.gCode.runner(queue, machine) { msg -> println(msg) }
+suspend fun gcodeFromCommandline(machine: Machine) {
     while (machine.state.value != Machine.State.SHUTDOWN) {
         print(": ")
         val cmd = readln()
         try {
-            runner.gcode(cmd)
+            machine.runGcode(cmd) { respones ->  println(respones) }
         } catch (e: InvalidGcodeException) {
             println("  Invalid gcode: ${e.message}")
         }
@@ -40,15 +38,15 @@ fun main(args: Array<String>) = runBlocking {
     var running = true
     while (running) {
         try {
-            val machine = MachineImpl()
+            val machine: Machine = MachineImpl()
             println("Setting up")
             machine.start()
             // Wait until running
             machine.state.first { it == Machine.State.RUNNING }
             println("Machine running")
-//        gcodeFromCommandline(machine)
-//
-//            gcode.run("SET_FAN_SPEED FAN=fan1 SPEED=0.3")
+            machine.runGcode("SET_FAN_SPEED FAN=partFan SPEED=0.5")
+            println("Initial commands done")
+//            gcodeFromCommandline(machine)
 //            gcode.run("PID_CALIBRATE HEATER='extruder' TARGET=150")
 //            gcode.run("SET_FAN_SPEED FAN=fan0 SPEED=0.5")
 //            gcode.run("SET_HEATER_TEMPERATURE HEATER='extruder' TARGET=150")
