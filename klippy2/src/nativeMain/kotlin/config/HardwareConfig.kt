@@ -34,7 +34,7 @@ open class McuTemplate(val mcu: McuConfig) {
 }
 
 // Base pin configs
-data class DigitalInPin(val mcu: McuConfig, val pin: String, val invert: Boolean = false, val pullup: Int = 0, val shared: Boolean = false)
+data class DigitalInPin(val mcu: McuConfig, val pin: String, val invert: Boolean = false, val pullup: Boolean = false, val shared: Boolean = false)
 data class DigitalOutPin(val mcu: McuConfig,
                          val pin: String,
                          val invert: Boolean = false,

@@ -1,30 +1,26 @@
-package machine
+import machine.CommandQueue
+import machine.InvalidGcodeException
+import machine.InvalidParameterException
+import machine.MissingRequiredParameterException
 
-import MachineRuntime
-import Temperature
-import celsius
-import getPartByName
-
-interface GCode {
-    fun registerCommand(name: String, rawText: Boolean = false, code: GCodeHandler)
-    fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler)
-    fun runner(commandQueue: CommandQueue, machineRuntime: MachineRuntime, outputHandler: GCodeOutputSink): GCodeRunner
-}
-
-typealias GCodeHandler = suspend GCodeRunner.(cmd: GCodeCommand) -> Unit
 typealias GCodeOutputSink = (message: String) -> Unit
 
-interface GCodeRunner {
-    suspend fun gcode(cmd: String)
-    fun respond(msg: String)
+interface GCodeContext {
+    /** Parses and runs a gcode.
+     * Most gcodes schedule the moves and return immediately.
+     * But some may take significant time to complete, like wait for temperature.
+     * */
+    suspend fun gcode(command: String)
 }
+
+typealias GCodeHandler = suspend GCodeContext.(cmd: GCodeCommand) -> Unit
 
 class GCodeCommand(val raw: String,
                    val name: String,
                    val params: Map<String, String>,
                    val runtime: MachineRuntime,
                    val queue: CommandQueue,
-                   val runner: GCodeRunner,
+                   val output: GCodeOutputSink,
 ) {
     fun get(name: String, default: String? = null) =
         params[name] ?: default ?: throw MissingRequiredParameterException(name)
@@ -41,7 +37,7 @@ class GCodeCommand(val raw: String,
         params[name]?.toDouble()?.celsius ?: default ?: throw MissingRequiredParameterException(name)
     inline fun <reified PartType> getPartByName(param: String) = runtime.getPartByName<PartType>(get(param)) ?:
         throw InvalidGcodeException("${PartType::class.simpleName} with name ${get(param)} not found")
-    fun respond(msg: String) = runner.respond(msg)
+    fun respond(msg: String) = output(msg)
 }
 
 private fun <T: Comparable<T>> validate(name: String, value: T, above: T? = null): T = value.also{

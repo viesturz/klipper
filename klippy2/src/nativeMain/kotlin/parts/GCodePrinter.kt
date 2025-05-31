@@ -1,11 +1,10 @@
 package parts
 
+import GCodeCommand
 import MachineBuilder
 import PartLifecycle
-import StepperMotor
 import celsius
 import getPartsImplementing
-import machine.GCodeCommand
 
 fun MachineBuilder.GCodePrinter(
     heater: Heater?,
@@ -49,15 +48,16 @@ class GCodePrinterImpl(
 
     private fun disableMotors(cmd: GCodeCommand) {
         cmd.queue.addLongRunning {
-            for (m in cmd.runtime.getPartsImplementing<StepperMotor>()) {
-                m.driver.enable(cmd.runtime.reactor.now, enabled = false)
+            val time = cmd.runtime.reactor.now
+            for (m in cmd.runtime.getPartsImplementing<LinearStepper>()) {
+                m.setPowered(time, value = false)
             }
         }
         // TODO: let the motion planner know.
     }
 
     private fun emergencyStop(cmd: GCodeCommand) {
-        cmd.runtime.emergencyStop("M112 emergency stop")
+        cmd.runtime.shutdown("M112 emergency stop", true)
     }
 
     private fun getExtruderTemperature(cmd: GCodeCommand) {

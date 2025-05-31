@@ -4,36 +4,14 @@
 //
 // This file may be distributed under the terms of the GNU GPLv3 license.
 
-#include <pthread.h> // pthread_mutex_lock
 #include <stddef.h> // offsetof
 #include <stdlib.h> // malloc
 #include <string.h> // memset
+#include "trdispatch.h"
 #include "compiler.h" // ARRAY_SIZE
-#include "list.h" // list_add_tail
 #include "pollreactor.h" // PR_NEVER
 #include "pyhelper.h" // report_errno
 #include "serialqueue.h" // serialqueue_add_fastreader
-
-struct trdispatch {
-    struct list_head tdm_list;
-
-    pthread_mutex_t lock; // protects variables below
-    uint32_t is_active, can_trigger, dispatch_reason;
-};
-
-struct trdispatch_mcu {
-    struct fastreader fr;
-    struct trdispatch *td;
-    struct list_node node;
-    struct serialqueue *sq;
-    struct command_queue *cq;
-    uint32_t trsync_oid, set_timeout_msgtag, trigger_msgtag;
-
-    // Remaining fields protected by trdispatch lock
-    uint64_t last_status_clock, expire_clock;
-    uint64_t expire_ticks, min_extend_ticks;
-    struct clock_estimate ce;
-};
 
 // Send: trsync_trigger oid=%c reason=%c
 static void

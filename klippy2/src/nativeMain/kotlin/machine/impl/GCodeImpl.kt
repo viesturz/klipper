@@ -1,31 +1,30 @@
 package machine.impl
 
+import GCodeCommand
+import GCodeHandler
+import GCodeOutputSink
+import GCodeContext
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
 import machine.ConfigurationException
 import machine.FailedToParseParamsException
-import machine.GCode
-import machine.GCodeCommand
-import machine.GCodeHandler
-import machine.GCodeOutputSink
-import machine.GCodeRunner
 import machine.InvalidGcodeException
 import MachineRuntime
 
 private val logger = KotlinLogging.logger("Gcode")
 
-class GCodeImpl: GCode {
+class GCodeImpl {
     data class CommandHandler(val name: String, val rawText: Boolean, val impl: GCodeHandler)
     internal val commands = HashMap<String, CommandHandler>()
     internal val muxCommands = HashMap<String, MuxCommandHandler>()
 
-    override fun registerCommand(name: String, rawText: Boolean, code: GCodeHandler) {
+    fun registerCommand(name: String, rawText: Boolean, code: GCodeHandler) {
         if (commands.containsKey(name)) {
             throw ConfigurationException("Command $name already registered")
         }
         commands[name] = CommandHandler(name, rawText, code)
     }
-    override fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler) {
+    fun registerMuxCommand(command: String, muxParam: String, muxValue: String, handler: GCodeHandler) {
         var muxer = muxCommands[command]
         if (muxer == null) {
             muxer = MuxCommandHandler(muxParam)
@@ -40,12 +39,10 @@ class GCodeImpl: GCode {
         muxer.handlers[muxValue] = handler
     }
 
-    override fun runner(commandQueue: CommandQueue, machineRuntime: MachineRuntime, outputHandler: GCodeOutputSink): GCodeRunner = GCodeRunnerImpl(commandQueue, this, machineRuntime, outputHandler)
+    fun runner(commandQueue: CommandQueue, machineRuntime: MachineRuntime, outputHandler: GCodeOutputSink) = GCodeRunnerImpl(commandQueue, this, machineRuntime, outputHandler)
 }
 
-class GCodeRunnerImpl(val commandQueue: CommandQueue, val gCode: GCodeImpl, val machineRuntime: MachineRuntime, val outputHandler: GCodeOutputSink):
-    GCodeRunner {
-    override fun respond(msg: String) = outputHandler(msg)
+class GCodeRunnerImpl(val commandQueue: CommandQueue, val gCode: GCodeImpl, val machineRuntime: MachineRuntime, val outputHandler: GCodeOutputSink): GCodeContext {
 
     override suspend fun gcode(cmd: String) {
         logger.info { cmd }
@@ -65,7 +62,7 @@ class GCodeRunnerImpl(val commandQueue: CommandQueue, val gCode: GCodeImpl, val 
             command.contains("=") -> parseWithAssign(cmd, args)
             else -> parseBasic(args)
         }
-        val params = GCodeCommand(command, name, map, machineRuntime, commandQueue, this)
+        val params = GCodeCommand(command, name, map, machineRuntime, commandQueue, outputHandler)
         val muxer = gCode.muxCommands[name]
         if (muxer != null && params.params.containsKey(muxer.key)) {
             val handler = muxer.handlers[params.params[muxer.key]]

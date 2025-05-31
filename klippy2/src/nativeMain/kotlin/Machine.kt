@@ -1,8 +1,6 @@
 import config.McuConfig
 import kotlinx.coroutines.flow.StateFlow
 import machine.CommandQueue
-import machine.GCode
-import machine.GCodeHandler
 import machine.Reactor
 
 typealias ActionBlock = suspend (m: MachineRuntime) -> Unit
@@ -24,14 +22,13 @@ interface Machine {
      *  Will throw exception if the startup fails.
      * */
     suspend fun start()
-    fun emergencyStop(reason: String)
-    fun shutdown(reason: String)
+    fun shutdown(reason: String, emergency: Boolean = false)
 
     /** Runs a gcode.
      * Most gcodes schedule the moves and return immediately.
      * But some may take significant time to complete, like wait for temperature.
      * */
-    suspend fun runGcode(command: String, responseHandler: ((response: String) -> Unit) = {})
+    suspend fun gcode(command: String, responseHandler: ((response: String) -> Unit) = {})
 
     val shutdownReason: String
     val status: Map<String, String>
@@ -51,11 +48,10 @@ interface Machine {
     }
 }
 
-/** API available to it's parts at the run time.  */
+/** API available to its parts at the run time.  */
 interface MachineRuntime: Machine {
     val parts: List<MachinePart>
     val reactor: Reactor
-    val gCode: GCode
 
     /** Start a new queue, starting as soon as possible. */
     fun newQueue(): CommandQueue

@@ -4,6 +4,7 @@ import config.McuConfig
 import config.StepperPins
 import config.UartPins
 import machine.Reactor
+import mcu.ObjectId
 
 typealias McuClock = ULong
 typealias McuDuration = Long
@@ -17,12 +18,14 @@ interface McuSetup {
     fun addPwmPin(config: config.DigitalOutPin): PwmPin
     fun addTmcUart(config: UartPins): MessageBus
     fun addStepperMotor(config: StepperPins, driver: StepperDriver): StepperMotor
-//    fun addPulseCounter(pin: config.DigitalInPin): PulseCounter
+    fun addEndstop(pin: config.DigitalInPin): Endstop
+    fun addEndstopSync(builder: EndstopSyncBuilder): EndstopSync
+
+    //    fun addPulseCounter(pin: config.DigitalInPin): PulseCounter
 //    fun addI2C(config: config.I2CPins): MessageBus
 //    fun addSpi(config: config.SpiPins): MessageBus
 //    fun addUart(config: config.UartPins): MessageBus
 //    fun addNeopixel(config: config.DigitalOutPin): Neopixel
-//    fun addEndstop(pin: config.DigitalInPin, motors: List<StepperMotor>): Endstop
 
     suspend fun start(reactor: Reactor): Mcu
 }
@@ -33,8 +36,11 @@ interface Mcu {
     val stateReason: String
     /** Generates all commanded moves up to this time. */
     fun flushMoves(time: MachineTime, clearHistoryTime: MachineTime)
-    fun emergencyStop(reason: String)
-    fun shutdown(reason: String)
+    fun shutdown(reason: String, emergency: Boolean = false)
+
+    /** Builds a new synchroniztion between endstops and motors.
+     * This can be done at runtime, but a limited number of syncs is available so they need to be released after use.*/
+    fun addEndstopSync(builder: EndstopSyncBuilder): EndstopSync
 }
 
 enum class McuState {
@@ -91,34 +97,16 @@ interface PwmPin{
     fun set(time: MachineTime, dutyCycle: Double, cycleTime: MachineDuration? = null)
     fun setNow(dutyCycle: Double, cycleTime: MachineDuration? = null)
 }
-interface Neopixel{
+
+interface MessageBus{
     val mcu: Mcu
-    fun update(color: Int, pos: Int = 0)
+    /** Returns null if the CRC check failed. Need to retry. */
+    suspend fun sendReply(data: UByteArray, readBytes:Int, sendTime: MachineTime): UByteArray?
+    /** Grants exclusive access to the bus during the transaction. */
+    suspend fun <ResultType> transaction(function: suspend () -> ResultType): ResultType
 }
 
 // Motions
-interface Endstop {
-    val mcu: Mcu
-    val lastState: Boolean
-    suspend fun queryState(): Boolean
-    // Resets any ongoing homing
-    fun resetHome()
-
-    // Wait for the homing trigger
-    suspend fun waitForHomingTrigger(
-        timeout: McuClock,
-        pollInterval: McuDuration,
-        samplesToCheck: Int,
-        checkInterval: McuDuration,
-        stopOnValue: Boolean): TriggerResult
-    enum class TriggerResult(val id: UByte) {
-        TRIGGERED(id = 1u),
-        COMMS_TIMEOUT(id = 2u),
-        RESET(id = 3u),
-        PAST_END_TIME(id = 4u),
-    }
-}
-
 interface StepperDriver {
     val microsteps: Int
     val stepBothEdges: Boolean
@@ -128,7 +116,7 @@ interface StepperDriver {
     /** Configure motor's steps per mm to reference speed dependant driver thresholds.
      * To be called during configuration phase. */
     fun configureForStepper(stepsPerMM: Double)
-    suspend fun enable(time: MachineTime ,enabled: Boolean)
+    suspend fun enable(time: MachineTime, enabled: Boolean)
 }
 
 interface StepperMotor {
@@ -143,10 +131,55 @@ interface StepperMotor {
     interface StepQueue
 }
 
-interface MessageBus{
+interface Endstop {
     val mcu: Mcu
-    /** Returns null if the CRC check failed. Need to retry. */
-    suspend fun sendReply(data: UByteArray, readBytes:Int, sendTime: MachineTime): UByteArray?
-    /** Grants exclusive access to the bus during the transaction. */
-    suspend fun <ResultType> transaction(function: suspend () -> ResultType): ResultType
+    val id: ObjectId
+    val lastState: Boolean
+    suspend fun queryState(): Boolean
+}
+
+interface EndstopSyncBuilder {
+    fun addEndstop(endstop: Endstop)
+    fun addStepperMotor(motor: StepperMotor)
+}
+
+/** Synchronizes motor movement with one or more endstops.
+ * When active, the motors will automatically stop when an endstop is triggered.
+ * Supports cross-MCU endstops and motors.
+ * */
+interface EndstopSync {
+    val state: StateFlow<State>
+
+    suspend fun run(
+        startTime: MachineTime,
+        timeoutTime: MachineTime,
+        pollInterval: MachineDuration,
+        samplesToCheck: UByte,
+        checkInterval: MachineDuration,
+        stopOnValue: Boolean): State
+
+    /** Resets any ongoing triggering. Allows stopped motors to move again after being stopped. */
+    fun reset()
+    /* Releases the sync resources, it cannot be used anymore after this. */
+    fun release()
+
+    sealed interface State
+    object StateIdle: State
+    object StateRunning: State
+    class StateTriggered(val triggerTime: MachineTime): State
+    class StateAborted(val result: TriggerResult): State
+
+    enum class TriggerResult(val id: UByte) {
+        NONE(id = 0u),
+        ENDSTOP_HIT(id = 1u),
+        COMMS_TIMEOUT(id = 2u),
+        RESET(id = 3u),
+        PAST_END_TIME(id = 4u);
+    }
+}
+
+// Other stuff
+interface Neopixel{
+    val mcu: Mcu
+    fun update(color: Int, pos: Int = 0)
 }

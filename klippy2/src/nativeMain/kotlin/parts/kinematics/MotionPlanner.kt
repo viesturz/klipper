@@ -64,6 +64,15 @@ interface MotionPlanner {
      *  TODO: this needs to be implemented, currently all moves are executed sequentially.
      * */
     fun move(queue: CommandQueue, vararg moves: KinMove)
+
+    fun addMove(vararg moves: KinMove2): QueuedMove
+
+    /** Returns number of moves generated. */
+    fun generateMoves(): Int
+
+    /** Flushes all moves and advances next move start time to at least time. */
+    fun flush(actuator: MotionActuator, time: MachineTime): Int
+
     /**
      * Dynamically reconfigure axis-to-letter assignment.
      * This is just a mapping change, the move planning is not affected.
@@ -71,6 +80,13 @@ interface MotionPlanner {
     fun configureAxis(vararg axisMap: Pair<String, MotionActuator>)
 }
 
+interface QueuedMove {
+    val startTime: MachineTime
+    val endTime: MachineTime
+}
+
 /** A move where all the axis are kinematically linked and orthogonal to each other.
  *  Which means that the speed will be distributed and junction speeds estimated jointly. */
 data class KinMove(val axis: String, val position: Position, var speed: Double?)
+
+data class KinMove2(val actuator: MotionActuator, val position: Position, var speed: Double?)

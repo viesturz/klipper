@@ -80,7 +80,7 @@ class Commands(val identify: FirmwareConfig){
                 "s" -> parser.parseStr()
                 ".*s", "*s" -> parser.parseBytes().toHexString()
                 "c" -> parser.parseC()
-                "b" -> parser.parseB()
+                "b" -> parser.parseBoolean()
                 "i", "d" -> parser.parseI()
                 "u" -> parser.parseU()
                 "h" -> parser.parseH()
@@ -125,6 +125,7 @@ class CommandBuilder(private val parser: Commands, private val buffer: CommandBu
     fun addHU(v: UShort) = buffer.addVLQ(v.toLong())
     fun addH(v: Short) = buffer.addVLQ(v.toLong())
     fun addI(v: Int) = buffer.addVLQ(v.toLong())
+    fun addBoolean(v: Boolean) = buffer.addVLQ(if (v) 1 else 0)
 
     fun addStr(v: String) = buffer.addBytes(v.encodeToByteArray().toUByteArray())
     fun addBytes(v: ByteArray) = buffer.addBytes(v.toUByteArray())
@@ -149,7 +150,9 @@ data class ParserContext(val array: ByteArray, var pos: Int = 0, val sentTime: M
     fun parseHU() = parseVLQ(false).toUShort()
     fun parseH() = parseVLQ(false).toShort()
     fun parseStr() = parseBytes().decodeToString()
-    fun parseB() = parseVLQ(false) > 0
+    fun parseId() = parseC()
+    fun parseClock(): McuClock32 = parseU()
+    fun parseBoolean() = parseVLQ(false) > 0
 
     fun parseVLQ(signed: Boolean): Long {
         var c = array[pos].toLong()

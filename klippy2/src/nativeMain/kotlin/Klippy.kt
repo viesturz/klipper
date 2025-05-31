@@ -18,7 +18,7 @@ suspend fun gcodeFromCommandline(machine: Machine) {
         print(": ")
         val cmd = readln()
         try {
-            machine.runGcode(cmd) { respones ->  println(respones) }
+            machine.gcode(cmd) { respones ->  println(respones) }
         } catch (e: InvalidGcodeException) {
             println("  Invalid gcode: ${e.message}")
         }
@@ -44,7 +44,7 @@ fun main(args: Array<String>) = runBlocking {
             // Wait until running
             machine.state.first { it == Machine.State.RUNNING }
             println("Machine running")
-            machine.runGcode("SET_FAN_SPEED FAN=partFan SPEED=0.5")
+            machine.gcode("SET_FAN_SPEED FAN=partFan SPEED=0.5")
             println("Initial commands done")
 //            gcodeFromCommandline(machine)
 //            gcode.run("PID_CALIBRATE HEATER='extruder' TARGET=150")

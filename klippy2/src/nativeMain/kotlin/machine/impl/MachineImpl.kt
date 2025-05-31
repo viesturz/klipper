@@ -1,5 +1,6 @@
 package machine.impl
 
+import GCodeHandler
 import MachineTime
 import MachineBuilder
 import MachineRuntime
@@ -12,8 +13,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import machine.GCodeHandler
-import Machine
 import Machine.State
 import PartLifecycle
 import machine.QueueManager
@@ -34,7 +33,7 @@ class MachineImpl : MachineRuntime, MachineBuilder {
         get() = _state
 
     override val reactor = Reactor()
-    override val gCode = GCodeImpl()
+    val gCode = GCodeImpl()
     val queueManager: QueueManager = QueueManagerImpl(reactor)
     var _shutdownReason = ""
     override val shutdownReason: String
@@ -78,25 +77,20 @@ class MachineImpl : MachineRuntime, MachineBuilder {
         addPart(Stats())
     }
 
-    override fun emergencyStop(reason: String) {
-        mcuList.reversed().forEach { it.emergencyStop(reason) }
-        shutdown(reason)
-    }
-
-    override fun shutdown(reason: String) {
+    override fun shutdown(reason: String, emergency: Boolean) {
         if (state.value != State.RUNNING) return
         _state.value = State.STOPPING
         logger.warn { "Shutting down the machine, reason: $reason" }
         reactor.launch {
             partsList.reversed().forEach { it.shutdown() }
-            mcuList.reversed().forEach { it.shutdown(reason) }
+            mcuList.reversed().forEach { it.shutdown(reason, emergency) }
             logger.warn { "Machine shutdown finished" }
             _state.value = State.SHUTDOWN
             reactor.shutdown()
         }
     }
 
-    override suspend fun runGcode(command: String, responseHandler: ((String) -> Unit)) {
+    override suspend fun gcode(command: String, responseHandler: ((String) -> Unit)) {
         gCode.runner(commandsQueue, this, responseHandler).gcode(command)
     }
 

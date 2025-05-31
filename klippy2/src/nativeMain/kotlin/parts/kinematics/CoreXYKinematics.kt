@@ -30,17 +30,26 @@ class CoreXYKinematics(
             railB.commandedPosition = b
         }
 
+    override var axisStatus: MutableList<RailStatus> = mutableListOf(RailStatus.INITIAL, RailStatus.INITIAL)
+
     // x = 0.5 * (a+b)
     // y = 0.5 * (a-b)
     // a = x + y
     // b = x - y
 
-    override fun initializePosition(time: MachineTime, position: List<Double>) {
+    override fun initializePosition(time: MachineTime, position: List<Double>, homed: List<Boolean>) {
         require(position.size == 2)
         val a = position[0] + position[1]
         val b = position[0] - position[1]
-        railA.initializePosition(time, a)
-        railA.initializePosition(time, b)
+        axisStatus[0] = axisStatus[0].copy(homed = homed[0])
+        axisStatus[1] = axisStatus[1].copy(homed = homed[1])
+        // The motors are never homed, they have no meaningful positions.
+        railA.initializePosition(time, a, false)
+        railB.initializePosition(time, b, false)
+    }
+
+    override suspend fun home(axis: List<Int>) {
+        TODO("Not yet implemented")
     }
 
     override fun checkMove(start: List<Double>, end: List<Double>): LinearSpeeds {

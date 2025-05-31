@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -34,6 +35,7 @@ class Reactor {
     var orderedJob: Job? = null
 
     fun launch(block: suspend CoroutineScope.() -> Unit)  = scope.launch( block = block )
+    fun <ResultType> async(block: suspend CoroutineScope.() -> ResultType)  = scope.async ( block = block )
 
     val now: MachineTime
         get() = getNow()

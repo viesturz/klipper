@@ -22,6 +22,10 @@ class CartesianKinematics(val x: LinearStepper, val y: LinearStepper, val z: Lin
         // TODO: consider the move
         return x.speeds.intersection(y.speeds).intersection(z.speeds)
     }
+
+    override suspend fun home(axis: List<Int>) {
+        TODO("Not yet implemented")
+    }
 }
 
 @OptIn(ExperimentalForeignApi::class)
@@ -40,6 +44,7 @@ abstract class KinematicMotion3(
         set(value) {
             _position = value
         }
+    override var axisStatus = mutableListOf(RailStatus.INITIAL, RailStatus.INITIAL, RailStatus.INITIAL)
 
     init {
         require(motors.size == 3)
@@ -59,7 +64,7 @@ abstract class KinematicMotion3(
         chelper.trapq_set_position(trapq.ptr, 0.0, _position[0], _position[1], _position[2])
     }
 
-    override fun initializePosition(time: MachineTime, position: List<Double>) {
+    override fun initializePosition(time: MachineTime, position: List<Double>, homed: List<Boolean>) {
         require(position.size == 3)
         generate(time)
         if (_time > time) throw IllegalStateException("Time before last time")

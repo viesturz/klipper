@@ -7,7 +7,7 @@ import mcu.GcWrapper
 import parts.LinearStepper
 
 /** Multiple motors driving the same rail. */
-class CombineLinearSteper(vararg railArgs: LinearStepper) : LinearStepper {
+class CombineLinearStepper(vararg railArgs: LinearStepper) : LinearStepper {
     private val steppers: List<LinearStepper> = railArgs.toList()
     override val speeds: LinearSpeeds
     override val range: LinearRange
@@ -46,9 +46,18 @@ class CombineLinearSteper(vararg railArgs: LinearStepper) : LinearStepper {
         }
         return sp
     }
-    override fun initializePosition(time: MachineTime, position: Double) {
+    override fun initializePosition(time: MachineTime, position: Double,  homed: Boolean) {
         for (a in steppers) {
-            a.initializePosition(time, position)
+            a.initializePosition(time, position, homed)
+        }
+    }
+
+    override val railStatus: RailStatus
+        get() = steppers.map { it.railStatus }.reduce { a,b -> a.combine(b)  }
+
+    override suspend fun setPowered(time: MachineTime, value: Boolean) {
+        for (a in steppers) {
+            a.setPowered(time, value)
         }
     }
 

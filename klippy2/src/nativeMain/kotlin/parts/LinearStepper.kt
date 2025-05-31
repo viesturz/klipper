@@ -18,6 +18,7 @@ import parts.kinematics.Homing
 import parts.kinematics.LinearRail
 import parts.kinematics.LinearRange
 import parts.kinematics.LinearSpeeds
+import parts.kinematics.RailStatus
 import platform.linux.free
 import kotlin.math.absoluteValue
 import kotlin.math.sign
@@ -44,9 +45,7 @@ fun MachineBuilder.LinearStepper(
 ).also { addPart(it) }
 
 interface LinearStepper: LinearRail {
-//    val driver: StepperDriver
     // To drive directly via stepQueue for external kinematics
-
     @OptIn(ExperimentalForeignApi::class)
     fun assignToKinematics(kinematicsProvider: () -> GcWrapper<chelper.stepper_kinematics>)
 }
@@ -75,6 +74,12 @@ private class StepperImpl(
         set(value) {
             _position = value
         }
+    override var railStatus = RailStatus(false, false)
+
+    override suspend fun setPowered(time: MachineTime, value: Boolean) {
+        railStatus = railStatus.copy(powered = value)
+        driver.enable( time, value)
+    }
 
     init {
         driver.configureForStepper(stepsPerMm)
@@ -100,7 +105,7 @@ private class StepperImpl(
         return speeds
     }
 
-    override fun initializePosition(time: MachineTime, position: Double) {
+    override fun initializePosition(time: MachineTime, position: Double, homed: Boolean) {
         if (externalKinematics != null) throw IllegalStateException("Stepper has external kinematics")
         generate(time)
         if (_time > time) throw IllegalStateException("Time before last time")
@@ -108,6 +113,7 @@ private class StepperImpl(
         _time = time
         chelper.itersolve_set_position(kinematics.ptr, _position, 0.0, 0.0)
         chelper.trapq_set_position(trapq.ptr, time, _position, 0.0, 0.0)
+        railStatus = railStatus.copy(homed = homed)
     }
 
     override fun moveTo(

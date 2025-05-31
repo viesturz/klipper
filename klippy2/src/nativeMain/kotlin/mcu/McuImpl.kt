@@ -1,5 +1,6 @@
 package mcu
 
+import Endstop
 import MachineDuration
 import config.McuConfig
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -25,21 +26,22 @@ import config.RestartMethod
 import mcu.components.McuAnalogPin
 import mcu.components.McuButton
 import mcu.components.McuDigitalPin
+import mcu.components.McuEndstop
 import mcu.components.McuHwPwmPin
 import mcu.components.McuPwmPin
 import mcu.components.McuStepperMotor
+import mcu.components.McuTrsync
 import mcu.components.TmcUartBus
 import mcu.connection.CommandQueue
 import mcu.connection.McuConnection
 import mcu.connection.StepQueueImpl
 import mcu.connection.StepperSync
-import platform.posix.log
 import kotlin.time.Duration.Companion.milliseconds
 
 /** Step 0 - API for adding all the parts to MCU. */
 class McuSetupImpl(override val config: McuConfig, val connection: McuConnection): McuSetup {
     private val configuration = McuConfigureImpl(connection.commands)
-    private val mcu = McuImpl(config, connection, configuration)
+    private val mcu = McuImpl(config, connection, configuration,)
 
     init {
         add(McuBasics(mcu, configuration))
@@ -59,6 +61,7 @@ class McuSetupImpl(override val config: McuConfig, val connection: McuConnection
         else McuPwmPin(mcu, config, configuration)).also { add(it) }
     override fun addAnalogPin(pin: AnalogInPin) = McuAnalogPin(mcu, pin, configuration).also { add(it) }
     override fun addStepperMotor(config: StepperPins, driver: StepperDriver): StepperMotor = McuStepperMotor(mcu, config, driver, configuration).also { add(it) }
+    override fun addEndstop(pin: DigitalInPin): Endstop = McuEndstop(mcu, pin, configuration).also { add(it) }
     override fun addTmcUart(config: UartPins) = TmcUartBus(mcu, config, configuration).also { add(it) }
 }
 
@@ -113,8 +116,10 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
 data class QueryCommand(val signature: String, val block: CommandBuilder.(clock: McuClock32)->Unit)
 
 /** Step 2 - the MCU runtime. */
-class McuImpl(override val config: McuConfig, val connection: McuConnection, val configuration: McuConfigureImpl):
-    Mcu {
+class McuImpl(
+    override val config: McuConfig,
+    val connection: McuConnection,
+    val configuration: McuConfigureImpl): Mcu {
     private val defaultQueue = CommandQueue(connection, "MCU ${config.name} DefaultQueue")
     private val components: List<McuComponent> = configuration.components
     private val clocksync = ClockSync(this, connection)
@@ -164,6 +169,7 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         override fun durationToClock(duration: MachineDuration) =
             clocksync.estimate.durationToClock(duration)
         override fun timeToClock(time: MachineTime) = clocksync.estimate.timeToClock(time)
+        override fun timeToClock32(time: MachineTime) = timeToClock(time).toUInt()
         override fun clockToTime(clock: McuClock32) = clocksync.estimate.clockToTime(clock)
         override fun <ResponseType : McuResponse> responseHandler(
             parser: ResponseParser<ResponseType>,
@@ -176,11 +182,10 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         stepperSync?.flushMoves(clocksync.estimate.timeToClock(time), clocksync.estimate.timeToClock(clearHistoryTime))
     }
 
-    override fun emergencyStop(reason: String) {
-        defaultQueue.send("emergency_stop")
-    }
-
-    override fun shutdown(reason: String) {
+    override fun shutdown(reason: String, emergency: Boolean) {
+        if (emergency) {
+            defaultQueue.send("emergency_stop")
+        }
         if (_state.value == McuState.ERROR || _state.value == McuState.SHUTDOWN) return
         logger.error { "MCU shutdown, $reason" }
         connection.dumpCmds()
@@ -188,6 +193,14 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
         connection.disconnect()
         _stateReason = reason
         _state.value = McuState.ERROR
+    }
+
+    fun acquireTrsync(): McuTrsync {
+
+    }
+
+    fun releaseTrsync(trsync: McuTrsync) {
+
     }
 
     private fun advanceStateOrAbort(state: McuState) {
@@ -264,4 +277,4 @@ class McuImpl(override val config: McuConfig, val connection: McuConnection, val
 data class ResponseConfig(val isConfig: Boolean, val crc: UInt, val isShutdown: Boolean, val moveCount: MoveQueueId):
     McuResponse
 val responseConfigParser = ResponseParser("config is_config=%c crc=%u is_shutdown=%c move_count=%hu")
-            { ResponseConfig(isConfig = parseB(), crc = parseU(), isShutdown = parseB(), moveCount = parseHU()) }
+            { ResponseConfig(isConfig = parseBoolean(), crc = parseU(), isShutdown = parseBoolean(), moveCount = parseHU()) }

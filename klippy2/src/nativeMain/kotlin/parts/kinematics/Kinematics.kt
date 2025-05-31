@@ -9,12 +9,16 @@ interface MotionActuator {
     val positionTypes: List<MotionType>
     /** The position requested by the commands.  */
     var commandedPosition: List<Double>
+    val axisStatus: List<RailStatus>
 
     /** Check move validity and return speed restrictions for the move. */
     fun checkMove(start: List<Double>, end: List<Double>): LinearSpeeds
 
-    /** Sets a homed position for the actuator. Should not perform any moves. */
-    fun initializePosition(time: MachineTime, position: List<Double>)
+    // Home at least the specified axis
+    suspend fun home(axis: List<Int>)
+
+    /** Sets a position for the actuator. Should not perform any moves. */
+    fun initializePosition(time: MachineTime, position: List<Double>, homed: List<Boolean>)
     /* A constant-acceleration move to a new position. */
     fun moveTo(startTime: MachineTime, endTime: MachineTime,
                startSpeed: Double, endSpeed: Double,
@@ -35,8 +39,15 @@ class LinearRailActuator(val rail: LinearRail): MotionActuator {
         return rail.checkMove(start[0], end[0])
     }
 
-    override fun initializePosition(time: MachineTime, position: List<Double>) {
-        rail.initializePosition(time, position[0])
+    override fun initializePosition(time: MachineTime, position: List<Double>, homed: List<Boolean>) {
+        rail.initializePosition(time, position[0], homed[0])
+    }
+
+    override val axisStatus: List<RailStatus>
+        get() = listOf(rail.railStatus)
+
+    override suspend fun home(axis: List<Int>) {
+        // TODO:
     }
 
     override fun moveTo(

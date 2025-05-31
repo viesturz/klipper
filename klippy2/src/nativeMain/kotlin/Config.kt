@@ -18,7 +18,7 @@ import kotlin.time.Duration.Companion.seconds
 fun MachineBuilder.buildMachine() {
     val mcu =
         SkrMiniE3V2(serial = "/dev/serial/by-id/usb-Klipper_stm32f103xe_31FFD7053030473538690543-if00")
-    val fan1 = Fan(pin = mcu.fan1)
+    val fan1 = Fan(pin = mcu.fan1, name="partFan", kickStartTime = 0.5)
     val he0 = Heater(
         pin = mcu.heaterE0,
         sensor = AdcTemperatureSensor(
@@ -153,7 +153,7 @@ fun MachineBuilder.buildMachine() {
     }
 
     val potSensor = PotSensor(
-        pin = mcu.bedTemp.copy(reportInterval = 0.3, sampleCount = 6u),
+        pin = mcu.bedTemp.copy(reportInterval = 0.03, sampleCount = 6u),
         minResistance = 0.ohms,
         maxResistance = 10_700.ohms,
     )
@@ -165,21 +165,21 @@ fun MachineBuilder.buildMachine() {
         maxAngle = 180.0,
     )
 
-    ControlLoop {
-        val openDegrees = 43
-        val closedDegrees = 138
-        fan1.setSpeed(1.0)
-        potSensor.flow.collect {
-//            val value = (Random.nextDouble() * 10.0).roundToInt() / 10.0
-            val value = it.value
-            servo.setAngle(closedDegrees + (openDegrees - closedDegrees) * value)
-//            delay(1.seconds)
-        }
-    }
-//    ControlLoop("Servo") {
+    val openDegrees = 28
+    val closedDegrees = 105
+
+//    ControlLoop {
 //        while (true) {
-//            servo.setAngle(180.0 * Random.nextDouble())
-//            delay(5000)
+//            val value = (Random.nextDouble() * 10.0).roundToInt() / 10.0
+//            servo.setAngle(closedDegrees + (openDegrees - closedDegrees) * value)
+//            delay(1.seconds)
 //        }
 //    }
+
+    ControlLoop {
+        potSensor.flow.collect {
+            val value = ((it.value-0.3)*3).coerceIn(0.0,1.0)
+            servo.setAngle(closedDegrees + (openDegrees - closedDegrees) * value)
+        }
+    }
 }

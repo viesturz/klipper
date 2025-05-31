@@ -53,6 +53,7 @@ interface McuRuntime {
 
     fun durationToClock(duration: MachineDuration): McuClock32
     fun timeToClock(time: MachineTime): McuClock
+    fun timeToClock32(time: MachineTime): McuClock32
     fun clockToTime(clock: McuClock32): MachineTime
     /** Add a handler for an event sent by the MCU. */
     fun <ResponseType: McuResponse> responseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: suspend (message: ResponseType) -> Unit)

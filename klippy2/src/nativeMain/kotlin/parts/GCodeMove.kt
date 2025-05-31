@@ -1,8 +1,8 @@
 package parts
 
+import GCodeCommand
 import machine.CommandQueue
 import MachineBuilder
-import machine.GCodeCommand
 import PartLifecycle
 import machine.waitUntil
 import parts.kinematics.MotionPlanner

@@ -53,7 +53,7 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
         val connection = this.connection ?:
             throw RuntimeException("Trying to send before setup is finished")
         var wait = retry.seconds
-        var received = connection.setResponseHandlerOnce(parser, id)
+        val received = connection.setResponseHandlerOnce(parser, id)
         for (retry in (1..5)) {
             sendWaitAck(data, minClock = minClock, reqClock = reqClock)
             try {
@@ -69,6 +69,7 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
     }
 
     /** Shorthand functions */
+    suspend fun <ResponseType: McuResponse> sendWithResponse(signature: String, id: ObjectId, parser: ResponseParser<ResponseType>) = sendWithResponse(build(signature){ addId(id)}, parser, id = 0u)
     suspend fun <ResponseType: McuResponse> sendWithResponse(signature: String, parser: ResponseParser<ResponseType>) = sendWithResponse(build(signature){}, parser, id = 0u)
     fun send(signature: String, minClock: McuClock = 0u, reqClock: McuClock = 0u, ackId: ULong=0u, function: CommandBuilder.()->Unit = {}) = send(build(signature, function), minClock = minClock, reqClock = reqClock, ackId = ackId)
 

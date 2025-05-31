@@ -3,15 +3,17 @@ package parts.kinematics
 import MachineTime
 
 interface LinearRail {
+    val railStatus: RailStatus
     var commandedPosition: Double
     val range: LinearRange
     val speeds: LinearSpeeds
     val homing: Homing?
 
+    suspend fun setPowered(time: MachineTime, value: Boolean)
     fun checkMove(start: Double, end: Double): LinearSpeeds
 
     // To drive the rail directly without kinematics
-    fun initializePosition(time: MachineTime, position: Double)
+    fun initializePosition(time: MachineTime, position: Double, homed: Boolean)
     fun moveTo(
         startTime: MachineTime,
         endTime: MachineTime,
@@ -21,6 +23,21 @@ interface LinearRail {
     )
     /** Generates move commands up to the given time. */
     fun generate(time: MachineTime)
+}
+
+data class RailStatus(
+    val powered: Boolean,
+    // When true, the rail position is accurate to the endstops.
+    // When false the position is arbitrary.
+    val homed: Boolean) {
+
+    fun combine(other: RailStatus) = RailStatus(
+        powered = this.powered && other.powered,
+        homed = this.homed && other.homed)
+
+    companion object {
+        val INITIAL = RailStatus(powered = false, homed = false)
+    }
 }
 
 data class LinearRange(

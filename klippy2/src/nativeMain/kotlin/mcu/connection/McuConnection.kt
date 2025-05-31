@@ -154,7 +154,7 @@ class McuConnection(val fd: Int, val reactor: Reactor) {
     }
 
     @Suppress("UNCHECKED_CAST")
-    fun <ResponseType: McuResponse> setResponseHandlerOnce(parser: ResponseParser<ResponseType>, id: ObjectId): CompletableDeferred<ResponseType> {
+    fun <ResponseType: McuResponse> setResponseHandlerOnce(parser: ResponseParser<ResponseType>, id: ObjectId): Deferred<ResponseType> {
         val key = Pair(parser.signature, id)
         val result = CompletableDeferred<ResponseType>()
         when {
