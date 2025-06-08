@@ -1,8 +1,10 @@
 #ifndef TRDISPATCH_H
 #define TRDISPATCH_H
 
+#include <stdint.h>
 #include <pthread.h> // pthread_mutex_lock
 #include "list.h" // list_add_tail
+#include "serialqueue.h" //trdispatch
 
 struct trdispatch {
     struct list_head tdm_list;

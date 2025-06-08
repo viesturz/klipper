@@ -3,4 +3,3 @@ headerFilter = *.h
 libraryPaths = ../klippy/build/libs/main
 staticLibraries = libklippy.a
 compilerOpts.linux = -I../klippy/chelper/
-linkerOpts.linux = --allow-shlib-undefined -L/usr/lib/x86_64-linux-gnu -pthread
