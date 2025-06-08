@@ -5,9 +5,9 @@ import EndstopSync
 import EndstopSyncBuilder
 import MachineDuration
 import MachineTime
+import Mcu
 import StepperMotor
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import mcu.McuClock32
@@ -19,6 +19,34 @@ import mcu.McuRuntime
 import mcu.ObjectId
 import mcu.ResponseParser
 import kotlin.math.min
+
+class McuEndstopSyncStaticBuilder(): EndstopSyncBuilder {
+    private val endstops = ArrayList<McuEndstop>()
+    private val motors = ArrayList<McuStepperMotor>()
+    private val mcus = ArrayList<McuImpl>()
+
+    override fun addEndstop(endstop: Endstop) {
+        require(endstop is McuEndstop)
+        endstops.add(endstop)
+        if (!mcus.contains(endstop.mcu)) {
+            mcus.add(endstop.mcu as McuImpl)
+        }
+    }
+    override fun addStepperMotor(motor: StepperMotor) {
+        require(motor is McuStepperMotor)
+        motors.add(motor)
+        if (!mcus.contains(motor.mcu)) {
+            mcus.add(motor.mcu)
+        }
+    }
+    fun build(): EndstopSync {
+        require(mcus.isNotEmpty())
+        require(endstops.isNotEmpty())
+        require(motors.isNotEmpty())
+        val mcuToTrsync = buildMap { mcus.forEach { mcu -> put(mcu, McuTrsync(mcu.configuration)) }}
+        return MultiMcuEndstopSync(mcuToTrsync, endstops, motors, releaseFunc = null)
+    }
+}
 
 class McuEndstopSyncRuntimeBuilder: EndstopSyncBuilder {
     private val endstops = ArrayList<McuEndstop>()
@@ -39,13 +67,17 @@ class McuEndstopSyncRuntimeBuilder: EndstopSyncBuilder {
             mcus.add(motor.mcu)
         }
     }
-
-    fun build(): MultiMcuEndstopSync {
-        require(mcus.size > 0)
-        require(endstops.size > 0)
-        require(motors.size > 0)
-        val mcuToTrsync = buildMap { mcus.forEach { mcu -> put(mcu, mcu.acquireTrsync()) }}
-        return MultiMcuEndstopSync(mcuToTrsync, endstops, motors)
+    fun build(): EndstopSync {
+        require(mcus.isNotEmpty())
+        require(endstops.isNotEmpty())
+        require(motors.isNotEmpty())
+        val mcuToTrsync = buildMap { mcus.forEach { mcu -> put(mcu, mcu.trsyncPool.acquire(this)) }}
+        val releaseFunc = { ->
+            mcuToTrsync.forEach { (mcu, trsync) ->
+                mcu.trsyncPool.release(trsync, this)
+            }
+        }
+        return MultiMcuEndstopSync(mcuToTrsync, endstops, motors, releaseFunc)
     }
 }
 
@@ -53,7 +85,8 @@ class McuEndstopSyncRuntimeBuilder: EndstopSyncBuilder {
 class MultiMcuEndstopSync(
     val mcuToTrsync: Map<McuImpl, McuTrsync>,
     val endstops: List<McuEndstop>,
-    val motors: List<McuStepperMotor>) : EndstopSync, McuComponent {
+    val motors: List<McuStepperMotor>,
+    val releaseFunc: (() -> Unit)?) : EndstopSync, McuComponent {
     override var state = MutableStateFlow<EndstopSync.State>(EndstopSync.StateIdle)
     lateinit var runtime: McuRuntime
 
@@ -63,6 +96,7 @@ class MultiMcuEndstopSync(
 
     override fun reset() {
         if (state.value == EndstopSync.StateIdle) return
+        if (state.value is EndstopSync.StateReleased) throw IllegalStateException("Sync released")
         for (trsync in mcuToTrsync.values) {
             trsync.reset()
         }
@@ -79,8 +113,10 @@ class MultiMcuEndstopSync(
     }
 
     override fun release() {
+        val rf = releaseFunc ?: throw RuntimeException("Not a releasable instance")
         reset()
-        TODO("Not yet implemented")
+        rf()
+        state.value = EndstopSync.StateReleased
     }
 
     @OptIn(ExperimentalForeignApi::class)
@@ -89,9 +125,7 @@ class MultiMcuEndstopSync(
         timeoutTime: MachineTime,
         pollInterval: MachineDuration,
         samplesToCheck: UByte,
-        checkInterval: MachineDuration,
-        stopOnValue: Boolean
-    ): EndstopSync.State {
+        checkInterval: MachineDuration): EndstopSync.State {
         reset()
         state.value = EndstopSync.StateRunning
         for (stepper in motors) {
@@ -109,7 +143,7 @@ class MultiMcuEndstopSync(
                 addU(runtime.durationToClock(pollInterval))
                 addC(samplesToCheck)
                 addU(runtime.durationToClock(checkInterval))
-                addBoolean(stopOnValue != endstop.config.invert)
+                addBoolean(!endstop.config.invert)
                 addId(trsync.id)
                 addC(EndstopSync.TriggerResult.ENDSTOP_HIT.id)
             }
@@ -184,6 +218,29 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
             else -> EndstopSync.StateAborted(response.reason)
         }
     }
+}
+
+/** Pool of reusable trsync IDs */
+class McuTrsyncPool(val mcu: Mcu, initialize: McuConfigure): McuComponent {
+    val entries: List<TrsyncEntry> = buildList { repeat(5) {
+        add(TrsyncEntry(McuTrsync(initialize), null))
+    } }
+
+    fun acquire(owner: Any): McuTrsync {
+        val entry = entries.firstOrNull { it.owner == null } ?: throw RuntimeException("Acquire: Not enough Trsyncs for MCU ${mcu.config.name}")
+        entry.owner = owner
+        return entry.trsync
+    }
+
+    fun release(trsync: McuTrsync, owner: Any) {
+        val entry = entries.firstOrNull{ it.trsync === trsync } ?:  throw RuntimeException("Release: Trsync not found")
+        if (entry.owner !== owner) {
+            throw RuntimeException("Release: Trsync owner does not match")
+        }
+        entry.owner = null
+    }
+
+    data class TrsyncEntry(val trsync: McuTrsync, var owner: Any?)
 }
 
 data class ResponseTrsyncState(override val id: ObjectId, val canTrigger: Boolean, val reason: EndstopSync.TriggerResult, val clock: McuClock32) :

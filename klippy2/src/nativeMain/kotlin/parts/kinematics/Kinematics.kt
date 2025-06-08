@@ -2,7 +2,7 @@ package parts.kinematics
 
 import MachineTime
 
-/** A motion actuator. Commands one or mode axis simultaneously. */
+/** A motion actuator. Commands one or more axis simultaneously. */
 interface MotionActuator {
     // Number of coordinates
     val size: Int
@@ -27,7 +27,7 @@ interface MotionActuator {
     fun generate(time: MachineTime)
 }
 
-/** An actuator that has a single liner rail. */
+/** An actuator that has a single linear rail. */
 class LinearRailActuator(val rail: LinearRail): MotionActuator {
     override val size = 1
     override val positionTypes = listOf(MotionType.LINEAR)
@@ -47,7 +47,28 @@ class LinearRailActuator(val rail: LinearRail): MotionActuator {
         get() = listOf(rail.railStatus)
 
     override suspend fun home(axis: List<Int>) {
-        // TODO:
+        require(axis.size == 1)
+        require(axis[0] == 0)
+        val homing = rail.homing
+        if (homing == null) {
+            throw IllegalStateException("Homing not configured")
+        }
+
+        val homingMove = HomingMove()
+        rail.commandedPosition = 0.0
+        rail.setupHomingMove(homingMove)
+        homing.endstopTrigger.setupHomingMove(homingMove)
+        homingMove.start()
+        rail.setPowered(time=0.0, value = true)
+        rail.moveTo(
+            startTime = 0.0,
+            endTime = 0.0,
+            startSpeed = 0.0,
+            endSpeed = 0.0,
+            endPosition = homing.endstopPosition,
+        )
+        rail.generate(time=0.0)
+        homingMove.wait()
     }
 
     override fun moveTo(

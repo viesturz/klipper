@@ -10,6 +10,7 @@ interface LinearRail {
     val homing: Homing?
 
     suspend fun setPowered(time: MachineTime, value: Boolean)
+    fun setupHomingMove(homingMove: HomingMove)
     fun checkMove(start: Double, end: Double): LinearSpeeds
 
     // To drive the rail directly without kinematics
@@ -28,7 +29,7 @@ interface LinearRail {
 data class RailStatus(
     val powered: Boolean,
     // When true, the rail position is accurate to the endstops.
-    // When false the position is arbitrary.
+    // When false, the position is arbitrary.
     val homed: Boolean) {
 
     fun combine(other: RailStatus) = RailStatus(

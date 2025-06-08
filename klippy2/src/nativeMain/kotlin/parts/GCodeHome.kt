@@ -9,34 +9,34 @@ import parts.kinematics.MotionPlanner
 
 fun MachineBuilder.GCodeHome(
     motion: MotionPlanner,
-    homeAxis: String = "XYZ",
+    homeAxes: String = "XYZ",
     homeScript: GCodeHandler? = null,
 ) = GCodeHomeImpl(
     "GCodeHome",
     motion,
-    homeAxis,
+    homeAxes,
     homeScript,
     this).also { addPart(it) }
 
 interface GCodeHome {
-    val homeAxis: String
-    suspend fun home(axis: String)
+    val homeAxes: String
+    suspend fun home(axes: String)
     suspend fun homeAll()
 }
 
 class GCodeHomeImpl(override val name: String,
                     val planner: MotionPlanner,
-                    override val homeAxis: String,
+                    override val homeAxes: String,
                     val script: GCodeHandler?,
                     configure: MachineBuilder
 ): PartLifecycle, GCodeHome {
-var inScript = false
+    var inScript = false
 
     init {
         configure.registerCommand("G28") { cmd -> cmdHome(this, cmd) }
     }
 
-    suspend fun cmdHome(context: GCodeContext,cmd: GCodeCommand) {
+    suspend fun cmdHome(context: GCodeContext, cmd: GCodeCommand) {
         if (script != null && !inScript) {
             inScript = true
             script(context, cmd)
@@ -46,6 +46,9 @@ var inScript = false
         }
     }
 
-    override suspend fun homeAll() = home(homeAxis)
-    override suspend fun home(axis: String) = planner.home(axis)
+    override suspend fun homeAll() = home(homeAxes)
+    override suspend fun home(axes: String) {
+        val realAxes = if (axes.isEmpty()) homeAxes else axes.uppercase()
+        planner.home(realAxes)
+    }
 }

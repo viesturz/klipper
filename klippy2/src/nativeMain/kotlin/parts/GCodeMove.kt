@@ -26,7 +26,7 @@ interface GCodeMove {
     /** Which axis does determine the toolhead position.
      * If any position axis is moved, the movement speed applies to them.
      * Otherwise the speed applies to the first axis specified.*/
-    var positionalAxis: String
+    var positionalAxes: String
     /* If positional axis movement should be relative. */
     var relativePosition: Boolean
     /** Which axis relative extrude applies to */
@@ -45,7 +45,7 @@ interface GCodeMove {
 
 class GCodeMoveImpl(override val name: String,
                     val planner: MotionPlanner,
-                    override var positionalAxis: String,
+                    override var positionalAxes: String,
                     override var extrudeAxis: String,
                     configure: MachineBuilder
 ): PartLifecycle, GCodeMove {
@@ -100,7 +100,7 @@ class GCodeMoveImpl(override val name: String,
             axees.add(validateAxis(entry.key))
             cmd.getDouble(entry.key)
         }
-        planner.initializePosition(axees.joinToString(""), position)
+        planner.setPosition(axees.joinToString(""), position)
     }
 
     fun gcodeMove(cmd: GCodeCommand) {
@@ -142,7 +142,7 @@ class GCodeMoveImpl(override val name: String,
         for (i in position.indices) {
             val a = axis[i]
             val p = applyTransform(a, position[i])
-            if (positionalAxis.contains(a)) {
+            if (positionalAxes.contains(a)) {
                 primaryAxis.append(a)
                 primaryPosition.add(p)
             } else {
@@ -150,10 +150,10 @@ class GCodeMoveImpl(override val name: String,
             }
         }
         if (primaryAxis.isNotEmpty()) {
-            // Apply cached and current speed to primary axis
+            // Apply speed to the primary axis
             moves.add(KinMove(primaryAxis.toString(), primaryPosition, moveSpeed))
         } else if (speed != null) {
-            // Apply speed override to all other moves
+            // No primary axis - apply speed to all axes.
             moves.forEach { it.speed = speed }
         }
         planner.move(queue, *moves.toTypedArray())
@@ -181,7 +181,7 @@ class GCodeMoveImpl(override val name: String,
                 p += planner.axisPosition(axis)
             }
         }
-        if (relativePosition && positionalAxis.contains(axis)) {
+        if (relativePosition && positionalAxes.contains(axis)) {
             p += planner.axisPosition(axis)
         }
         offset[axis]?.let { p += it }

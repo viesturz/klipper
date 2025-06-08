@@ -3,6 +3,7 @@ package parts.kinematics
 import MachineTime
 import machine.CommandQueue
 import MachineBuilder
+import MachineDuration
 
 typealias Position = List<Double>
 
@@ -35,11 +36,17 @@ interface MotionPlanner {
     /** Currently configured axis, uppercase letters. */
     val axis: String
     fun axisPosition(axis: Char): Double
-    /** Initialize position for some or all axis.
+
+    /**
+     * Dynamically reconfigure axis-to-letter assignment.
+     * This is just a mapping change, the move planning is not affected.
+     */
+    fun configureAxis(vararg axesMap: Pair<String, MotionActuator>)
+    /** Set position for some or all axes.
      *
      * Any outstanding moves on the affected axis will be finalized to a full stop.
      */
-    fun initializePosition(axis: String, position: Position)
+    fun setPosition(axes: String, position: Position)
     /**
      * Queue a move.
      *
@@ -58,31 +65,31 @@ interface MotionPlanner {
      * But NOT the other axis, even if they are linked kinematically.
      *
      * For example when issuing:
-     *  - move(queue1, "x",..)
-     *  - move(queue2, "y",..)
+     *  - move(queue1, "X",..)
+     *  - move(queue2, "Y",..)
      *  the two moves will be allowed to overlap, even if X and Y axis are kinematically linked.
      *  TODO: this needs to be implemented, currently all moves are executed sequentially.
      * */
     fun move(queue: CommandQueue, vararg moves: KinMove)
 
-    fun addMove(vararg moves: KinMove2): QueuedMove
+    suspend fun home(axes: String)
 
-    /** Returns number of moves generated. */
-    fun generateMoves(): Int
+//    fun addMove(vararg moves: KinMove2): QueuedMove
+//
+//    fun addMoveLate(vararg moves: KinMove2): QueuedMove
+//
+//    /** Returns number of moves generated. */
+//    fun generateMoves(): Int
+//
+//    /** Flushes all moves and advances next move start time to at least time. */
+//    fun flush(actuator: MotionActuator, time: MachineTime): Int
 
-    /** Flushes all moves and advances next move start time to at least time. */
-    fun flush(actuator: MotionActuator, time: MachineTime): Int
-
-    /**
-     * Dynamically reconfigure axis-to-letter assignment.
-     * This is just a mapping change, the move planning is not affected.
-     */
-    fun configureAxis(vararg axisMap: Pair<String, MotionActuator>)
 }
 
 interface QueuedMove {
     val startTime: MachineTime
     val endTime: MachineTime
+    val minDuration: MachineDuration
 }
 
 /** A move where all the axis are kinematically linked and orthogonal to each other.

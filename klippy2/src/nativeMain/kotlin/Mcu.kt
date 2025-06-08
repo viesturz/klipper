@@ -19,7 +19,7 @@ interface McuSetup {
     fun addTmcUart(config: UartPins): MessageBus
     fun addStepperMotor(config: StepperPins, driver: StepperDriver): StepperMotor
     fun addEndstop(pin: config.DigitalInPin): Endstop
-    fun addEndstopSync(builder: EndstopSyncBuilder): EndstopSync
+    fun addEndstopSync(block:  (EndstopSyncBuilder) -> Unit): EndstopSync
 
     //    fun addPulseCounter(pin: config.DigitalInPin): PulseCounter
 //    fun addI2C(config: config.I2CPins): MessageBus
@@ -38,9 +38,9 @@ interface Mcu {
     fun flushMoves(time: MachineTime, clearHistoryTime: MachineTime)
     fun shutdown(reason: String, emergency: Boolean = false)
 
-    /** Builds a new synchroniztion between endstops and motors.
-     * This can be done at runtime, but a limited number of syncs is available so they need to be released after use.*/
-    fun addEndstopSync(builder: EndstopSyncBuilder): EndstopSync
+    /** Builds a new synchronization between endstops and motors.
+     * At runtime a limited number of syncs are available, so they need to be released after use.*/
+    fun addEndstopSync(block:  (EndstopSyncBuilder) -> Unit): EndstopSync
 }
 
 enum class McuState {
@@ -155,8 +155,7 @@ interface EndstopSync {
         timeoutTime: MachineTime,
         pollInterval: MachineDuration,
         samplesToCheck: UByte,
-        checkInterval: MachineDuration,
-        stopOnValue: Boolean): State
+        checkInterval: MachineDuration): State
 
     /** Resets any ongoing triggering. Allows stopped motors to move again after being stopped. */
     fun reset()
@@ -166,6 +165,7 @@ interface EndstopSync {
     sealed interface State
     object StateIdle: State
     object StateRunning: State
+    object StateReleased: State
     class StateTriggered(val triggerTime: MachineTime): State
     class StateAborted(val result: TriggerResult): State
 

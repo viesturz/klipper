@@ -11,10 +11,10 @@ import kotlin.math.abs
 /**
  * The move planner.
  * Input: multiple kinematically coupled submoves.
- * Step0: determine max speeds and accelerations for each submove based on axis involved.
+ * Step0: determine max speeds and accelerations for each submove based on the axis involved.
  * Step1: determine cornering speed for each submove.
  * Step2: get joint max speed and cornering speed and distribute back to each submove.
- * Step3: compute actual speeds for a given move queue, determine number of flushable moves.
+ * Step3: compute actual speeds for a given move queue, determine the number of flushable moves.
  * Step4: write out the flushable moves.
  * */
 class MotionPlannerImpl(val config: MotionPlannerConfig) : MotionPlanner, PartLifecycle,
@@ -51,17 +51,31 @@ class MotionPlannerImpl(val config: MotionPlannerConfig) : MotionPlanner, PartLi
         axis = axisBuilder.toString()
     }
 
-    override fun configureAxis(vararg axisMap: Pair<String, MotionActuator>) {
-        TODO("Not yet implemented")
+    override fun configureAxis(vararg axesMap: Pair<String, MotionActuator>) {
+        for ((axes, actuator) in axesMap) {
+            if (axes.length != actuator.size) throw IllegalArgumentException("Axis $axes not matching the number of dimensions ${actuator.size}")
+            // Remove previous assignment if any
+            removeActuator(actuator)
+            // Add the new axes
+            for ((index, axis) in axes.withIndex()) {
+                val currentMapping = axisMapping[axis]
+                if (currentMapping != null) removeActuator(currentMapping.actuator)
+                axisMapping[axis] = AxisMapping(axis, actuator, axes, index)
+            }
+        }
     }
 
-    override fun initializePosition(axis: String, position: Position) {
-        for (i in axis.indices) {
-            val mapping = axisMapping[axis[i]] ?: throw RuntimeException("No axis for $axis")
+    private fun removeActuator(actuator: MotionActuator) {
+        val itemsToRemove = axisMapping.filter { it.value.actuator == actuator }.map { it.key }
+        itemsToRemove.forEach { axisMapping.remove(it) }
+    }
+
+    override fun setPosition(axes: String, position: Position) {
+        for (i in axes.indices) {
+            val mapping = axisMapping[axes[i]] ?: throw RuntimeException("No axis for $axes")
             val value = position[i]
             mapping.actuator.commandedPosition =
                 mapping.actuator.commandedPosition.mapIndexed { index, current -> if (index == mapping.index) value else current }
-            // TODO: schedule position set after all the moves.
         }
     }
 
@@ -94,6 +108,17 @@ class MotionPlannerImpl(val config: MotionPlannerConfig) : MotionPlanner, PartLi
             result.add(time)
         }
         return result
+    }
+
+    override suspend fun home(axes: String) {
+        val homedAxis = mutableSetOf<Char>()
+        for (ax in axes) {
+            if (homedAxis.contains(ax)) continue
+            val mapping = axisMapping[ax] ?: throw IllegalArgumentException("Axis $ax not configured")
+            val actuator = mapping.actuator
+            val axesForActuator = axes.mapNotNull { axisMapping[it] }.filter { it.actuator == actuator }.map { homedAxis.add(it.axis); it.index }
+            actuator.home(axesForActuator)
+        }
     }
 
     /** Map the moves to the configured axis. Pull in the start positions and create a basic move plan. */

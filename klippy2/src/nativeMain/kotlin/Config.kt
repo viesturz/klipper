@@ -1,7 +1,6 @@
 import config.NTC100K
 import config.PID
 import config.mcus.SkrMiniE3V2
-import kotlinx.coroutines.delay
 import parts.*
 import parts.drivers.TMC2209
 import parts.kinematics.CoreXYKinematics
@@ -11,9 +10,6 @@ import parts.kinematics.LinearRange
 import parts.kinematics.LinearSpeeds
 import parts.kinematics.MotionPlanner
 import parts.kinematics.PinTrigger
-import kotlin.math.roundToInt
-import kotlin.random.Random
-import kotlin.time.Duration.Companion.seconds
 
 fun MachineBuilder.buildMachine() {
     val mcu =
@@ -84,14 +80,14 @@ fun MachineBuilder.buildMachine() {
         range = LinearRange(
             positionMin = 0.0,
             positionMax = 125.0),
-//        homing = Homing(
-//            endstopPosition = 122.0,
-//            endstopTrigger = PinTrigger(pin = mcu.endstop2.copy(invert = true, pullup = 1)),
-//            direction = HomingDirection.MAX,
-//            speed = 20.0,
-//            secondSpeed = 3.0,
-//            retractDist = 3.0,
-//        )
+        homing = Homing(
+            endstopPosition = 122.0,
+            endstopTrigger = PinTrigger(pin = mcu.endstop2.copy(invert = true, pullup = true)),
+            direction = HomingDirection.MAX,
+            speed = 20.0,
+            secondSpeed = 3.0,
+            retractDist = 3.0,
+        )
     )
 
     val eStepper = LinearStepper(
@@ -107,26 +103,26 @@ fun MachineBuilder.buildMachine() {
             positionMin = 0.0,
             positionMax = 125.0,
         ),
-//        xHoming = Homing(
-//            endstopPosition = 120.0,
-//            endstopTrigger = PinTrigger(mcu.endstop0),
-//            direction = HomingDirection.MAX,
-//            speed = 20.0,
-//            secondSpeed = 3.0,
-//            retractDist = 3.0
-//        ),
+        xHoming = Homing(
+            endstopPosition = 120.0,
+            endstopTrigger = PinTrigger(mcu.endstop0),
+            direction = HomingDirection.MAX,
+            speed = 20.0,
+            secondSpeed = 3.0,
+            retractDist = 3.0
+        ),
         yRange = LinearRange(
             positionMin = 0.0,
             positionMax = 125.0,
         ),
-//        yHoming = Homing(
-//            endstopPosition = 120.0,
-//            endstopTrigger = PinTrigger(mcu.endstop1),
-//            direction = HomingDirection.MAX,
-//            speed = 20.0,
-//            secondSpeed = 3.0,
-//            retractDist = 3.0
-//        ),
+        yHoming = Homing(
+            endstopPosition = 120.0,
+            endstopTrigger = PinTrigger(mcu.endstop1),
+            direction = HomingDirection.MAX,
+            speed = 20.0,
+            secondSpeed = 3.0,
+            retractDist = 3.0
+        ),
         xSpeed = LinearSpeeds(speed = 300.0, accel = 8000.0),
         ySpeed = LinearSpeeds(speed = 300.0, accel = 8000.0),
     )

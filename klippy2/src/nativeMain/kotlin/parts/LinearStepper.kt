@@ -15,6 +15,7 @@ import machine.MoveOutsideRangeException
 import mcu.connection.StepQueueImpl
 import mcu.GcWrapper
 import parts.kinematics.Homing
+import parts.kinematics.HomingMove
 import parts.kinematics.LinearRail
 import parts.kinematics.LinearRange
 import parts.kinematics.LinearSpeeds
@@ -96,6 +97,10 @@ private class StepperImpl(
             stepQueue.stepcompress.ptr,
             stepsPerMm,
         )
+    }
+
+    override fun setupHomingMove(homingMove: HomingMove) {
+        homingMove.addStepper(motor)
     }
 
     override fun checkMove(start: Double, end: Double): LinearSpeeds {

@@ -19,14 +19,14 @@ interface MachineBuilder
 /** External API to a machine */
 interface Machine {
     /** Starts the machine - this can take a few seconds to complete.
-     *  Will throw exception if the startup fails.
+     *  Will throw an exception if the startup fails.
      * */
     suspend fun start()
     fun shutdown(reason: String, emergency: Boolean = false)
 
     /** Runs a gcode.
      * Most gcodes schedule the moves and return immediately.
-     * But some may take significant time to complete, like wait for temperature.
+     * But some may take significant time to complete, like waiting for temperature.
      * */
     suspend fun gcode(command: String, responseHandler: ((response: String) -> Unit) = {})
 
@@ -61,6 +61,12 @@ interface MachineRuntime: Machine {
      *  it may stall it until this queue completes. */
     fun newBackdatingQueue(): CommandQueue
 }
+inline fun <reified PartType> MachineRuntime.getPartByName(name: String): PartType? =
+    parts.first { it.name == name && it is PartType } as PartType?
+
+/** Get a list of all parts implementing a specific API. */
+inline fun <reified PartApi> MachineRuntime.getPartsImplementing() = parts.filterIsInstance<PartApi>()
+
 
 /** Base class for all parts. */
 interface MachinePart {
@@ -72,13 +78,5 @@ interface PartLifecycle: MachinePart {
     fun status(): Map<String, Any> = mapOf()
     // Called when all MCUs are configured and parts components initialized.
     suspend fun onStart(runtime: MachineRuntime){}
-    // Called when printer session is over and it enters idle state.
-    fun onSessionEnd(){}
     fun shutdown(){}
 }
-
-inline fun <reified PartType> MachineRuntime.getPartByName(name: String): PartType? =
-    parts.first { it.name == name && it is PartType } as PartType?
-
-/** Get a list of all parts implementing a specific API. */
-inline fun <reified PartApi> MachineRuntime.getPartsImplementing() = parts.filterIsInstance<PartApi>()

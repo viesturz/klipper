@@ -1,5 +1,6 @@
 package parts.kinematics
 
+import MachineDuration
 import MachineTime
 import utils.distanceTo
 import utils.magnitude
@@ -61,7 +62,9 @@ data class MovePlan(
     // Actuator moves, split by kinetic groups.
     val kinMoves: List<List<MovePlanActuator>>,
 ): QueuedMove {
-    var minDuration: Double = 0.0
+    override var minDuration: MachineDuration = 0.0
+    override var startTime: MachineTime = 0.0
+    override var endTime: MachineTime = 0.0
 
     /** Maximum junction speed between this and previous move. */
     var speeds = MoveSpeeds.UNLIMITED
@@ -77,8 +80,6 @@ data class MovePlan(
     var accelDuration: Double = 0.0
     var cruiseDuration: Double = 0.0
     var decelDuration: Double = 0.0
-    override var startTime: MachineTime = 0.0
-    override var endTime: MachineTime = 0.0
 
     fun calcJunctionSpeed() {
         // Find common minimum speed for all moves.

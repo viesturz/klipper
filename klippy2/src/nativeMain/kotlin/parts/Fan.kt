@@ -9,8 +9,6 @@ import MachinePart
 import MachineRuntime
 import MachineTime
 import PartLifecycle
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Deferred
 import utils.interpolate
 
 fun MachineBuilder.Fan(

@@ -1,6 +1,8 @@
 package mcu
 
 import Endstop
+import EndstopSync
+import EndstopSyncBuilder
 import MachineDuration
 import config.McuConfig
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -27,10 +29,13 @@ import mcu.components.McuAnalogPin
 import mcu.components.McuButton
 import mcu.components.McuDigitalPin
 import mcu.components.McuEndstop
+import mcu.components.McuEndstopSyncRuntimeBuilder
+import mcu.components.McuEndstopSyncStaticBuilder
 import mcu.components.McuHwPwmPin
 import mcu.components.McuPwmPin
 import mcu.components.McuStepperMotor
 import mcu.components.McuTrsync
+import mcu.components.McuTrsyncPool
 import mcu.components.TmcUartBus
 import mcu.connection.CommandQueue
 import mcu.connection.McuConnection
@@ -63,6 +68,7 @@ class McuSetupImpl(override val config: McuConfig, val connection: McuConnection
     override fun addStepperMotor(config: StepperPins, driver: StepperDriver): StepperMotor = McuStepperMotor(mcu, config, driver, configuration).also { add(it) }
     override fun addEndstop(pin: DigitalInPin): Endstop = McuEndstop(mcu, pin, configuration).also { add(it) }
     override fun addTmcUart(config: UartPins) = TmcUartBus(mcu, config, configuration).also { add(it) }
+    override fun addEndstopSync(block: (EndstopSyncBuilder) -> Unit): EndstopSync = McuEndstopSyncStaticBuilder().also { block(it) }.build()
 }
 
 /** Step 1 - API to configure each part. */
@@ -126,6 +132,7 @@ class McuImpl(
     private val _state = MutableStateFlow(McuState.STARTING)
     private var _stateReason = ""
     private val logger = KotlinLogging.logger("McuImpl ${config.name}")
+    val trsyncPool = McuTrsyncPool(this, configuration)
     private var stepperSync: StepperSync? = null
     override val state: StateFlow<McuState>
         get() = _state
@@ -177,6 +184,8 @@ class McuImpl(
             handler: suspend (message: ResponseType) -> Unit) = connection.setResponseHandler(parser, id, handler)
     }
 
+    override fun addEndstopSync(block: (EndstopSyncBuilder) -> Unit): EndstopSync = McuEndstopSyncRuntimeBuilder().also { block(it) }.build()
+
     override fun flushMoves(time: MachineTime,  clearHistoryTime: MachineTime) {
         require(isRunning)
         stepperSync?.flushMoves(clocksync.estimate.timeToClock(time), clocksync.estimate.timeToClock(clearHistoryTime))
@@ -193,14 +202,6 @@ class McuImpl(
         connection.disconnect()
         _stateReason = reason
         _state.value = McuState.ERROR
-    }
-
-    fun acquireTrsync(): McuTrsync {
-
-    }
-
-    fun releaseTrsync(trsync: McuTrsync) {
-
     }
 
     private fun advanceStateOrAbort(state: McuState) {
