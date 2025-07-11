@@ -71,14 +71,17 @@ class ResponseParserGenerator(
             properties.forEach { prop -> file += "${prop.simpleName.asString()} = p.${generateParser(prop)}," }
             file += ")\n"
             file += " override fun write(input: $name, builder: CommandBuilder) { "
+            var numPoperties = 0
             properties.forEach { prop ->
                 generateWriter(prop)?.also { writeMethod ->
                     file += "builder.$writeMethod(input.${prop.simpleName.asString()});"
+                    numPoperties += 1
                 }
             }
             file += "}\n"
             file += "},\n"
-            // TODO: validate signature matches parameters.
+            val numParamsInSignature = signature.split("=").count() - 1
+            require(numPoperties == numParamsInSignature){ "$name signature has $numParamsInSignature fields, but class has $numPoperties"}
         }
 
         private fun generateParser(prop: KSPropertyDeclaration): String {
