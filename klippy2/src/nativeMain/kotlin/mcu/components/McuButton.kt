@@ -7,10 +7,13 @@ import ButtonListener
 import Mcu
 import mcu.McuComponent
 import mcu.McuConfigure
+import mcu.McuObjectCommand
 import mcu.McuObjectResponse
 import mcu.McuRuntime
 import mcu.ObjectId
-import mcu.ResponseParser
+import mcu.PinName
+import mcu.responseHandler
+import utils.RegisterMcuMessage
 
 class McuButton(override val mcu: Mcu, val config: DigitalInPin, configure: McuConfigure) : Button,
     McuComponent {
@@ -19,17 +22,13 @@ class McuButton(override val mcu: Mcu, val config: DigitalInPin, configure: McuC
     private var reactor: Reactor? = null
     private var _pressed = false
     init {
-        configure.configCommand("config_buttons oid=%c button_count=%c") {
-                addId(id);addC(1u)
-            }
-        configure.configCommand("buttons_add oid=%c pos=%c pin=%u pull_up=%c") {
-            addId(id);addC(1u);addEnum("pin", config.pin);addC(config.pullup)
-        }
+        configure.configCommand(CommandConfigButtons(id, 1u))
+        configure.configCommand(CommandButtonsAdd(id, 1u, config.pin, config.pullup))
     }
 
     override fun start(runtime: McuRuntime) {
         this.reactor = runtime.reactor
-        runtime.responseHandler(responseButtonsStateParser, id, this::onButtonState)
+        runtime.responseHandler<ResponseButtonsState>(id, this::onButtonState)
     }
 
     private suspend fun onButtonState(state: ResponseButtonsState) {
@@ -48,8 +47,9 @@ class McuButton(override val mcu: Mcu, val config: DigitalInPin, configure: McuC
     }
 }
 
-data class ResponseButtonsState(override val id: ObjectId, val ackCount:UByte, val state: ByteArray):
-    McuObjectResponse
-val responseButtonsStateParser = ResponseParser("buttons_state oid=%c ack_count=%c state=%*s") {
-    ResponseButtonsState(parseC(), parseC(), parseBytes())
-}
+@RegisterMcuMessage(signature = "config_buttons oid=%c button_count=%c")
+data class CommandConfigButtons(override val id: ObjectId, val buttonCount:UByte): McuObjectCommand
+@RegisterMcuMessage(signature = "buttons_add oid=%c pos=%c pin=%u pull_up=%c")
+data class CommandButtonsAdd(override val id: ObjectId, val pos:UByte, val pin: PinName, val pullUp: Boolean): McuObjectCommand
+@RegisterMcuMessage(signature = "buttons_state oid=%c ack_count=%c state=%*s")
+data class ResponseButtonsState(override val id: ObjectId, val ackCount:UByte, val state: ByteArray):McuObjectResponse

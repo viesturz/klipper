@@ -9,6 +9,7 @@ import machine.Reactor
 import McuClock
 import mcu.connection.CommandQueue
 import mcu.connection.McuConnection
+import utils.RegisterMcuMessage
 import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.reflect.KMutableProperty0
@@ -62,9 +63,9 @@ internal class ClockSync(val mcu: McuImpl, val connection: McuConnection) {
 
     suspend fun start(reactor: Reactor) {
         mcuFrequency = connection.commands.identify.clockFreq.toDouble()
-        val uptime = commands.sendWithResponse("get_uptime", responseUptimeParser)
-        lastClock = uptime.clock
-        clockAverage = uptime.clock.toDouble()
+        val uptime = commands.sendWithResponse<ResponseUptime>(CommandGetUptime())
+        lastClock = uptime.clock()
+        clockAverage = lastClock.toDouble()
         timeAverage = uptime.sendTime
         estimate = ClockEstimate(
             frequency = mcuFrequency,
@@ -77,16 +78,16 @@ internal class ClockSync(val mcu: McuImpl, val connection: McuConnection) {
         repeat(8) {
             delay(50.milliseconds)
             predictionVarianceTime = -9999.0
-            val clock = commands.sendWithResponse("get_clock", responseClockParser)
+            val clock = commands.sendWithResponse<ResponseClock>(CommandGetClock())
             handleClock(clock)
         }
         logger.info { "Clock sync initialized: $estimate" }
         // Setup periodic background resync
-        connection.setResponseHandler(responseClockParser, 0u, this::handleClock)
+        connection.setResponseHandler(ResponseClock::class, id = 0u, this::handleClock)
         reactor.scope.launch {
             while (true) {
                 delay(0.9839.seconds) // Nice uneven delay to avoid resonances wth other periodic events.
-                commands.send("get_clock")
+                commands.send(CommandGetClock())
                 if (queriesPending > 4) {
                     mcu.shutdown("MCU not responding to clock sync")
                 }
@@ -99,18 +100,18 @@ internal class ClockSync(val mcu: McuImpl, val connection: McuConnection) {
         queriesPending = 0
         val newClock = estimate.clock32ToClock64(response.clock)
         val clock = newClock.toDouble()
-        roundtrip.update(response.sentTime, response.receiveTime)
+        roundtrip.update(response.sendTime, response.receiveTime)
         // Filter out samples that are extreme outliers
-        val expectedClock = (response.sentTime - timeAverage) * estimate.frequency + clockAverage
+        val expectedClock = (response.sendTime - timeAverage) * estimate.frequency + clockAverage
         val diff = clock - expectedClock
-        logger.debug { "HandleClock: $newClock sent=${response.sentTime} receive=${response.receiveTime}, error=${diff/mcuFrequency}, halfRtt=${roundtrip.halfRoundtrip}" }
+        logger.debug { "HandleClock: $newClock sent=${response.sendTime} receive=${response.receiveTime}, error=${diff/mcuFrequency}, halfRtt=${roundtrip.halfRoundtrip}" }
         val diffSq = diff.pow(2)
         if (diffSq > 25 * predictionVariance && diffSq > (0.000_500 * mcuFrequency).pow(2)) {
             // Outlier sample
-            val stats = "${response.sentTime}: freq=${estimate.frequency} diff=$diff stdev=${
+            val stats = "${response.sendTime}: freq=${estimate.frequency} diff=$diff stdev=${
                 sqrt(predictionVariance)
             }"
-            if (clock > expectedClock && response.sentTime < predictionVarianceTime + 10) {
+            if (clock > expectedClock && response.sendTime < predictionVarianceTime + 10) {
                 logger.info { "Ignoring clock sample $stats" }
                 return
             }
@@ -118,11 +119,11 @@ internal class ClockSync(val mcu: McuImpl, val connection: McuConnection) {
             predictionVariance = (0.001 * mcuFrequency).pow(2)
         } else {
             // Normal sample
-            predictionVarianceTime = response.sentTime
+            predictionVarianceTime = response.sendTime
             ::predictionVariance.updateWithDecay(diffSq)
         }
         // Add clock and sent_time to linear regression
-        val difSentTime = response.sentTime - timeAverage
+        val difSentTime = response.sendTime - timeAverage
         timeAverage += DECAY * difSentTime
         ::timeVariance.updateWithDecay(difSentTime.pow(2))
         val diffClock = clock - clockAverage
@@ -138,7 +139,7 @@ internal class ClockSync(val mcu: McuImpl, val connection: McuConnection) {
                 frequency = estMcuFrequency,
                 timeOffset = estMcuTime - estMcuClock / estMcuFrequency,
                 lastClock = newClock,
-                validUntil = response.sentTime + ESTIMATE_DURATION
+                validUntil = response.sendTime + ESTIMATE_DURATION
             ),
             sqrt(predictionVariance)
         )
@@ -188,22 +189,20 @@ class RoundtripEstimator {
     }
 }
 
+@RegisterMcuMessage("get_uptime")
+class CommandGetUptime() : McuCommand
+@RegisterMcuMessage("uptime high=%u clock=%u")
 data class ResponseUptime(
-    val clock: McuClock,
+    val high: McuClock32,
+    val low: McuClock32,
     val sendTime: MachineTime,
     val receiveTime: MachineTime
-) : McuResponse
-
-val responseUptimeParser = ResponseParser("uptime high=%u clock=%u") {
-    ResponseUptime((parseU().toULong() shl 32) + parseU(), sentTime, receiveTime)
+) : McuResponse {
+    fun clock(): McuClock = (high.toULong() shl 32) + low
 }
+@RegisterMcuMessage("get_clock")
+class CommandGetClock() : McuCommand
+@RegisterMcuMessage("clock clock=%u")
+data class ResponseClock(val clock: McuClock32, val sendTime: MachineTime, val receiveTime: MachineTime) : McuResponse
 
-data class ResponseClock(
-    val clock: McuClock32,
-    val sentTime: MachineTime,
-    val receiveTime: MachineTime
-) : McuResponse
 
-val responseClockParser = ResponseParser("clock clock=%u") {
-    ResponseClock(parseU(), sentTime, receiveTime)
-}

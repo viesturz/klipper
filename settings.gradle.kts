@@ -18,3 +18,4 @@ pluginManagement {
 rootProject.name = "klipper"
 
 include("klippy", "klippy2")
+include("klippycodegen")

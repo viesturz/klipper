@@ -18,6 +18,6 @@ class HomingMove {
     }
 
     suspend fun wait(): EndstopSync.State {
-
+        return EndstopSync.StateAborted(result = EndstopSync.TriggerResult.NONE)
     }
 }

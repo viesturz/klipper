@@ -31,18 +31,10 @@ class McuPwmPin(override val mcu: Mcu, val config: DigitalOutPin, initialize: Mc
     override fun configure(configure: McuConfigure) {
         logger.trace { "Configure" }
         cycleTicks = configure.durationToClock(config.cycleTime)
-        configure.configCommand("config_digital_out oid=%c pin=%u value=%c default_value=%c max_duration=%u") {
-            addId(id);addEnum("pin", config.pin)
-            addC(config.startValue > 0)
-            addC(config.shutdownValue > 0)
-            addU(configure.durationToClock(config.watchdogDuration))
-        }
-        configure.initCommand("set_digital_out_pwm_cycle oid=%c cycle_ticks=%u") {
-            addId(id);addU(cycleTicks)
-        }
-        configure.initCommand("update_digital_out_pwm oid=%c on_ticks=%u") {
-            addId(id);addU(dutyToTicks(dutyCycle))
-        }
+        configure.configCommand(CommandConfigDigitalOut(id, config.pin, config.startValue > 0, config.shutdownValue > 0,
+            configure.durationToClock(config.watchdogDuration)))
+        configure.initCommand(CommandSetDigitalOutPwmCycle(id, cycleTicks))
+        configure.initCommand(CommandUpdateDigitalOutPwm(id, dutyToTicks(dutyCycle)))
     }
 
     private fun dutyToTicks(d: Double) = (d * cycleTicks.toDouble() + 0.5f).toUInt()
@@ -58,11 +50,9 @@ class McuPwmPin(override val mcu: Mcu, val config: DigitalOutPin, initialize: Mc
             _dutyCycle = dutyCycle
             val clock = max(runtime.timeToClock(time),queue.lastClock)
             queue.send(
+                CommandQueueDigitalOut(id, clock.toUInt(), dutyToTicks(_dutyCycle)),
                 minClock = lastClock,
-                reqClock = clock,
-                data = queue.build("queue_digital_out oid=%c clock=%u on_ticks=%u") {
-                    addId(id);addU(clock.toUInt());addU(dutyToTicks(_dutyCycle))
-                })
+                reqClock = clock)
         }
     }
 
@@ -73,11 +63,9 @@ class McuPwmPin(override val mcu: Mcu, val config: DigitalOutPin, initialize: Mc
         if (cycleChange || dutyCycle != _dutyCycle || config.watchdogDuration > 0) {
             _dutyCycle = dutyCycle
             queue.send(
+                CommandUpdateDigitalOutPwm(id, dutyToTicks(_dutyCycle)),
                 minClock = lastClock,
-                reqClock = runtime.timeToClock(curClock),
-                data = queue.build("update_digital_out_pwm oid=%c on_ticks=%u") {
-                    addId(id);addU(dutyToTicks(_dutyCycle))
-                })
+                reqClock = runtime.timeToClock(curClock))
         }
     }
 
@@ -87,12 +75,9 @@ class McuPwmPin(override val mcu: Mcu, val config: DigitalOutPin, initialize: Mc
         _cycleTime = cycleTime
         cycleTicks = runtime.durationToClock(config.cycleTime)
         queue.send(
+            CommandSetDigitalOutPwmCycle(id, cycleTicks),
             minClock = lastClock,
-            reqClock = runtime.timeToClock(time),
-            data = queue.build("set_digital_out_pwm_cycle oid=%c cycle_ticks=%u") {
-                addId(id);addU(cycleTicks)
-            })
+            reqClock = runtime.timeToClock(time))
         return true
     }
-
 }

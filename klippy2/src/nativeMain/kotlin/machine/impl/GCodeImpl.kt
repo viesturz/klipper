@@ -44,9 +44,9 @@ class GCodeImpl {
 
 class GCodeRunnerImpl(val commandQueue: CommandQueue, val gCode: GCodeImpl, val machineRuntime: MachineRuntime, val outputHandler: GCodeOutputSink): GCodeContext {
 
-    override suspend fun gcode(cmd: String) {
-        logger.info { cmd }
-        var command = cmd
+    override suspend fun gcode(command: String) {
+        logger.info { command }
+        var command = command
         val name = command.split(" ")[0].uppercase()
         val isRawText = gCode.commands.get(name)?.rawText == true
         val comment = command.indexOfFirst { it == ';' }
@@ -59,7 +59,7 @@ class GCodeRunnerImpl(val commandQueue: CommandQueue, val gCode: GCodeImpl, val 
         val args = parts.subList(1, parts.size)
         val map = when {
             isRawText -> mapOf()
-            command.contains("=") -> parseWithAssign(cmd, args)
+            command.contains("=") -> parseWithAssign(command, args)
             else -> parseBasic(args)
         }
         val params = GCodeCommand(command, name, map, machineRuntime, commandQueue, outputHandler)
@@ -73,9 +73,9 @@ class GCodeRunnerImpl(val commandQueue: CommandQueue, val gCode: GCodeImpl, val 
         val handler = gCode.commands[name]
         if (handler == null) {
             if (muxer != null) {
-                throw InvalidGcodeException("Gcode $cmd requires parameter ${muxer.key}")
+                throw InvalidGcodeException("Gcode $command requires parameter ${muxer.key}")
             } else {
-                throw InvalidGcodeException("Unknown gcode $cmd")
+                throw InvalidGcodeException("Unknown gcode $command")
             }
         }
         handler.impl(this, params)

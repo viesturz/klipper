@@ -20,12 +20,14 @@ import McuClock
 import mcu.Commands
 import mcu.GcWrapper
 import mcu.FirmwareConfig
+import mcu.McuCommand
 import mcu.McuObjectResponse
 import mcu.McuResponse
 import mcu.ObjectId
-import mcu.ResponseParser
 import platform.posix.close
+import utils.RegisterMcuMessage
 import kotlin.concurrent.AtomicLong
+import kotlin.reflect.KClass
 
 private val logger = KotlinLogging.logger("McuConnection")
 
@@ -79,20 +81,16 @@ class McuConnection(val fd: Int, val reactor: Reactor) {
     suspend fun identify(chunkSize:UByte = 40u): Commands {
         logger.debug { "Identify" }
         val queue = CommandQueue(this, "Identify")
-        var offset = 0
-        val data = buildList<Byte> {
+        var offset = 0u
+        val data = buildList {
             while (true) {
-                val response = queue.sendWithResponse(
-                    commands.build("identify offset=%u count=%c") {
-                        addU(offset.toUInt()); addC(chunkSize)
-                    },
-                    responseIdentifyParser)
-                if (response.offset.toInt() == offset) {
+                val response = queue.sendWithResponse<ResponseIdentify>(CommandIdentify(offset, chunkSize))
+                if (response.offset == offset) {
                     addAll(response.data.toList())
                     if (response.data.size < chunkSize.toInt()) {
                         break
                     }
-                    offset += response.data.size
+                    offset += response.data.size.toUInt()
                 }
             }
         }.toByteArray()
@@ -141,26 +139,24 @@ class McuConnection(val fd: Int, val reactor: Reactor) {
     }
 
     @Suppress("UNCHECKED_CAST")
-    fun <ResponseType: McuResponse> setResponseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: (suspend (message: ResponseType) -> Unit)? ) {
-        val key = Pair(parser.signature, id)
+    fun <ResponseType: McuResponse> setResponseHandler(responseType:  KClass<ResponseType>, id: ObjectId, handler: (suspend (message: ResponseType) -> Unit)? ) {
+        val key = Pair(commands.getSignature(responseType), id)
         when {
             handler == null -> responseHandlers.remove(key)
             responseHandlers.containsKey(key) -> throw IllegalArgumentException("Duplicate message handler for $key")
             else -> {
-                commands.registerParser(parser)
                 responseHandlers[key] = handler as (suspend (message: McuResponse) -> Unit)
             }
         }
     }
 
     @Suppress("UNCHECKED_CAST")
-    fun <ResponseType: McuResponse> setResponseHandlerOnce(parser: ResponseParser<ResponseType>, id: ObjectId): Deferred<ResponseType> {
-        val key = Pair(parser.signature, id)
+    fun <ResponseType: McuResponse> setResponseHandlerOnce(responseType: KClass<ResponseType>, id: ObjectId): Deferred<ResponseType> {
+        val key = Pair(commands.getSignature(responseType), id)
         val result = CompletableDeferred<ResponseType>()
         when {
             responseHandlersOneshot.containsKey(key) -> throw IllegalArgumentException("Duplicate message handler for $key")
             else -> {
-                commands.registerParser(parser)
                 responseHandlersOneshot[key] = result as CompletableDeferred<McuResponse>
             }
         }
@@ -172,6 +168,7 @@ class McuConnection(val fd: Int, val reactor: Reactor) {
     }
 }
 
+@RegisterMcuMessage(signature = "identify offset=%u count=%c")
+data class CommandIdentify(val offset: UInt, val count: UByte): McuCommand
+@RegisterMcuMessage(signature = "identify_response offset=%u data=%.*s")
 data class ResponseIdentify(val offset: UInt, val data: ByteArray) : McuResponse
-val responseIdentifyParser = ResponseParser("identify_response offset=%u data=%.*s",
-    {ResponseIdentify(parseU(),parseBytes())})

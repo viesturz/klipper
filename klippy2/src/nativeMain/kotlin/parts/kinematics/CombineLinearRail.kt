@@ -26,6 +26,10 @@ class CombineLinearStepper(vararg railArgs: LinearStepper) : LinearStepper {
         range = ra
     }
 
+    override fun setupHomingMove(homingMove: HomingMove) {
+        steppers.forEach { it.setupHomingMove(homingMove) }
+    }
+
     @OptIn(ExperimentalForeignApi::class)
     override fun assignToKinematics(kinematicsProvider: () -> GcWrapper<stepper_kinematics>) {
         steppers.forEach { assignToKinematics(kinematicsProvider)}

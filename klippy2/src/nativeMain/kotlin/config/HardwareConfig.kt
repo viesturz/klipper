@@ -63,7 +63,7 @@ data class AnalogInPin(
     // Seconds between value updates
     val reportInterval: MachineDuration = 0.300,
     // Number of samples in each update
-    val sampleCount: UInt = 8u,
+    val sampleCount: UByte = 8u,
     // Interval between samples
     val sampleInterval: MachineDuration = 0.001,
     // Shutdown if sensor value less than this.

@@ -11,11 +11,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import McuClock
 import chelper.steppersync_alloc
-import mcu.CommandBuilder
 import mcu.GcWrapper
+import mcu.McuCommand
+import mcu.McuObjectCommand
 import mcu.McuResponse
-import mcu.ObjectId
-import mcu.ResponseParser
+import kotlin.reflect.KClass
 import kotlin.time.Duration.Companion.seconds
 
 /** Queue for sending commands to MCU. */
@@ -32,6 +32,12 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
 
     /** Schedule to send a message to the MCU.
      * No earlier than minClock and at the order of reqClock. */
+    fun send(message: McuCommand, minClock: McuClock = 0u, reqClock: McuClock = 0u, ackId: ULong=0u) {
+        val connection = this.connection ?:
+        throw RuntimeException("Trying to send before setup is finished")
+        send(connection.commands.build(message), minClock, reqClock, ackId)
+    }
+
     fun send(data: UByteArray, minClock: McuClock = 0u, reqClock: McuClock = 0u, ackId: ULong=0u) {
         val connection = this.connection ?:
             throw RuntimeException("Trying to send before setup is finished")
@@ -41,21 +47,22 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
         lastClock = reqClock
     }
 
-    suspend fun sendWaitAck(data: UByteArray, minClock: McuClock =0u, reqClock: McuClock = 0u) {
+    suspend fun sendWaitAck(message: McuCommand, minClock: McuClock =0u, reqClock: McuClock = 0u) {
         val connection = this.connection ?:
             throw RuntimeException("Trying to send before setup is finished")
         val (ackDeferred, ackId) = connection.registerMessageAckedCallback()
-        send(data, minClock, reqClock, ackId=ackId)
+        send(message, minClock, reqClock, ackId=ackId)
         ackDeferred.await()
     }
 
-    suspend fun <ResponseType: McuResponse> sendWithResponse(data: UByteArray, parser: ResponseParser<ResponseType>, id: ObjectId = 0u, retry: Double = 0.01, minClock: McuClock = 0u, reqClock: McuClock = 0u): ResponseType {
+    suspend fun <ResponseType: McuResponse> sendWithResponse(command: McuCommand, response: KClass<ResponseType>, retry: Double = 0.01, minClock: McuClock = 0u, reqClock: McuClock = 0u): ResponseType {
         val connection = this.connection ?:
             throw RuntimeException("Trying to send before setup is finished")
         var wait = retry.seconds
-        val received = connection.setResponseHandlerOnce(parser, id)
+        val id = if (command is McuObjectCommand) command.id else 0u
+        val received = connection.setResponseHandlerOnce(response, id)
         for (retry in (1..5)) {
-            sendWaitAck(data, minClock = minClock, reqClock = reqClock)
+            sendWaitAck(command, minClock = minClock, reqClock = reqClock)
             try {
                 return withTimeout(wait) {
                     received.await()
@@ -68,17 +75,8 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
         throw RuntimeException("Timeout out waiting for response")
     }
 
-    /** Shorthand functions */
-    suspend fun <ResponseType: McuResponse> sendWithResponse(signature: String, id: ObjectId, parser: ResponseParser<ResponseType>) = sendWithResponse(build(signature){ addId(id)}, parser, id = 0u)
-    suspend fun <ResponseType: McuResponse> sendWithResponse(signature: String, parser: ResponseParser<ResponseType>) = sendWithResponse(build(signature){}, parser, id = 0u)
-    fun send(signature: String, minClock: McuClock = 0u, reqClock: McuClock = 0u, ackId: ULong=0u, function: CommandBuilder.()->Unit = {}) = send(build(signature, function), minClock = minClock, reqClock = reqClock, ackId = ackId)
-
-    inline fun build(signature: String, block: CommandBuilder.()->Unit): UByteArray {
-        val connection = this.connection ?:
-            throw RuntimeException("Trying to send before setup is finished")
-        return connection.commands.build(signature, block)
-    }
-
+    suspend inline fun <reified ResponseType: McuResponse> sendWithResponse(command: McuCommand, retry: Double = 0.01, minClock: McuClock = 0u, reqClock: McuClock = 0u) =
+        sendWithResponse(command, ResponseType::class, retry, minClock, reqClock)
 }
 
 @OptIn(ExperimentalForeignApi::class)

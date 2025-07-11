@@ -101,11 +101,11 @@ fun makeResistanceCalibration(func: (temp: Temperature) -> Resistance) = buildLi
 }.toTypedArray()
 
 object TemperaturePT1000 : TemperatureCalibration {
-    override fun resistanceToTemp(v: Resistance): Temperature {
+    override fun resistanceToTemp(r: Resistance): Temperature {
         TODO("Not yet implemented")
     }
 
-    override fun tempToResistance(v: Temperature): Resistance {
+    override fun tempToResistance(t: Temperature): Resistance {
         TODO("Not yet implemented")
     }
 }

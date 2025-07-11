@@ -6,9 +6,10 @@ import machine.Reactor
 import McuClock
 import mcu.connection.CommandQueue
 import mcu.connection.StepQueueImpl
+import kotlin.reflect.KClass
 
 /** McuComponent controls a specific hardware feature in the MCU
- * It's tightly coupled with the MCU code and provides provides an API to the low level
+ * It's tightly coupled with the MCU code and provides an API to the low level
  * communication protocol.
  *  */
 interface McuComponent {
@@ -34,15 +35,15 @@ interface McuConfigure {
     /** Create a new stepper command queue */
     fun makeStepQueue(id: ObjectId): StepQueueImpl
     /** Add a configuration command for the MCU */
-    fun configCommand(signature: String, block: CommandBuilder.()->Unit)
+    fun configCommand(command: McuCommand)
     /** On soft restart, restart commands are used instead of configuration. */
-    fun restartCommand(signature: String, block: CommandBuilder.()->Unit)
-    /** Add a initialization command to be run right after configuration is done */
-    fun initCommand(signature: String, block: CommandBuilder.()->Unit)
+    fun restartCommand(command: McuCommand)
+    /** Add initialization command to be run right after configuration is done */
+    fun initCommand(command: McuCommand)
     /** Add a query command, run after all initialization commands to start querying sensors. */
-    fun queryCommand(signature: String, block: CommandBuilder.(clock: McuClock32)->Unit)
+    fun queryCommand(block: (clock: McuClock32)-> McuCommand)
     /** Add a handler for an event sent by the MCU. */
-    fun <ResponseType: McuResponse> responseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: suspend (message: ResponseType) -> Unit)
+    fun <ResponseType: McuResponse> responseHandler(response: KClass<ResponseType>, id: ObjectId, handler: suspend (message: ResponseType) -> Unit)
     fun durationToClock(durationSeconds: MachineDuration) = firmware.durationToTicks(durationSeconds)
 }
 
@@ -56,5 +57,8 @@ interface McuRuntime {
     fun timeToClock32(time: MachineTime): McuClock32
     fun clockToTime(clock: McuClock32): MachineTime
     /** Add a handler for an event sent by the MCU. */
-    fun <ResponseType: McuResponse> responseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: suspend (message: ResponseType) -> Unit)
+    fun <ResponseType: McuResponse> responseHandler(response: KClass<ResponseType>, id: ObjectId, handler: suspend (message: ResponseType) -> Unit)
 }
+
+inline fun <reified ResponseType: McuResponse> McuRuntime.responseHandler(id: ObjectId, noinline handler: suspend (message: ResponseType) -> Unit) = responseHandler<ResponseType>(ResponseType::class, id, handler)
+inline fun <reified ResponseType: McuResponse> McuConfigure.responseHandler(id: ObjectId, noinline handler: suspend (message: ResponseType) -> Unit) = responseHandler<ResponseType>(ResponseType::class, id, handler)

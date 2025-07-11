@@ -4,12 +4,16 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.ConfigurationException
 import AnalogInPin
 import Mcu
+import mcu.McuClock32
 import mcu.McuComponent
 import mcu.McuConfigure
+import mcu.McuObjectCommand
 import mcu.McuObjectResponse
 import mcu.McuRuntime
 import mcu.ObjectId
-import mcu.ResponseParser
+import mcu.PinName
+import mcu.responseHandler
+import utils.RegisterMcuMessage
 
 class McuAnalogPin(override val mcu: Mcu, val config: config.AnalogInPin, configure: McuConfigure): McuComponent,
     AnalogInPin {
@@ -27,24 +31,22 @@ class McuAnalogPin(override val mcu: Mcu, val config: config.AnalogInPin, config
     override fun configure(configure: McuConfigure) {
         if(nextClockOffset < 0.002) throw ConfigurationException("Analog pin ${config.pin} report interval too close. Measure time ${config.sampleCount.toDouble()*config.sampleInterval}, interval ${config.reportInterval}.")
         logger.trace { "Configure ${config}" }
-        configure.configCommand(
-            "config_analog_in oid=%c pin=%u") {
-            addId(id);addEnum("pin", config.pin)
-        }
-
-        configure.queryCommand("query_analog_in oid=%c clock=%u sample_ticks=%u sample_count=%c rest_ticks=%u min_value=%hu max_value=%hu range_check_count=%c")
-        { clock ->
-            addId(id); addU(clock); addU(configure.durationToClock(config.sampleInterval)); addU(config.sampleCount);
-            addU(configure.durationToClock(config.reportInterval));
-            addHU((config.minValue * configure.firmware.adcMax * config.sampleCount.toDouble()).toUInt().toUShort());
-            addHU((config.maxValue * configure.firmware.adcMax * config.sampleCount.toDouble()).toUInt().toUShort());
-            addC(config.rangeCheckCount)
+        configure.configCommand(CommandConfigAnalogIn(id, config.pin))
+        configure.queryCommand { clock -> CommandQueryAnalogIn(
+            id = id,
+            clock = clock,
+            sampleTicks = configure.durationToClock(config.sampleInterval),
+            sampleCount = config.sampleCount,
+            restTicks = configure.durationToClock(config.reportInterval),
+            minValue = (config.minValue * configure.firmware.adcMax * config.sampleCount.toDouble()).toUInt().toUShort(),
+            maxValue = (config.maxValue * configure.firmware.adcMax * config.sampleCount.toDouble()).toUInt().toUShort(),
+            rangeCeheckCount = config.rangeCheckCount)
         }
     }
 
     override fun start(runtime: McuRuntime) {
         this.runtime = runtime
-        runtime.responseHandler(responseAnalogInStateParser, id, this::handleAnalogInState)
+        runtime.responseHandler<ResponseAnalogInState>(id, this::handleAnalogInState)
     }
     override fun setListener(handler: suspend (m: AnalogInPin.Measurement) -> Unit) {
         this.listener = handler
@@ -58,8 +60,9 @@ class McuAnalogPin(override val mcu: Mcu, val config: config.AnalogInPin, config
     }
 }
 
-data class ResponseAnalogInState(override val id: ObjectId, val nextClock :UInt, val value: UShort):
-    McuObjectResponse
-val responseAnalogInStateParser = ResponseParser("analog_in_state oid=%c next_clock=%u value=%hu") {
-    ResponseAnalogInState(parseC(), parseU(), parseHU())
-}
+@RegisterMcuMessage(signature = "config_analog_in oid=%c pin=%u")
+data class CommandConfigAnalogIn(override val id: ObjectId, val pin: PinName): McuObjectCommand
+@RegisterMcuMessage(signature = "query_analog_in oid=%c clock=%u sample_ticks=%u sample_count=%c rest_ticks=%u min_value=%hu max_value=%hu range_check_count=%c")
+data class CommandQueryAnalogIn(override val id: ObjectId, val clock: McuClock32, val sampleTicks: McuClock32, val sampleCount: UByte, val restTicks: McuClock32, val minValue: UShort, val maxValue: UShort, val rangeCeheckCount: UByte): McuObjectCommand
+@RegisterMcuMessage(signature = "analog_in_state oid=%c next_clock=%u value=%hu")
+data class ResponseAnalogInState(override val id: ObjectId, val nextClock : McuClock32, val value: UShort):McuObjectResponse

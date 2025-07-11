@@ -34,13 +34,14 @@ import mcu.components.McuEndstopSyncStaticBuilder
 import mcu.components.McuHwPwmPin
 import mcu.components.McuPwmPin
 import mcu.components.McuStepperMotor
-import mcu.components.McuTrsync
 import mcu.components.McuTrsyncPool
 import mcu.components.TmcUartBus
 import mcu.connection.CommandQueue
 import mcu.connection.McuConnection
 import mcu.connection.StepQueueImpl
 import mcu.connection.StepperSync
+import utils.RegisterMcuMessage
+import kotlin.reflect.KClass
 import kotlin.time.Duration.Companion.milliseconds
 
 /** Step 0 - API for adding all the parts to MCU. */
@@ -77,9 +78,9 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
     internal var reservedMoves: Int = 0
     internal val configCommands = ArrayList<UByteArray>()
     internal val initCommands = ArrayList<UByteArray>()
-    internal val queryCommands = ArrayList<QueryCommand>()
+    internal val queryCommands = ArrayList<(clock: McuClock32) -> McuCommand>()
     internal val restartCommands = ArrayList<UByteArray>()
-    internal val responseHandlers = HashMap<Pair<ResponseParser<McuResponse>, ObjectId>, suspend (message: McuResponse) -> Unit>()
+    internal val responseHandlers = HashMap<Pair<KClass<McuResponse>, ObjectId>, suspend (message: McuResponse) -> Unit>()
     internal val commandQueues = ArrayList<CommandQueue>()
     internal val stepQueues = ArrayList<StepQueueImpl>()
     val components = ArrayList<McuComponent>()
@@ -105,22 +106,17 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
         return result
     }
 
-    override fun configCommand(signature: String, block: CommandBuilder.()->Unit) { configCommands.add(cmd.build(signature, block)) }
-    override fun initCommand(signature: String, block: CommandBuilder.()->Unit) { initCommands.add(cmd.build(signature, block)) }
-    override fun queryCommand(signature: String, block: CommandBuilder.(clock: McuClock32)->Unit) { queryCommands.add(
-        QueryCommand(signature, block)
-    ) }
-    override fun restartCommand(signature: String, block: CommandBuilder.()->Unit) { restartCommands.add(cmd.build(signature, block))}
+    override fun configCommand(command: McuCommand) { configCommands.add(cmd.build(command)) }
+    override fun initCommand(command: McuCommand) { initCommands.add(cmd.build(command)) }
+    override fun queryCommand(block: (clock: McuClock32)-> McuCommand) { queryCommands.add(block) }
+    override fun restartCommand(command: McuCommand) { restartCommands.add(cmd.build(command))}
 
     @Suppress("UNCHECKED_CAST")
-    override fun <ResponseType: McuResponse> responseHandler(parser: ResponseParser<ResponseType>, id: ObjectId, handler: suspend (message: ResponseType) -> Unit) {
-        val key = Pair(parser, id) as Pair<ResponseParser<McuResponse>, ObjectId>
+    override fun <ResponseType: McuResponse> responseHandler(response: KClass<ResponseType>, id: ObjectId, handler: suspend (message: ResponseType) -> Unit) {
+        val key = Pair(response as KClass<McuResponse>, id)
         responseHandlers[key] = handler as (suspend (message: McuResponse) -> Unit)
     }
 }
-
-data class QueryCommand(val signature: String, val block: CommandBuilder.(clock: McuClock32)->Unit)
-
 /** Step 2 - the MCU runtime. */
 class McuImpl(
     override val config: McuConfig,
@@ -179,9 +175,9 @@ class McuImpl(
         override fun timeToClock32(time: MachineTime) = timeToClock(time).toUInt()
         override fun clockToTime(clock: McuClock32) = clocksync.estimate.clockToTime(clock)
         override fun <ResponseType : McuResponse> responseHandler(
-            parser: ResponseParser<ResponseType>,
+            response: KClass<ResponseType>,
             id: ObjectId,
-            handler: suspend (message: ResponseType) -> Unit) = connection.setResponseHandler(parser, id, handler)
+            handler: suspend (message: ResponseType) -> Unit) = connection.setResponseHandler(response, id, handler)
     }
 
     override fun addEndstopSync(block: (EndstopSyncBuilder) -> Unit): EndstopSync = McuEndstopSyncRuntimeBuilder().also { block(it) }.build()
@@ -193,7 +189,7 @@ class McuImpl(
 
     override fun shutdown(reason: String, emergency: Boolean) {
         if (emergency) {
-            defaultQueue.send("emergency_stop")
+            defaultQueue.send(CommandEmergencyStop())
         }
         if (_state.value == McuState.ERROR || _state.value == McuState.SHUTDOWN) return
         logger.error { "MCU shutdown, $reason" }
@@ -213,12 +209,12 @@ class McuImpl(
 
     private suspend fun configure(reactor: Reactor) {
         logger.info { "Configuring MCU, oids=${configuration.numIds}, queues=${configuration.commandQueues.size}" }
-        var config = defaultQueue.sendWithResponse("get_config", responseConfigParser)
+        var config = defaultQueue.sendWithResponse<ResponseConfig>(CommandGetConfig())
         if (config.isShutdown)
             throw NeedsRestartException("Mcu ${this.config.name} is shutdown")
         configuration.responseHandlers.entries.forEach { e -> connection.setResponseHandler(e.key.first, e.key.second, e.value) }
         val configCommands = buildList {
-            add(defaultQueue.build("allocate_oids count=%c") {addC(configuration.numIds)})
+            add(connection.commands.build(CommandAllocateOids(configuration.numIds)))
             addAll(configuration.configCommands)
         }
         val checksum = configCommands.map { it.contentHashCode() }.reduce{ a,b -> a xor b}.toUInt()
@@ -232,19 +228,18 @@ class McuImpl(
             configuration.restartCommands.forEach { defaultQueue.send(it) }
         } else {
             configCommands.forEach { defaultQueue.send(it) }
-            defaultQueue.send("finalize_config crc=%u"){addU(checksum)}
+            defaultQueue.send(CommandFinalizeConfig(checksum))
         }
         // Run initial commands
         configuration.initCommands.forEach { defaultQueue.send(it) }
         // Flush the queue and get the new config.
-        config = defaultQueue.sendWithResponse("get_config", responseConfigParser)
+        config = defaultQueue.sendWithResponse<ResponseConfig>(CommandGetConfig())
         val configureStartOffset = 0.5
         configuration.queryCommands.forEach { builder ->
             val time = reactor.now + configureStartOffset
             val clock = clocksync.estimate.timeToClock(time).toUInt()
-            val cmd = defaultQueue.build(builder.signature) { builder.block(this, clock) }
             // Wait for acks to throttle the query commands.
-            defaultQueue.sendWaitAck(cmd)
+            defaultQueue.sendWaitAck(builder(clock))
         }
         // Configure the stepper queues.
         if (configuration.reservedMoves > config.moveCount.toInt())
@@ -255,11 +250,11 @@ class McuImpl(
     private suspend fun restartFirmware() {
         when (config.restartMethod) {
             RestartMethod.COMMAND -> {
-                if (connection.commands.hasCommand("config_reset")) {
-                    defaultQueue.send("config_reset")
+                if (connection.commands.hasCommand(CommandConfigReset::class)) {
+                    defaultQueue.send(CommandConfigReset())
                     delay(15.milliseconds)
-                } else if (connection.commands.hasCommand("reset")) {
-                    defaultQueue.send("reset")
+                } else if (connection.commands.hasCommand(CommandReset::class)) {
+                    defaultQueue.send(CommandReset())
                     delay(15.milliseconds)
                 } else {
                     logger.error { "Cannot reset MCU ${config.name} via command - no supported command found." }
@@ -275,7 +270,17 @@ class McuImpl(
     }
 }
 
-data class ResponseConfig(val isConfig: Boolean, val crc: UInt, val isShutdown: Boolean, val moveCount: MoveQueueId):
-    McuResponse
-val responseConfigParser = ResponseParser("config is_config=%c crc=%u is_shutdown=%c move_count=%hu")
-            { ResponseConfig(isConfig = parseBoolean(), crc = parseU(), isShutdown = parseBoolean(), moveCount = parseHU()) }
+@RegisterMcuMessage(signature = "emergency_stop")
+class CommandEmergencyStop(): McuCommand
+@RegisterMcuMessage(signature = "allocate_oids count=%c")
+class CommandAllocateOids(val count: UByte): McuCommand
+@RegisterMcuMessage(signature = "finalize_config crc=%u")
+class CommandFinalizeConfig(val crc: UInt): McuCommand
+@RegisterMcuMessage(signature = "config_reset")
+class CommandConfigReset(): McuCommand
+@RegisterMcuMessage(signature = "reset")
+class CommandReset(): McuCommand
+@RegisterMcuMessage(signature = "get_config")
+class CommandGetConfig(): McuCommand
+@RegisterMcuMessage(signature = "config is_config=%c crc=%u is_shutdown=%c move_count=%hu")
+data class ResponseConfig(val isConfig: Boolean, val crc: UInt, val isShutdown: Boolean, val moveCount: UShort): McuResponse

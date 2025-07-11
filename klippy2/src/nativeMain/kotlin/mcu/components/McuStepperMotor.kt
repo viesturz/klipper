@@ -5,13 +5,16 @@ import config.StepperPins
 import io.github.oshai.kotlinlogging.KotlinLogging
 import StepperDriver
 import StepperMotor
+import mcu.McuClock32
 import mcu.McuComponent
 import mcu.McuConfigure
 import mcu.McuImpl
+import mcu.McuObjectCommand
 import mcu.McuObjectResponse
 import mcu.McuRuntime
 import mcu.ObjectId
-import mcu.ResponseParser
+import mcu.PinName
+import utils.RegisterMcuMessage
 
 class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, override val driver: StepperDriver, configuration: McuConfigure) : StepperMotor,
     McuComponent {
@@ -27,12 +30,8 @@ class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, overri
             pulseTicks = 0u
             invert = -1
         }
-        configure.configCommand("config_stepper oid=%c step_pin=%c dir_pin=%c invert_step=%c step_pulse_ticks=%u") {
-            addId(id); addPin(config.stepPin.pin); addPin(config.dirPin.pin); addC(invert); addU(pulseTicks)
-        }
-        configure.restartCommand("reset_step_clock oid=%c clock=%u") {
-            addId(id); addU(0u)
-        }
+        configure.configCommand(CommandConfigStepper(id, config.stepPin.pin,config.dirPin.pin, invert, pulseTicks))
+        configure.restartCommand(CommandResetStepClock(id, 0u))
     }
 
     override fun start(runtime: McuRuntime) {
@@ -44,7 +43,7 @@ class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, overri
     }
 
     override suspend fun getPosition(): Long {
-        val position = runtime.defaultQueue.sendWithResponse(runtime.defaultQueue.build("stepper_get_position oid=%c") {addId(id) }, responseStepperGetPositionParser, id=id)
+        val position = runtime.defaultQueue.sendWithResponse<ResponseStepperGetPosition>(CommandStepperGetPosition(id))
         setPosition(position.time, position.position)
         return position.position
     }
@@ -55,8 +54,13 @@ class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, overri
     }
 }
 
-data class ResponseStepperGetPosition(override val id: ObjectId, val time: MachineTime, val position: Long) :
-    McuObjectResponse
-val responseStepperGetPositionParser = ResponseParser("stepper_position oid=%c pos=%i") {
-    ResponseStepperGetPosition(parseC(), receiveTime, parseL())
-}
+@RegisterMcuMessage(signature = "config_stepper oid=%c step_pin=%c dir_pin=%c invert_step=%c step_pulse_ticks=%u")
+data class CommandConfigStepper(override val id: ObjectId, val stepPin: PinName, val dirPin: PinName, val invertStep: Byte, val stepPulseTicks: UInt): McuObjectCommand
+@RegisterMcuMessage(signature = "reset_step_clock oid=%c clock=%u")
+data class CommandResetStepClock(override val id: ObjectId, val clock: McuClock32): McuObjectCommand
+@RegisterMcuMessage(signature = "stepper_get_position oid=%c")
+data class CommandStepperGetPosition(override val id: ObjectId): McuObjectCommand
+@RegisterMcuMessage(signature = "stepper_position oid=%c pos=%i")
+data class ResponseStepperGetPosition(override val id: ObjectId, val position: Long, val time: MachineTime) : McuObjectResponse
+@RegisterMcuMessage(signature = "stepper_stop_on_trigger oid=%c trsync_oid=%c")
+data class CommandStepperStopOnTrigger(override val id: ObjectId, val trsyncId: ObjectId): McuObjectCommand

@@ -14,10 +14,11 @@ import mcu.McuClock32
 import mcu.McuComponent
 import mcu.McuConfigure
 import mcu.McuImpl
+import mcu.McuObjectCommand
 import mcu.McuObjectResponse
 import mcu.McuRuntime
 import mcu.ObjectId
-import mcu.ResponseParser
+import utils.RegisterMcuMessage
 import kotlin.math.min
 
 class McuEndstopSyncStaticBuilder(): EndstopSyncBuilder {
@@ -105,9 +106,7 @@ class MultiMcuEndstopSync(
         }
         for (stepper in motors) {
             val trsync = mcuToTrsync[stepper.mcu] ?: throw RuntimeException("Not supposed to happen")
-            trsync.queue.send("reset_step_clock oid=%c clock=%u") {
-                addId(stepper.id); addU(0U)
-            }
+            trsync.queue.send(CommandResetStepClock(stepper.id, 0U))
         }
         state.value = EndstopSync.StateIdle
     }
@@ -130,23 +129,20 @@ class MultiMcuEndstopSync(
         state.value = EndstopSync.StateRunning
         for (stepper in motors) {
             val trsync = mcuToTrsync[stepper.mcu] ?: throw RuntimeException("Not supposed to happen")
-            trsync.queue.send("stepper_stop_on_trigger oid=%c trsync_oid=%c") {
-                addId(stepper.id);addId(trsync.id)
-            }
+            trsync.queue.send(CommandStepperStopOnTrigger(stepper.id, trsync.id))
         }
         for (endstop in endstops) {
             val trsync = mcuToTrsync[endstop.mcu] ?: throw RuntimeException("Not supposed to happen")
             val runtime = trsync.runtime
-            trsync.queue.send("endstop_home oid=%c clock=%u sample_ticks=%u sample_count=%c rest_ticks=%u pin_value=%c trsync_oid=%c trigger_reason=%c") {
-                addId(endstop.id)
-                addU(runtime.timeToClock32(startTime))
-                addU(runtime.durationToClock(pollInterval))
-                addC(samplesToCheck)
-                addU(runtime.durationToClock(checkInterval))
-                addBoolean(!endstop.config.invert)
-                addId(trsync.id)
-                addC(EndstopSync.TriggerResult.ENDSTOP_HIT.id)
-            }
+            trsync.queue.send(CommandEndstopHome(
+                id =endstop.id,
+                clock = runtime.timeToClock32(startTime),
+                sampleTicks = runtime.durationToClock(pollInterval),
+                sampleCount = samplesToCheck,
+                restTicks = runtime.durationToClock(checkInterval),
+                pinValue = !endstop.config.invert,
+                trssyncId = trsync.id,
+                triggerReason = EndstopSync.TriggerResult.ENDSTOP_HIT.id))
         }
         if (mcuToTrsync.size == 1) {
             // Single MCU, wait for the trigger result.
@@ -175,10 +171,8 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
     lateinit var runtime: McuRuntime
 
     init {
-        initialize.configCommand("config_trsync oid=%c") { addId(id) }
-        initialize.restartCommand("trsync_start oid=%c report_clock=%u report_ticks=%u expire_reason=%c") {
-            addId(id);addU(0U);addU(0U);addC(0U)
-        }
+        initialize.configCommand(CommandConfigTrsync(id))
+        initialize.restartCommand(CommandTrsyncStart(id, 0U,0U,0U))
     }
 
     override fun start(runtime: McuRuntime) {
@@ -186,36 +180,25 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
     }
 
     fun sendTrigger(reason: EndstopSync.TriggerResult) {
-        queue.send("trsync_trigger oid=%c reason=%c") {
-            addId(id);addC(reason.id)
-        }
+        queue.send(CommandTrsyncTrigger(id, reason.id))
     }
 
     fun reset() {
-        queue.send("trsync_start oid=%c report_clock=%u report_ticks=%u expire_reason=%c") {
-            addId(id);addU(0U);addU(0U);addC(0U)
-        }
+        queue.send(CommandTrsyncStart(id, 0U,0U,0U))
     }
 
     suspend fun run(
         startTime: MachineTime,
         timeoutTime: MachineTime,
         pollInterval: MachineDuration): EndstopSync.State {
-        queue.send("trsync_start oid=%c report_clock=%u report_ticks=%u expire_reason=%c") {
-            addId(id)
-            addU(runtime.timeToClock32(startTime))
-            addU(runtime.durationToClock(pollInterval))
-            addC(EndstopSync.TriggerResult.COMMS_TIMEOUT.id)
-        }
-        queue.send("trsync_set_timeout oid=%c clock=%u") {
-            addId(id)
-            addU(runtime.timeToClock32(timeoutTime))
-        }
-
-        val response = queue.connection!!.setResponseHandlerOnce(responesTrsyncStateParser, id).await()
-        return when (response.reason) {
+        queue.send(CommandTrsyncStart(id, runtime.timeToClock32(startTime),
+            runtime.durationToClock(pollInterval),
+            EndstopSync.TriggerResult.COMMS_TIMEOUT.id))
+        queue.send(CommandTrsyncSetTimeout(id, runtime.timeToClock32(timeoutTime)))
+        val response = queue.connection!!.setResponseHandlerOnce(ResponseTrsyncState::class, id).await()
+        return when (parseTriggerResult(response.reason)) {
             EndstopSync.TriggerResult.ENDSTOP_HIT -> EndstopSync.StateTriggered(runtime.clockToTime(response.clock))
-            else -> EndstopSync.StateAborted(response.reason)
+            else -> EndstopSync.StateAborted(parseTriggerResult(response.reason))
         }
     }
 }
@@ -243,18 +226,23 @@ class McuTrsyncPool(val mcu: Mcu, initialize: McuConfigure): McuComponent {
     data class TrsyncEntry(val trsync: McuTrsync, var owner: Any?)
 }
 
-data class ResponseTrsyncState(override val id: ObjectId, val canTrigger: Boolean, val reason: EndstopSync.TriggerResult, val clock: McuClock32) :
-    McuObjectResponse
-val responesTrsyncStateParser = ResponseParser("trsync_state oid=%c can_trigger=%c trigger_reason=%c clock=%u") {
-    ResponseTrsyncState(parseId(),  parseBoolean(), parseTriggerResult(parseI()), parseClock())
-}
+@RegisterMcuMessage(signature = "config_trsync oid=%c")
+data class CommandConfigTrsync(override val id: ObjectId): McuObjectCommand
+@RegisterMcuMessage(signature = "trsync_start oid=%c report_clock=%u report_ticks=%u expire_reason=%c")
+data class CommandTrsyncStart(override val id: ObjectId, val reportClock: McuClock32, val reportTicks: McuClock32, val expireReason: UByte): McuObjectCommand
+@RegisterMcuMessage(signature = "trsync_trigger oid=%c reason=%c")
+data class CommandTrsyncTrigger(override val id: ObjectId, val reason: UByte): McuObjectCommand
+@RegisterMcuMessage(signature = "trsync_set_timeout oid=%c clock=%u")
+data class CommandTrsyncSetTimeout(override val id: ObjectId, val clock: McuClock32): McuObjectCommand
+@RegisterMcuMessage(signature = "trsync_state oid=%c can_trigger=%c trigger_reason=%c clock=%u")
+data class ResponseTrsyncState(override val id: ObjectId, val canTrigger: Boolean, val reason: UInt, val clock: McuClock32) : McuObjectResponse
 
-fun parseTriggerResult(num: Int) = when(num) {
-    0 -> EndstopSync.TriggerResult.NONE
-    1 -> EndstopSync.TriggerResult.ENDSTOP_HIT
-    2 -> EndstopSync.TriggerResult.COMMS_TIMEOUT
-    3 -> EndstopSync.TriggerResult.RESET
-    4 -> EndstopSync.TriggerResult.PAST_END_TIME
+fun parseTriggerResult(num: UInt) = when(num) {
+    0U -> EndstopSync.TriggerResult.NONE
+    1u -> EndstopSync.TriggerResult.ENDSTOP_HIT
+    2u -> EndstopSync.TriggerResult.COMMS_TIMEOUT
+    3u -> EndstopSync.TriggerResult.RESET
+    4u -> EndstopSync.TriggerResult.PAST_END_TIME
     else -> throw RuntimeException("Invalid trigger result $num")
 }
 

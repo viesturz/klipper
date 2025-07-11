@@ -61,7 +61,7 @@ data class FirmwareConfig @OptIn(ExperimentalSerializationApi::class) constructo
                         val start_value = (json[0] as JsonPrimitive).int
                         val count = (json[1] as JsonPrimitive).int
                         var indexStart = 0
-                        var digitPos = root.indexOfFirst { it.isDigit() }
+                        val digitPos = root.indexOfFirst { it.isDigit() }
                         if (digitPos != -1) {
                             indexStart = root.substring(digitPos).toInt()
                             root = root.substring(0..digitPos-1)
