@@ -7,9 +7,11 @@ out
 .config.old
 .gradle
 .idea
+build
 klippy/.version
 klippy/.build
 klippy/build
+klippycodegen/build
 local.properties
 klippy2/build
 klippy2/klippy.log
