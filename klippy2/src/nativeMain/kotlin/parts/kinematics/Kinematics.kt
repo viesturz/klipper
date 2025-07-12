@@ -11,6 +11,8 @@ interface MotionActuator {
     var commandedPosition: List<Double>
     val axisStatus: List<RailStatus>
 
+    val commandedEndTime: MachineTime
+
     /** Check move validity and return speed restrictions for the move. */
     fun checkMove(start: List<Double>, end: List<Double>): LinearSpeeds
 
@@ -34,6 +36,8 @@ class LinearRailActuator(val rail: LinearRail): MotionActuator {
     override var commandedPosition: List<Double>
         get() = listOf(rail.commandedPosition)
         set(value) { rail.commandedPosition = value[0]}
+    override val commandedEndTime: MachineTime
+        get() = rail.commandedEndTime
 
     override fun checkMove(start: List<Double>, end: List<Double>): LinearSpeeds {
         return rail.checkMove(start[0], end[0])

@@ -19,6 +19,8 @@ class CoreXYKinematics(
 ): MotionActuator {
     override val size = 2
     override val positionTypes = listOf(MotionType.LINEAR, MotionType.LINEAR)
+    override var commandedEndTime: MachineTime = 0.0
+
     var _commandedPosition: List<Double> = listOf(0.0,0.0)
     override var commandedPosition: List<Double>
         get() = _commandedPosition
@@ -101,10 +103,12 @@ class CoreXYKinematics(
         endSpeed: Double,
         endPosition: List<Double>
     ) {
+        require(startTime >= commandedEndTime)
         val a = endPosition[0] + endPosition[1]
         val b = endPosition[0] - endPosition[1]
         railA.moveTo(startTime, endTime, startSpeed, endSpeed, a)
         railB.moveTo(startTime, endTime, startSpeed, endSpeed, b)
+        commandedEndTime = endTime
     }
 
     override fun generate(time: MachineTime) {

@@ -83,7 +83,7 @@ fun MachineBuilder.buildMachine() {
         homing = Homing(
             endstopPosition = 122.0,
             endstopTrigger = PinTrigger(pin = mcu.endstop2.copy(invert = true, pullup = true)),
-            direction = HomingDirection.MAX,
+            direction = HomingDirection.DECREASING,
             speed = 20.0,
             secondSpeed = 3.0,
             retractDist = 3.0,
@@ -106,7 +106,7 @@ fun MachineBuilder.buildMachine() {
         xHoming = Homing(
             endstopPosition = 120.0,
             endstopTrigger = PinTrigger(mcu.endstop0),
-            direction = HomingDirection.MAX,
+            direction = HomingDirection.DECREASING,
             speed = 20.0,
             secondSpeed = 3.0,
             retractDist = 3.0
@@ -118,7 +118,7 @@ fun MachineBuilder.buildMachine() {
         yHoming = Homing(
             endstopPosition = 120.0,
             endstopTrigger = PinTrigger(mcu.endstop1),
-            direction = HomingDirection.MAX,
+            direction = HomingDirection.DECREASING,
             speed = 20.0,
             secondSpeed = 3.0,
             retractDist = 3.0

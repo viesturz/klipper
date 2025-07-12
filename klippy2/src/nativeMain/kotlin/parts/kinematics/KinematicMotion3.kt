@@ -35,7 +35,7 @@ abstract class KinematicMotion3(
 ): MotionActuator {
     val trapq = GcWrapper(trapq_alloc()) { trapq_free(it) }
     var _position: List<Double> = listOf(0.0, 0.0, 0.0)
-    var _time: Double = 0.0
+    override var commandedEndTime: MachineTime = 0.0
     val kinematics: List<GcWrapper<chelper.stepper_kinematics>>
     override val size = 3
     override val positionTypes = listOf(MotionType.LINEAR, MotionType.LINEAR, MotionType.LINEAR)
@@ -67,9 +67,9 @@ abstract class KinematicMotion3(
     override fun initializePosition(time: MachineTime, position: List<Double>, homed: List<Boolean>) {
         require(position.size == 3)
         generate(time)
-        if (_time > time) throw IllegalStateException("Time before last time")
+        if (this.commandedEndTime > time) throw IllegalStateException("Time before last time")
         _position = position
-        _time = time
+        this.commandedEndTime = time
         for (kin in kinematics) {
             chelper.itersolve_set_position(kin.ptr, _position[0], _position[1], _position[2])
         }
@@ -81,7 +81,7 @@ abstract class KinematicMotion3(
         startSpeed: Double, endSpeed: Double,
         endPosition: List<Double>
     ) {
-        require(startTime >= _time, { "startTime < _time" })
+        require(startTime >= this.commandedEndTime, { "startTime < _time" })
         val distance = endPosition.distanceTo(_position)
         val duration = endTime - startTime
         if (duration <= 0.0) {
@@ -104,7 +104,7 @@ abstract class KinematicMotion3(
         }
         chelper.trapq_add_move(trapq.ptr, move)
         _position = endPosition
-        _time = endTime
+        this.commandedEndTime = endTime
     }
 
     override fun generate(time: MachineTime) {

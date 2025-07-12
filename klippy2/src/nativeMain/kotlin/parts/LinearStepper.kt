@@ -68,13 +68,8 @@ private class StepperImpl(
     val kinematics = GcWrapper(cartesian_stepper_alloc('x'.code.toByte())) { free(it) }
     var externalKinematics: GcWrapper<chelper.stepper_kinematics>? = null
     val trapq = GcWrapper(trapq_alloc()) { trapq_free(it) }
-    var _position: Double = 0.0
-    var _time: Double = 0.0
-    override var commandedPosition: Double
-        get() = _position
-        set(value) {
-            _position = value
-        }
+    override var commandedPosition: Double = 0.0
+    override var commandedEndTime: MachineTime = 0.0
     override var railStatus = RailStatus(false, false)
 
     override suspend fun setPowered(time: MachineTime, value: Boolean) {
@@ -86,7 +81,7 @@ private class StepperImpl(
         driver.configureForStepper(stepsPerMm)
         chelper.itersolve_set_stepcompress(kinematics.ptr, stepQueue.stepcompress.ptr, stepsPerMm)
         chelper.itersolve_set_trapq(kinematics.ptr, trapq.ptr)
-        chelper.itersolve_set_position(kinematics.ptr, _position, 0.0, 0.0)
+        chelper.itersolve_set_position(kinematics.ptr, commandedPosition, 0.0, 0.0)
     }
 
     override fun assignToKinematics(kinematicsProvider: () -> GcWrapper<stepper_kinematics>) {
@@ -113,11 +108,11 @@ private class StepperImpl(
     override fun initializePosition(time: MachineTime, position: Double, homed: Boolean) {
         if (externalKinematics != null) throw IllegalStateException("Stepper has external kinematics")
         generate(time)
-        if (_time > time) throw IllegalStateException("Time before last time")
-        _position = position
-        _time = time
-        chelper.itersolve_set_position(kinematics.ptr, _position, 0.0, 0.0)
-        chelper.trapq_set_position(trapq.ptr, time, _position, 0.0, 0.0)
+        if (commandedEndTime > time) throw IllegalStateException("Time before last time")
+        commandedPosition = position
+        commandedEndTime = time
+        chelper.itersolve_set_position(kinematics.ptr, commandedPosition, 0.0, 0.0)
+        chelper.trapq_set_position(trapq.ptr, time, commandedPosition, 0.0, 0.0)
         railStatus = railStatus.copy(homed = homed)
     }
 
@@ -129,7 +124,7 @@ private class StepperImpl(
         endPosition: Double
     ) {
         if (externalKinematics != null) throw IllegalStateException("Stepper has external kinematics")
-        val delta = endPosition - _position
+        val delta = endPosition - commandedPosition
         val direction = delta.sign
         val distance = delta.absoluteValue
         val duration = endTime - startTime
@@ -143,7 +138,7 @@ private class StepperImpl(
             move_t = duration
             start_v = startSpeed
             half_accel = (endSpeed - startSpeed) / duration * 0.5
-            start_pos.x = _position
+            start_pos.x = commandedPosition
             start_pos.y = 0.0
             start_pos.z = 0.0
             axes_r.x = direction
@@ -151,8 +146,8 @@ private class StepperImpl(
             axes_r.z = 0.0
         }
         chelper.trapq_add_move(trapq.ptr, move)
-        _position = endPosition
-        _time = endTime
+        commandedPosition = endPosition
+        commandedEndTime = endTime
     }
 
     override fun generate(time: MachineTime) {

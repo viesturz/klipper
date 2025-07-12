@@ -69,6 +69,9 @@ class FakeQueue: CommandQueue {
         plannedCommands.add(data)
     }
 
+    override fun addLongRunning(block: suspend () -> Unit) {
+    }
+
     override fun wait(deferred: Deferred<MachineTime>) {
     }
 

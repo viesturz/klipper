@@ -5,6 +5,7 @@ import MachineTime
 interface LinearRail {
     val railStatus: RailStatus
     var commandedPosition: Double
+    val commandedEndTime: Double
     val range: LinearRange
     val speeds: LinearSpeeds
     val homing: Homing?
@@ -93,7 +94,7 @@ data class Homing(
 )
 
 enum class HomingDirection {
-    MIN,
-    MAX,
+    INCREASING,
+    DECREASING,
 }
 
