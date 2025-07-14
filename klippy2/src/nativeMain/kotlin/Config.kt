@@ -1,11 +1,14 @@
 import config.NTC100K
 import config.PID
 import config.mcus.SkrMiniE3V2
+import kotlinx.coroutines.delay
 import parts.*
 import parts.drivers.TMC2209
 import parts.kinematics.CoreXYKinematics
 import parts.kinematics.Homing
 import parts.kinematics.HomingDirection
+import parts.kinematics.LinearRail
+import parts.kinematics.LinearRailActuator
 import parts.kinematics.LinearRange
 import parts.kinematics.LinearSpeeds
 import parts.kinematics.MotionPlanner
@@ -71,6 +74,7 @@ fun MachineBuilder.buildMachine() {
         rotationDistance = 40.0,
         speed = LinearSpeeds(speed = 400.0)
     )
+    val zEndstop = PinTrigger(pin = mcu.endstop2.copy(invert = false, pullup = false))
     val zStepper = LinearStepper(
         pins = mcu.stepper2,
         driver = zDriver,
@@ -82,8 +86,8 @@ fun MachineBuilder.buildMachine() {
             positionMax = 125.0),
         homing = Homing(
             endstopPosition = 122.0,
-            endstopTrigger = PinTrigger(pin = mcu.endstop2.copy(invert = true, pullup = true)),
-            direction = HomingDirection.DECREASING,
+            endstopTrigger = zEndstop,
+            direction = HomingDirection.INCREASING,
             speed = 20.0,
             secondSpeed = 3.0,
             retractDist = 3.0,
@@ -126,15 +130,15 @@ fun MachineBuilder.buildMachine() {
         xSpeed = LinearSpeeds(speed = 300.0, accel = 8000.0),
         ySpeed = LinearSpeeds(speed = 300.0, accel = 8000.0),
     )
-    GCodeMove(
-        motion = MotionPlanner {
-            axis("XY", xyAxis)
-            axis('Z', zStepper)
-            axis('E', eStepper)
-        },
-        positionalAxis = "XYZ",
-        extrudeAxis = "E",
-    )
+//    GCodeMove(
+//        motion = MotionPlanner {
+//            axis("XY", xyAxis)
+//            axis('Z', zStepper)
+//            axis('E', eStepper)
+//        },
+//        positionalAxis = "XYZ",
+//        extrudeAxis = "E",
+//    )
     GCodePrinter(
         heater = he0,
         partFan = fan1,
@@ -178,4 +182,10 @@ fun MachineBuilder.buildMachine() {
             servo.setAngle(closedDegrees + (openDegrees - closedDegrees) * value)
         }
     }
+    val zAxis = LinearRailActuator(zStepper)
+    ControlLoop { runtime ->
+        delay(1000)
+        zAxis.home(listOf(0))
+    }
+
 }

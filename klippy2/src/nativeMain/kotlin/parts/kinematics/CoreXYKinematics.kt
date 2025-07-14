@@ -50,7 +50,7 @@ class CoreXYKinematics(
         railB.initializePosition(time, b, false)
     }
 
-    override suspend fun home(axis: List<Int>) {
+    override suspend fun home(axis: List<Int>): HomeResult {
         TODO("Not yet implemented")
     }
 

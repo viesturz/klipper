@@ -93,6 +93,10 @@ class McuConfigureImpl(var cmd: Commands): McuConfigure {
         return id
     }
 
+    override fun addComponent(component: McuComponent) {
+        components.add(component)
+    }
+
     override fun makeCommandQueue(name: String, numCommands: Int): CommandQueue {
         val result = CommandQueue(null, name)
         commandQueues.add(result)
@@ -122,13 +126,13 @@ class McuImpl(
     override val config: McuConfig,
     val connection: McuConnection,
     val configuration: McuConfigureImpl): Mcu {
-    private val defaultQueue = CommandQueue(connection, "MCU ${config.name} DefaultQueue")
+    val defaultQueue = CommandQueue(connection, "MCU ${config.name} DefaultQueue")
+    val trsyncPool =  McuTrsyncPool(this, configuration)
     private val components: List<McuComponent> = configuration.components
     private val clocksync = ClockSync(this, connection)
     private val _state = MutableStateFlow(McuState.STARTING)
     private var _stateReason = ""
     private val logger = KotlinLogging.logger("McuImpl ${config.name}")
-    val trsyncPool = McuTrsyncPool(this, configuration)
     private var stepperSync: StepperSync? = null
     override val state: StateFlow<McuState>
         get() = _state

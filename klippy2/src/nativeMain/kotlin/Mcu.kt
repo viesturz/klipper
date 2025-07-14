@@ -3,6 +3,7 @@ import config.DigitalInPin
 import config.McuConfig
 import config.StepperPins
 import config.UartPins
+import kotlinx.coroutines.Deferred
 import machine.Reactor
 import mcu.ObjectId
 
@@ -150,12 +151,7 @@ interface EndstopSyncBuilder {
 interface EndstopSync {
     val state: StateFlow<State>
 
-    suspend fun run(
-        startTime: MachineTime,
-        timeoutTime: MachineTime,
-        pollInterval: MachineDuration,
-        samplesToCheck: UByte,
-        checkInterval: MachineDuration): State
+    fun start(startTime: MachineTime, timeoutTime: MachineTime): Deferred<State>
 
     /** Resets any ongoing triggering. Allows stopped motors to move again after being stopped. */
     fun reset()
@@ -165,17 +161,12 @@ interface EndstopSync {
     sealed interface State
     object StateIdle: State
     object StateRunning: State
+    data class StateTriggered(val triggerTime: MachineTime): State
     object StateReleased: State
-    class StateTriggered(val triggerTime: MachineTime): State
-    class StateAborted(val result: TriggerResult): State
-
-    enum class TriggerResult(val id: UByte) {
-        NONE(id = 0u),
-        ENDSTOP_HIT(id = 1u),
-        COMMS_TIMEOUT(id = 2u),
-        RESET(id = 3u),
-        PAST_END_TIME(id = 4u);
-    }
+    object StatePastEndTime: State
+    object StateReset: State
+    object StateCommsTimeout: State
+    object StateNotStarted: State
 }
 
 // Other stuff

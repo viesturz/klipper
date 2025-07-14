@@ -11,6 +11,7 @@ import chelper.cartesian_stepper_alloc
 import chelper.stepper_kinematics
 import chelper.trapq_alloc
 import chelper.trapq_free
+import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.MoveOutsideRangeException
 import mcu.connection.StepQueueImpl
 import mcu.GcWrapper
@@ -63,6 +64,7 @@ private class StepperImpl(
     val driver: StepperDriver,
     builder: MachineBuilder,
 ) : PartLifecycle, LinearStepper {
+    val logger = KotlinLogging.logger(name)
     val motor = builder.setupMcu(pins.mcu).addStepperMotor(pins, driver)
     val stepQueue = motor.stepQueue as StepQueueImpl
     val kinematics = GcWrapper(cartesian_stepper_alloc('x'.code.toByte())) { free(it) }
@@ -73,8 +75,11 @@ private class StepperImpl(
     override var railStatus = RailStatus(false, false)
 
     override suspend fun setPowered(time: MachineTime, value: Boolean) {
-        railStatus = railStatus.copy(powered = value)
+        railStatus = railStatus.copy(powered = value, homed = if (!value) false else railStatus.homed)
         driver.enable( time, value)
+    }
+    override fun setHomed(value: Boolean) {
+        railStatus = railStatus.copy(homed = value)
     }
 
     init {
@@ -106,6 +111,7 @@ private class StepperImpl(
     }
 
     override fun initializePosition(time: MachineTime, position: Double, homed: Boolean) {
+        logger.info { "Initializing position $position at time $time" }
         if (externalKinematics != null) throw IllegalStateException("Stepper has external kinematics")
         generate(time)
         if (commandedEndTime > time) throw IllegalStateException("Time before last time")
@@ -123,6 +129,7 @@ private class StepperImpl(
         endSpeed: Double,
         endPosition: Double
     ) {
+        logger.info  { "moveTo $endPosition at time $endTime" }
         if (externalKinematics != null) throw IllegalStateException("Stepper has external kinematics")
         val delta = endPosition - commandedPosition
         val direction = delta.sign
@@ -151,6 +158,7 @@ private class StepperImpl(
     }
 
     override fun generate(time: MachineTime) {
+        logger.info  { "generate at time $time" }
         if (externalKinematics != null) throw IllegalStateException("Stepper has external kinematics")
         chelper.itersolve_generate_steps(kinematics.ptr, time).let { ret ->
             if (ret != 0) throw RuntimeException("Internal error in stepcompress $ret")

@@ -20,12 +20,11 @@ import machine.Reactor
 import Mcu
 import McuSetup
 import McuState
+import io.github.oshai.kotlinlogging.KLogger
 import mcu.connection.McuConnection
 import mcu.connection.connectSerial
 import mcu.McuSetupImpl
 import parts.Stats
-
-private val logger = KotlinLogging.logger("MachineImpl")
 
 class MachineImpl : MachineRuntime, MachineBuilder {
     private var _state = MutableStateFlow(State.NEW)
@@ -33,6 +32,7 @@ class MachineImpl : MachineRuntime, MachineBuilder {
         get() = _state
 
     override val reactor = Reactor()
+    override val logger = KotlinLogging.logger("MachineImpl")
     val gCode = GCodeImpl()
     val queueManager: QueueManager = QueueManagerImpl(reactor)
     var _shutdownReason = ""
@@ -116,7 +116,7 @@ class MachineImpl : MachineRuntime, MachineBuilder {
     val STEPCOMPRESS_FLUSH_TIME = 0.050
     val SDS_CHECK_TIME = 0.001 // step+dir+step filter in stepcompress.c
 
-    fun flushMoves(machineTime: MachineTime) {
+    override fun flushMoves(machineTime: MachineTime) {
         val flushDelay = STEPCOMPRESS_FLUSH_TIME + SDS_CHECK_TIME
         val flushTime = machineTime - flushDelay
         val clearHistoryTime = flushTime - 30.0

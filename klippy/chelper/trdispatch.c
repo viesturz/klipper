@@ -156,6 +156,13 @@ trdispatch_alloc(void)
     return td;
 }
 
+// Create a new 'struct trdispatch' object
+void __visible
+trdispatch_free(struct trdispatch * tr)
+{
+    free(tr);
+}
+
 // Create a new 'struct trdispatch_mcu' object
 struct trdispatch_mcu * __visible
 trdispatch_mcu_alloc(struct trdispatch *td, struct serialqueue *sq
@@ -185,6 +192,11 @@ trdispatch_mcu_alloc(struct trdispatch *td, struct serialqueue *sq
     list_add_tail(&tdm->node, &td->tdm_list);
 
     return tdm;
+}
+
+void __visible
+trdispatch_mcu_free(struct trdispatch_mcu *tr) {
+    free(tr);
 }
 
 // Setup for a trigger test

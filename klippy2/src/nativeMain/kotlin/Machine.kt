@@ -1,4 +1,6 @@
 import config.McuConfig
+import io.github.oshai.kotlinlogging.KLogger
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.StateFlow
 import machine.CommandQueue
 import machine.Reactor
@@ -52,6 +54,7 @@ interface Machine {
 interface MachineRuntime: Machine {
     val parts: List<MachinePart>
     val reactor: Reactor
+    val logger: KLogger
 
     /** Start a new queue, starting as soon as possible. */
     fun newQueue(): CommandQueue
@@ -60,6 +63,7 @@ interface MachineRuntime: Machine {
      *  Note that if this queue takes longer than remaining commands in the target queue,
      *  it may stall it until this queue completes. */
     fun newBackdatingQueue(): CommandQueue
+    fun flushMoves(machineTime: MachineTime)
 }
 inline fun <reified PartType> MachineRuntime.getPartByName(name: String): PartType? =
     parts.first { it.name == name && it is PartType } as PartType?
@@ -79,4 +83,8 @@ interface PartLifecycle: MachinePart {
     // Called when all MCUs are configured and parts components initialized.
     suspend fun onStart(runtime: MachineRuntime){}
     fun shutdown(){}
+}
+
+fun MachineRuntime.withLogger(name: String) = object : MachineRuntime by this {
+    override val logger: KLogger = KotlinLogging.logger(name)
 }

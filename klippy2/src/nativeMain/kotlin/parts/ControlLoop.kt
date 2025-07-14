@@ -6,6 +6,7 @@ import kotlinx.coroutines.Job
 import MachineBuilder
 import MachineRuntime
 import PartLifecycle
+import withLogger
 
 fun MachineBuilder.ControlLoop(
     name: String = defaultName("ControlLoop"),
@@ -38,7 +39,7 @@ private class LocalControlImpl(
     override fun start() {
         job = runtime.reactor.launch {
             try {
-                control(runtime)
+                control(runtime.withLogger(name))
             } catch (e: CancellationException) {
                 logger.info { "Cancelled" }
             } catch (e: Exception) {

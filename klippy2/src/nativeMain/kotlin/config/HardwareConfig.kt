@@ -26,7 +26,7 @@ enum class RestartMethod {
 // Helper class to define MCU templates
 open class McuTemplate(val mcu: McuConfig) {
     fun analogPin(pin: String)= AnalogInPin(mcu, pin)
-    fun digitalPin(pin: String)= DigitalInPin(mcu, pin)
+    fun digitalPin(pin: String)= DigitalInPin(mcu, pin,)
     fun digitalOutPin(pin: String, invert: Boolean = false) = DigitalOutPin(mcu, pin, invert)
     fun analogOutPin(pin: String) = AnalogOutPin(mcu, pin)
     fun stepperPins(enablePin: DigitalOutPin, stepPin: DigitalOutPin, dirPin: DigitalOutPin) = StepperPins(mcu, enablePin, stepPin, dirPin)
@@ -34,7 +34,16 @@ open class McuTemplate(val mcu: McuConfig) {
 }
 
 // Base pin configs
-data class DigitalInPin(val mcu: McuConfig, val pin: String, val invert: Boolean = false, val pullup: Boolean = false, val shared: Boolean = false)
+data class DigitalInPin(
+    val mcu: McuConfig,
+    val pin: String,
+    val invert: Boolean = false,
+    val pullup: Boolean = false,
+    val shared: Boolean = false,
+    val sampleCount: UByte = 4u,
+    val sampleInterval: MachineDuration = .000015,
+    val restTime: MachineDuration = .001,
+)
 data class DigitalOutPin(val mcu: McuConfig,
                          val pin: String,
                          val invert: Boolean = false,

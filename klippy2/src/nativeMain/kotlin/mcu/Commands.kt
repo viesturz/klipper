@@ -78,8 +78,17 @@ class Commands(val identify: FirmwareConfig){
     }
 
     fun <CommandType: McuCommand> hasCommand(command: KClass<CommandType>): Boolean {
-        val serializer = command::class.qualifiedName?.let{ CLASS_TO_SERIALIZER.getValue(it) } ?: return false
+        val serializer = command.qualifiedName?.let{ CLASS_TO_SERIALIZER.getValue(it) } ?: return false
         return identify.commands.containsKey(serializer.signature)
+    }
+
+    fun <CommandType: McuCommand> tagFor(command: KClass<CommandType>): Int {
+        val serializer = command.qualifiedName?.let{ CLASS_TO_SERIALIZER.getValue(it) } ?: throw RuntimeException("Unknown command/response $command")
+        return identify.commands.getValue(serializer.signature)
+    }
+    fun <ResponseType: McuResponse> tagFor(command: KClass<ResponseType>): Int {
+        val serializer = command.qualifiedName?.let{ CLASS_TO_SERIALIZER.getValue(it) } ?: throw RuntimeException("Unknown command/response $command")
+        return identify.responses.getValue(serializer.signature)
     }
 
     fun getSignature(command: KClass<*>): String {
@@ -114,6 +123,7 @@ class Commands(val identify: FirmwareConfig){
                 "u" -> parser.parseU()
                 "h" -> parser.parseH()
                 "hu" -> parser.parseHU()
+                "hi" -> parser.parseH()
                 else -> "???"
             }.toString()
         } catch (e: Exception) {

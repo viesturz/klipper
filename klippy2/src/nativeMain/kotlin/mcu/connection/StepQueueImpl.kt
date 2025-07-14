@@ -10,9 +10,13 @@ import chelper.stepcompress_alloc
 import chelper.stepcompress_free
 import mcu.CommandBuffer
 import mcu.CommandBuilder
+import mcu.Commands
 import mcu.FirmwareConfig
 import mcu.GcWrapper
+import mcu.McuClock32
+import mcu.McuObjectCommand
 import mcu.ObjectId
+import utils.RegisterMcuMessage
 
 /** Queue for sending commands to MCU. */
 @OptIn(ExperimentalForeignApi::class)
@@ -24,8 +28,9 @@ class StepQueueImpl(firmware: FirmwareConfig, var connection: McuConnection?, va
     init {
         val maxErrorSecs = 0.000025
         val maxErrorTicks = firmware.durationToTicks(maxErrorSecs)
-        val stepCmdTag = firmware.getCommandTag("queue_step oid=%c interval=%u count=%hu add=%hi")
-        val dirCmdTag = firmware.getCommandTag("set_next_step_dir oid=%c dir=%c")
+        val commands = Commands(firmware)
+        val stepCmdTag = commands.tagFor(CommandQueueStep::class).toInt()
+        val dirCmdTag = commands.tagFor(CommandSetNextStepDir::class).toInt()
         chelper.stepcompress_fill(stepcompress.ptr, maxErrorTicks, stepCmdTag, dirCmdTag)
     }
 
@@ -73,3 +78,8 @@ class IntsCommandBuffer: CommandBuffer {
         throw IllegalStateException("Raw bytes not supported on an Step queue")
     }
 }
+
+@RegisterMcuMessage(signature = "queue_step oid=%c interval=%u count=%hu add=%hi")
+data class CommandQueueStep(override val id: ObjectId, val interval: McuClock32, val count: UShort, val add: Short): McuObjectCommand
+@RegisterMcuMessage(signature = "set_next_step_dir oid=%c dir=%c")
+data class CommandSetNextStepDir(override val id: ObjectId, val dir: UByte): McuObjectCommand

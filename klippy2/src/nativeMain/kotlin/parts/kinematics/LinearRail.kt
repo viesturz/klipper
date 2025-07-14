@@ -11,6 +11,7 @@ interface LinearRail {
     val homing: Homing?
 
     suspend fun setPowered(time: MachineTime, value: Boolean)
+    fun setHomed(value: Boolean)
     fun setupHomingMove(homingMove: HomingMove)
     fun checkMove(start: Double, end: Double): LinearSpeeds
 
@@ -93,8 +94,8 @@ data class Homing(
     val retractDist: Double,
 )
 
-enum class HomingDirection {
-    INCREASING,
-    DECREASING,
+enum class HomingDirection(val multipler: Int) {
+    INCREASING(multipler = 1),
+    DECREASING(multipler = -1),
 }
 

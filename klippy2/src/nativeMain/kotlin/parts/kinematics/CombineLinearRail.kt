@@ -62,9 +62,11 @@ class CombineLinearStepper(vararg railArgs: LinearStepper) : LinearStepper {
         get() = steppers.map { it.railStatus }.reduce { a,b -> a.combine(b)  }
 
     override suspend fun setPowered(time: MachineTime, value: Boolean) {
-        for (a in steppers) {
-            a.setPowered(time, value)
-        }
+        steppers.forEach { it.setPowered(time, value) }
+    }
+
+    override fun setHomed(value: Boolean) {
+        steppers.forEach { it.setHomed(value) }
     }
 
     override fun moveTo(

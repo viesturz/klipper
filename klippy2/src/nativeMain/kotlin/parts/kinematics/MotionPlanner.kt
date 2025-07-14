@@ -22,7 +22,7 @@ class MotionPlannerConfig {
         mapping[name] = value
     }
     fun axis(name: Char, value: LinearRail) {
-        mapping[name.toString()] = LinearRailActuator(value)
+//        mapping[name.toString()] = LinearRailActuator(value)
     }
 }
 

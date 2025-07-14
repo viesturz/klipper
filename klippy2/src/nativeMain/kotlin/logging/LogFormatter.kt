@@ -9,6 +9,9 @@ class LogFormatter: Formatter {
     @OptIn(ExperimentalForeignApi::class)
     override fun formatMessage(loggingEvent: KLoggingEvent): String {
         val timestamp = chelper.get_monotonic()
-        return "${timestamp.format(0,5)} ${loggingEvent.level}: [${loggingEvent.loggerName}] ${loggingEvent.message}"
+        val msg = "${timestamp.format(0,5)} ${loggingEvent.level}: [${loggingEvent.loggerName}] ${loggingEvent.message}"
+        val cause = loggingEvent.cause
+        if (cause == null) return msg
+        return "$msg\n${cause.stackTraceToString()}"
     }
 }

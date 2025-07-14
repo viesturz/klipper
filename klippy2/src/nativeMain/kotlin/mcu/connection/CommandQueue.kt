@@ -22,7 +22,7 @@ import kotlin.time.Duration.Companion.seconds
 @OptIn(ExperimentalForeignApi::class, ExperimentalStdlibApi::class)
 class CommandQueue(var connection: McuConnection?, logName: String) {
     @OptIn(ExperimentalForeignApi::class)
-    private val queue = GcWrapper(serialqueue_alloc_commandqueue()) { serialqueue_free_commandqueue(it) }
+    val queue = GcWrapper(serialqueue_alloc_commandqueue()) { serialqueue_free_commandqueue(it) }
     var lastClock: McuClock = 0u
     private val logger = KotlinLogging.logger("CommandQueue $logName ")
 

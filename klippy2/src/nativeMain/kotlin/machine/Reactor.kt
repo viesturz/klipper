@@ -27,7 +27,7 @@ class Reactor {
     val scope = CoroutineScope(context)
 
     /** Time to add to ensure reliable scheduling */
-    val SCHEDULING_TIME = 0.1
+    val SCHEDULING_TIME = machine.SCHEDULING_TIME
 
     data class Event(var time: MachineTime, val block: suspend () -> Unit)
     private val orderedEvents = ArrayList<Event>()
@@ -118,6 +118,9 @@ class Reactor {
 
 @OptIn(ExperimentalForeignApi::class)
 fun getNow(): MachineTime = chelper.get_monotonic()
+
+/** Time to add to ensure reliable scheduling */
+val SCHEDULING_TIME = 0.1
 
 suspend fun waitUntil(time: MachineTime) =
     delay(max(0.0, time - getNow()).seconds)

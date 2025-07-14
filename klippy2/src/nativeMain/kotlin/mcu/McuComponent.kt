@@ -31,6 +31,7 @@ interface McuConfigure {
     /** Create a new command queue, separate from the step queues.
      *  NumMoves is the number of commands simultaneously queued.
      * Can only be used after start. */
+    fun addComponent(component: McuComponent)
     fun makeCommandQueue(name:String, numCommands: Int): CommandQueue
     /** Create a new stepper command queue */
     fun makeStepQueue(id: ObjectId): StepQueueImpl

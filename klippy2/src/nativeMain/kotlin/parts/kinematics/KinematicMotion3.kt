@@ -23,7 +23,7 @@ class CartesianKinematics(val x: LinearStepper, val y: LinearStepper, val z: Lin
         return x.speeds.intersection(y.speeds).intersection(z.speeds)
     }
 
-    override suspend fun home(axis: List<Int>) {
+    override suspend fun home(axis: List<Int>): HomeResult {
         TODO("Not yet implemented")
     }
 }
