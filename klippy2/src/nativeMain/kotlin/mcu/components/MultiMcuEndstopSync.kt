@@ -76,12 +76,13 @@ class McuEndstopSyncRuntimeBuilder: EndstopSyncBuilder {
         require(mcus.isNotEmpty())
         require(endstops.isNotEmpty())
         require(motors.isNotEmpty())
+        val owner = this@McuEndstopSyncRuntimeBuilder
         val mcuToTrsync = buildMap { mcus.forEach { mcu ->
-            put(mcu, mcu.trsyncPool.acquire(this))
+            put(mcu, mcu.trsyncPool.acquire(owner))
         }}
         val releaseFunc = {
             mcuToTrsync.forEach { (mcu, trsync) ->
-                mcu.trsyncPool.release(trsync, this)
+                mcu.trsyncPool.release(trsync, owner)
             }
         }
         return MultiMcuEndstopSync(mcuToTrsync, endstops, motors, releaseFunc)
@@ -103,10 +104,10 @@ class MultiMcuEndstopSync(
         mcuToTrsync.forEach { (mcu, trsync) -> trsync.acquire(this, mcu) }
     }
 
-    override fun reset() {
-        logger.info { "reset" }
+    override suspend fun reset() {
         if (state.value == EndstopSync.StateIdle) return
         if (state.value is EndstopSync.StateReleased) throw IllegalStateException("Sync released")
+        logger.debug { "reset" }
         for (trsync in mcuToTrsync.values) {
             trsync.reset()
         }
@@ -114,30 +115,25 @@ class MultiMcuEndstopSync(
             endstop.reset()
         }
         for (stepper in motors) {
-            val trsync = mcuToTrsync[stepper.mcu] ?: throw RuntimeException("Not supposed to happen")
-            trsync.queue.send(CommandResetStepClock(stepper.id, 0U))
+            stepper.resetTrigger()
         }
         state.value = EndstopSync.StateIdle
     }
 
-    override fun release() {
-        logger.info { "release" }
-        val rf = releaseFunc ?: throw RuntimeException("Not a releasable instance")
+    override suspend fun release() {
+        logger.debug { "release" }
+        val releaseF = releaseFunc ?: throw RuntimeException("Not a releasable instance")
         reset()
-        rf()
         state.value = EndstopSync.StateReleased
         chelper.trdispatch_free(trdispatch)
         mcuToTrsync.forEach { (_, trsync) -> trsync.release() }
+        releaseF()
     }
 
-    override fun start(startTime: MachineTime, timeoutTime: MachineTime): Deferred<EndstopSync.State> {
-        logger.info { "start startTime=$startTime timeoutTime=$timeoutTime" }
+    override suspend fun start(startTime: MachineTime, timeoutTime: MachineTime): Deferred<EndstopSync.State> {
+        logger.debug { "start startTime=$startTime timeoutTime=$timeoutTime" }
         reset()
         state.value = EndstopSync.StateRunning
-        for (stepper in motors) {
-            val trsync = mcuToTrsync[stepper.mcu] ?: throw RuntimeException("Not supposed to happen")
-            trsync.queue.send(CommandStepperStopOnTrigger(stepper.id, trsync.id))
-        }
         for (endstop in endstops) {
             val trsync = mcuToTrsync[endstop.mcu] ?: throw RuntimeException("Not supposed to happen")
             val runtime = trsync.runtime
@@ -165,12 +161,16 @@ class MultiMcuEndstopSync(
             val result = trsync.start(startTime, timeoutTime, reportInterval, reportInterval)
             return@map McuTrsyncEntry(trsync, result)
         }
-        chelper.trdispatch_start(trdispatch, 2u) // REASON_HOST_REQUEST
+        for (stepper in motors) {
+            val trsync = mcuToTrsync[stepper.mcu] ?: throw RuntimeException("Not supposed to happen")
+            trsync.queue.send(CommandStepperStopOnTrigger(stepper.id, trsync.id))
+        }
+        chelper.trdispatch_start(trdispatch, TriggerResult.HOST_REQUEST.id.toUInt())
         return reactor.async {
             return@async try {
-                logger.info { "wait start" }
+                logger.debug { "wait start" }
                 results.map { it.result.await() }.reduce(::combineStates).also {
-                    logger.info { "wait done, result $it" }
+                    logger.debug { "wait done, result $it" }
                 }
             } finally {
                 chelper.trdispatch_stop(trdispatch)
@@ -205,7 +205,7 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
     fun handleTrsyncState(state: ResponseTrsyncState) {
         val timeout = timeoutTime
         val trigger = activeTrigger
-        logger.info { "state $state" }
+        logger.debug { "state $state" }
         if (trigger != null && state.canTrigger == false) {
             // Triggered
             val result = parseTriggerResult(state.reason, runtime.clockToTime(state.clock))
@@ -219,7 +219,7 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
     }
 
     fun acquire(mm: MultiMcuEndstopSync, mcu: McuImpl) {
-        logger.info { "acquire" }
+        logger.debug { "acquire" }
         if (trdispatchMcu != null) throw RuntimeException("Double acquire")
         trdispatchMcu = chelper.trdispatch_mcu_alloc(
             mm.trdispatch, mcu.connection.serial.ptr, queue.queue.ptr, id.toUInt(),
@@ -230,7 +230,7 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
     }
 
     fun release() {
-        logger.info { "release" }
+        logger.debug { "release" }
         require(activeTrigger == null)
         val tm = trdispatchMcu ?: throw RuntimeException("Relasing without acquire")
         chelper.trdispatch_mcu_free(tm)
@@ -251,8 +251,8 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
         firstReportOffset: MachineDuration,
         reportInterval: MachineDuration): Deferred<EndstopSync.State> {
         this.timeoutTime = timeoutTime
-        logger.info { "start" }
         if (activeTrigger != null) throw RuntimeException("Already running")
+        logger.debug { "start" }
         val result = CompletableDeferred<EndstopSync.State>()
         activeTrigger = result
         val firstReportTime = startTime + firstReportOffset
@@ -284,7 +284,7 @@ class McuTrsyncPool(val mcu: Mcu, initialize: McuConfigure): McuComponent {
     fun release(trsync: McuTrsync, owner: Any) {
         val entry = entries.firstOrNull{ it.trsync === trsync } ?:  throw RuntimeException("Release: Trsync not found")
         if (entry.owner !== owner) {
-            throw RuntimeException("Release: Trsync owner does not match")
+            throw RuntimeException("Release: Trsync owner does not match, current owner ${entry.owner}, releasing owner $owner")
         }
         entry.owner = null
     }
@@ -315,11 +315,10 @@ fun parseTriggerResult(num: UByte, time: MachineTime) = when(num.toUInt()) {
 }
 
 enum class TriggerResult(val id: UByte) {
-    NONE(id = 0u),
     ENDSTOP_HIT(id = 1u),
-    COMMS_TIMEOUT(id = 2u),
-    RESET(id = 3u),
-    PAST_END_TIME(id = 4u);
+    HOST_REQUEST(id = 2u),
+    PAST_END_TIME(id = 3u),
+    COMMS_TIMEOUT(id = 4u),
 }
 
 fun combineStates(a: EndstopSync.State, b: EndstopSync.State): EndstopSync.State {

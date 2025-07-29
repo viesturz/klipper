@@ -8,12 +8,15 @@ import McuClock
 import StepperMotor
 import chelper.stepcompress_alloc
 import chelper.stepcompress_free
+import chelper.steppersync_alloc
+import chelper.steppersync_free
 import mcu.CommandBuffer
 import mcu.CommandBuilder
 import mcu.Commands
 import mcu.FirmwareConfig
 import mcu.GcWrapper
 import mcu.McuClock32
+import mcu.McuCommand
 import mcu.McuObjectCommand
 import mcu.ObjectId
 import utils.RegisterMcuMessage
@@ -29,24 +32,24 @@ class StepQueueImpl(firmware: FirmwareConfig, var connection: McuConnection?, va
         val maxErrorSecs = 0.000025
         val maxErrorTicks = firmware.durationToTicks(maxErrorSecs)
         val commands = Commands(firmware)
-        val stepCmdTag = commands.tagFor(CommandQueueStep::class).toInt()
-        val dirCmdTag = commands.tagFor(CommandSetNextStepDir::class).toInt()
+        val stepCmdTag = commands.tagFor(CommandQueueStep::class)
+        val dirCmdTag = commands.tagFor(CommandSetNextStepDir::class)
         chelper.stepcompress_fill(stepcompress.ptr, maxErrorTicks, stepCmdTag, dirCmdTag)
     }
 
-    fun appendCommand(signature: String, block: CommandBuilder.()->Unit) {
+    fun appendCommand(command: McuCommand) {
         val connection = this.connection ?:
             throw RuntimeException("Trying to send before setup is finished")
         val buf = IntsCommandBuffer()
-        connection.commands.build(buf, signature, block)
+        connection.commands.build(buf, command)
         chelper.stepcompress_queue_msg(stepcompress.ptr, buf.ints.toUIntArray().toCValues(), buf.ints.size)
     }
 
-    fun appendMoveCommand(clock: McuClock, signature: String, block: CommandBuilder.()->Unit) {
+    fun appendMoveCommand(clock: McuClock, command: McuCommand) {
         val connection = this.connection ?:
             throw RuntimeException("Trying to send before setup is finished")
         val buf = IntsCommandBuffer()
-        connection.commands.build(buf, signature, block)
+        connection.commands.build(buf, command)
         chelper.stepcompress_queue_mq_msg(stepcompress.ptr, clock, buf.ints.toUIntArray().toCValues(), buf.ints.size)
     }
 
@@ -58,13 +61,32 @@ class StepQueueImpl(firmware: FirmwareConfig, var connection: McuConnection?, va
         chelper.stepcompress_set_last_position(stepcompress.ptr, clock, pos)
     }
 
-    fun commit() {
-        chelper.stepcompress_commit(stepcompress.ptr)
+    /** Clears the queued steps and resets. */
+    fun reset() {
+        chelper.stepcompress_reset(stepcompress.ptr, 0u)
     }
 
     // Probably don't need this.
     fun setInverted(invert: Boolean) {
         chelper.stepcompress_set_invert_sdir(stepcompress.ptr, if (invert) 1u else 0u)
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+class StepperSync(connection: McuConnection, stepQueue: StepQueueImpl, moveCount: Int) {
+    val stepperSync = GcWrapper(steppersync_alloc(connection.serial.ptr, listOf(stepQueue.stepcompress.ptr).toCValues(), 1, moveCount)) {
+        steppersync_free(it)
+    }
+
+    fun flushMoves(clock: McuClock, clearHistoryClock: McuClock) {
+        val ret = chelper.steppersync_flush(stepperSync.ptr, clock, clearHistoryClock)
+        if (ret != 0) {
+            throw IllegalStateException("steppersync_flush failed ret=$ret")
+        }
+    }
+
+    fun setTime(convTime: Double, frequency: Double) {
+        chelper.steppersync_set_time(stepperSync.ptr, convTime, frequency)
     }
 }
 

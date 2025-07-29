@@ -133,7 +133,7 @@ class McuImpl(
     private val _state = MutableStateFlow(McuState.STARTING)
     private var _stateReason = ""
     private val logger = KotlinLogging.logger("McuImpl ${config.name}")
-    private var stepperSync: StepperSync? = null
+    private val stepperSyncs = mutableListOf<StepperSync>()
     override val state: StateFlow<McuState>
         get() = _state
     override val stateReason: String
@@ -188,7 +188,9 @@ class McuImpl(
 
     override fun flushMoves(time: MachineTime,  clearHistoryTime: MachineTime) {
         require(isRunning)
-        stepperSync?.flushMoves(clocksync.estimate.timeToClock(time), clocksync.estimate.timeToClock(clearHistoryTime))
+        stepperSyncs.forEach {
+            it.flushMoves(clocksync.estimate.timeToClock(time), clocksync.estimate.timeToClock(clearHistoryTime))
+        }
     }
 
     override fun shutdown(reason: String, emergency: Boolean) {
@@ -248,7 +250,10 @@ class McuImpl(
         // Configure the stepper queues.
         if (configuration.reservedMoves > config.moveCount.toInt())
             throw RuntimeException("Mcu ${this.config.name}, moves buffer not enough, has ${config.moveCount}, need ${configuration.reservedMoves}")
-        stepperSync = StepperSync(connection, configuration.stepQueues, config.moveCount.toInt() - configuration.reservedMoves)
+        if (configuration.stepQueues.isNotEmpty()) {
+            val stepQueueMoveCount = (config.moveCount.toInt() - configuration.reservedMoves) / configuration.stepQueues.size
+            configuration.stepQueues.forEach { stepperSyncs.add(StepperSync(connection, it, stepQueueMoveCount)) }
+        }
     }
 
     private suspend fun restartFirmware() {
@@ -270,7 +275,7 @@ class McuImpl(
 
     fun updateClocks(frequency: Double, convTime: Double, convClock: ULong, lastClock: McuClock) {
         connection.setClockEstimate(frequency, convTime, convClock, lastClock)
-        stepperSync?.setTime(convTime, frequency)
+        stepperSyncs.forEach { it.setTime(convTime, frequency) }
     }
 }
 

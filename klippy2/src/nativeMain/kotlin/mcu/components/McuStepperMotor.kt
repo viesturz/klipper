@@ -48,9 +48,10 @@ class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, overri
         return position.position
     }
 
-    override fun step(startTime: MachineTime, direction: Int) {
-        stepQueue.appendStep(direction, startTime, 0.0)
-        stepQueue.commit()
+    suspend fun resetTrigger() {
+        stepQueue.reset()
+        stepQueue.appendCommand(CommandResetStepClock(id, 0U))
+        getPosition()
     }
 }
 

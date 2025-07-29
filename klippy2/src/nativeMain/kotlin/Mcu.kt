@@ -112,20 +112,14 @@ interface StepperDriver {
     val microsteps: Int
     val stepBothEdges: Boolean
     val pulseDuration: Double
-
     val enabled: Boolean
-    /** Configure motor's steps per mm to reference speed dependant driver thresholds.
-     * To be called during configuration phase. */
-    fun configureForStepper(stepsPerMM: Double)
-    suspend fun enable(time: MachineTime, enabled: Boolean)
+    suspend fun setEnabled(time: MachineTime, enabled: Boolean)
 }
 
 interface StepperMotor {
     val mcu: Mcu
     val stepQueue: StepQueue
     val driver: StepperDriver
-    // Move one step
-    fun step(startTime: MachineTime, direction: Int)
     fun setPosition(time: MachineTime, pos: Long)
     suspend fun getPosition(): Long
 
@@ -151,12 +145,13 @@ interface EndstopSyncBuilder {
 interface EndstopSync {
     val state: StateFlow<State>
 
-    fun start(startTime: MachineTime, timeoutTime: MachineTime): Deferred<State>
+    /** Initiates the endstop sync and returns a deferred trigger result. */
+    suspend fun start(startTime: MachineTime, timeoutTime: MachineTime): Deferred<State>
 
-    /** Resets any ongoing triggering. Allows stopped motors to move again after being stopped. */
-    fun reset()
+    /** Resets any ongoing triggering. Allows stopped motors to move again. */
+    suspend fun reset()
     /* Releases the sync resources, it cannot be used anymore after this. */
-    fun release()
+    suspend fun release()
 
     sealed interface State
     object StateIdle: State
@@ -166,7 +161,6 @@ interface EndstopSync {
     object StatePastEndTime: State
     object StateReset: State
     object StateCommsTimeout: State
-    object StateNotStarted: State
 }
 
 // Other stuff

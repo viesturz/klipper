@@ -20,7 +20,6 @@ import machine.Reactor
 import Mcu
 import McuSetup
 import McuState
-import io.github.oshai.kotlinlogging.KLogger
 import mcu.connection.McuConnection
 import mcu.connection.connectSerial
 import mcu.McuSetupImpl
@@ -121,7 +120,7 @@ class MachineImpl : MachineRuntime, MachineBuilder {
         val flushTime = machineTime - flushDelay
         val clearHistoryTime = flushTime - 30.0
         for (mcu in mcuList) {
-            mcu.flushMoves(flushTime, clearHistoryTime);
+            mcu.flushMoves(flushTime, clearHistoryTime)
         }
     }
 
@@ -146,7 +145,7 @@ class MachineImpl : MachineRuntime, MachineBuilder {
     private fun acquireConnection(config: Connection): McuConnection {
         logger.debug { "Acquire connection $config" }
         val connection = when (config) {
-            is SerialConnection -> McuConnection(connectSerial(config.file, config.baud), reactor)
+            is SerialConnection -> McuConnection(connectSerial(config.file, config.baud), config.baud, reactor)
             else -> throw RuntimeException("Unsupported connection ${config}")
         }
         logger.info { "Identifying connection $config" }

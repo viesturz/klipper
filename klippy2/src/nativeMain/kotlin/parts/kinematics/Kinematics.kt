@@ -5,6 +5,7 @@ import MachineBuilder
 import MachineRuntime
 import MachineTime
 import PartLifecycle
+import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.SCHEDULING_TIME
 import machine.getNow
 import kotlin.math.absoluteValue
@@ -52,6 +53,7 @@ class LinearRailActuatorImpl(override val name: String, val rail: LinearRail): M
     override val commandedEndTime: MachineTime
         get() = rail.commandedEndTime
     lateinit var runtime: MachineRuntime
+    val logger = KotlinLogging.logger(name)
 
     override suspend fun onStart(runtime: MachineRuntime) {
         this.runtime = runtime
@@ -90,6 +92,7 @@ class LinearRailActuatorImpl(override val name: String, val rail: LinearRail): M
         val accelDonePosition = accelDuration * speed * 0.5
         val cruiseDuration = (endPosition - accelDonePosition) / speed
         val endTime = startTime + accelDuration + cruiseDuration
+        logger.info { "Homing move, distance=$endPosition speed=$speed, accel=$accel, accelDuration=$accelDuration, cruiseDuration=$cruiseDuration" }
         homingMove.start(startTime, endTime + 1.0)
         rail.moveTo(
             startTime = startTime,
@@ -112,10 +115,8 @@ class LinearRailActuatorImpl(override val name: String, val rail: LinearRail): M
         rail.generate(flushTime)
         runtime.flushMoves(flushTime)
         val result = homingMove.wait()
-
-        // Clear any pending moves
-        // self.trapq_finalize_moves(self.trapq, reactor.NEVER, 0)
-
+        homingMove.release()
+        logger.info { "Homing result=$result" }
         if (result is EndstopSync.StateTriggered) {
             rail.setHomed(true)
             rail.commandedPosition = homing.endstopPosition

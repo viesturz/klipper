@@ -33,7 +33,7 @@ private val logger = KotlinLogging.logger("McuConnection")
 
 /** Connection to MCU, primarily handles dispatch of messages received from MCU. */
 @OptIn(ExperimentalForeignApi::class)
-class McuConnection(val fd: Int, val reactor: Reactor) {
+class McuConnection(private val fd: Int, private val configuredBaudRate: Int, val reactor: Reactor) {
     private val responseHandlersOneshot = HashMap<Pair<String, ObjectId>, CompletableDeferred<McuResponse>>()
     private val responseHandlers = HashMap<Pair<String, ObjectId>, suspend (message: McuResponse) -> Unit>()
     private val pendingAcks = HashMap<ULong, CompletableDeferred<Unit>>()
@@ -96,6 +96,20 @@ class McuConnection(val fd: Int, val reactor: Reactor) {
         }.toByteArray()
         logger.debug { "Identify done, read ${data.size} bytes" }
         commands = Commands(FirmwareConfig.parse(data))
+        // Setup connection params.
+        val serialFrequency = commands.identify.configDouble("SERIAL_BAUD", 0.0)
+        val canbusFrequency = commands.identify.configDouble("CANBUS_FREQUENCY", 0.0)
+        if (canbusFrequency > 0) {
+            chelper.serialqueue_set_wire_frequency(serial.ptr, canbusFrequency)
+        } else if (serialFrequency > 0) {
+            chelper.serialqueue_set_wire_frequency(serial.ptr, serialFrequency)
+        } else if (configuredBaudRate > 0) {
+            chelper.serialqueue_set_wire_frequency(serial.ptr, configuredBaudRate.toDouble())
+        }
+        val receiveWindow = commands.identify.configLong("RECEIVE_WINDOW", 0).toInt()
+        if (receiveWindow != 0) {
+            chelper.serialqueue_set_receive_window(serial.ptr, receiveWindow)
+        }
         return commands
     }
 

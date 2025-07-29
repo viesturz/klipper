@@ -38,7 +38,7 @@ fun MachineBuilder.LinearStepper(
 ): LinearStepper = StepperImpl(
     name = name,
     pins = pins,
-    stepsPerMm = stepsPerRotation * driver.microsteps / gearRatio / rotationDistance,
+    stepDistance = rotationDistance * gearRatio / stepsPerRotation / driver.microsteps,
     speeds = speed,
     range = range,
     homing = homing,
@@ -57,7 +57,7 @@ interface LinearStepper: LinearRail {
 private class StepperImpl(
     override val name: String,
     pins: StepperPins,
-    val stepsPerMm: Double,
+    val stepDistance: Double,
     override val speeds: LinearSpeeds,
     override val range: LinearRange,
     override val homing: Homing?,
@@ -76,15 +76,14 @@ private class StepperImpl(
 
     override suspend fun setPowered(time: MachineTime, value: Boolean) {
         railStatus = railStatus.copy(powered = value, homed = if (!value) false else railStatus.homed)
-        driver.enable( time, value)
+        driver.setEnabled( time, value)
     }
     override fun setHomed(value: Boolean) {
         railStatus = railStatus.copy(homed = value)
     }
 
     init {
-        driver.configureForStepper(stepsPerMm)
-        chelper.itersolve_set_stepcompress(kinematics.ptr, stepQueue.stepcompress.ptr, stepsPerMm)
+        chelper.itersolve_set_stepcompress(kinematics.ptr, stepQueue.stepcompress.ptr, stepDistance)
         chelper.itersolve_set_trapq(kinematics.ptr, trapq.ptr)
         chelper.itersolve_set_position(kinematics.ptr, commandedPosition, 0.0, 0.0)
     }
@@ -95,7 +94,7 @@ private class StepperImpl(
         chelper.itersolve_set_stepcompress(
             kin.ptr,
             stepQueue.stepcompress.ptr,
-            stepsPerMm,
+            stepDistance,
         )
     }
 

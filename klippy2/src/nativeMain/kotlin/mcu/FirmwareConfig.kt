@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.long
 import okio.buffer
@@ -41,6 +42,8 @@ data class FirmwareConfig @OptIn(ExperimentalSerializationApi::class) constructo
 
     fun configLong(name: String, default: Long? = null): Long =
         config[name]?.long ?: default ?: throw RuntimeException("Missing MCU config $name")
+    fun configDouble(name: String, default: Double? = null): Double =
+        config[name]?.double ?: default ?: throw RuntimeException("Missing MCU config $name")
     fun configString(name: String, default: String? = null): String =
         config[name]?.content ?: default ?: throw RuntimeException("Missing MCU config $name")
     fun durationToTicks(duration: MachineDuration): McuClock32 = (clockFreq * duration).toUInt()

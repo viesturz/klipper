@@ -2,7 +2,6 @@ package mcu.connection
 
 import chelper.serialqueue_alloc_commandqueue
 import chelper.serialqueue_free_commandqueue
-import chelper.steppersync_free
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toCValues
@@ -10,7 +9,6 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import McuClock
-import chelper.steppersync_alloc
 import mcu.GcWrapper
 import mcu.McuCommand
 import mcu.McuObjectCommand
@@ -25,10 +23,6 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
     val queue = GcWrapper(serialqueue_alloc_commandqueue()) { serialqueue_free_commandqueue(it) }
     var lastClock: McuClock = 0u
     private val logger = KotlinLogging.logger("CommandQueue $logName ")
-
-    init {
-        // TODO: Configure RECEIVE_WINDOW, etc.
-    }
 
     /** Schedule to send a message to the MCU.
      * No earlier than minClock and at the order of reqClock. */
@@ -77,27 +71,4 @@ class CommandQueue(var connection: McuConnection?, logName: String) {
 
     suspend inline fun <reified ResponseType: McuResponse> sendWithResponse(command: McuCommand, retry: Double = 0.01, minClock: McuClock = 0u, reqClock: McuClock = 0u) =
         sendWithResponse(command, ResponseType::class, retry, minClock, reqClock)
-}
-
-@OptIn(ExperimentalForeignApi::class)
-class StepperSync(connection: McuConnection, stepQueues: List<StepQueueImpl>, moveCount: Int) {
-    val stepperSync = GcWrapper(
-        steppersync_alloc(connection.serial.ptr,
-        stepQueues.map { it.stepcompress.ptr }.toCValues(),
-        stepQueues.size,
-        moveCount)
-    ) {
-        steppersync_free(it)
-    }
-
-    fun flushMoves(clock: McuClock, clearHistoryClock: McuClock) {
-        val ret = chelper.steppersync_flush(stepperSync.ptr, clock, clearHistoryClock)
-        if (ret != 0) {
-            throw IllegalStateException("steppersync_flush failed ret=$ret")
-        }
-    }
-
-    fun setTime(convTime: Double, frequency: Double) {
-        chelper.steppersync_set_time(stepperSync.ptr, convTime, frequency)
-    }
 }

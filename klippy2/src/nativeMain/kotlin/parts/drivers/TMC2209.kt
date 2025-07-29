@@ -46,17 +46,12 @@ class TMC2209Impl(
     override val pulseDuration = 0.000_000_100
     override val microsteps: Int
         get() = _microsteps.microsteps
-    var stepsPerMM = 0.0
 
     var _enabled = false
     override val enabled: Boolean
         get() = _enabled
 
-    override fun configureForStepper(stepsPerMM: Double) {
-        this.stepsPerMM = stepsPerMM
-    }
-
-    override suspend fun enable(time: MachineTime, enabled: Boolean) {
+    override suspend fun setEnabled(time: MachineTime, enabled: Boolean) {
         if (enabled == _enabled) return
         _enabled = enabled
         if (enabled) {

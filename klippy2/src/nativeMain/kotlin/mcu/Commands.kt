@@ -55,26 +55,18 @@ class Commands(val identify: FirmwareConfig){
         return Pair(name, result)
     }
 
-    inline fun build(signature: String, block: CommandBuilder.()->Unit): UByteArray {
+    fun build(message: McuCommand): UByteArray {
         val buffer = BytesBuffer()
-        build(buffer, signature, block)
+        build(buffer, message)
         return buffer.bytes.toUByteArray()
     }
 
     @Suppress("UNCHECKED_CAST")
-    fun build(message: McuCommand): UByteArray {
-        val buffer = BytesBuffer()
+    fun build(buffer: CommandBuffer, message: McuCommand) {
         val builder = CommandBuilder(this, buffer)
         val serializer = message::class.qualifiedName?.let{ CLASS_TO_SERIALIZER.getValue(it) } ?: throw RuntimeException("No serializer for ${message::class}")
         builder.addI(identify.commands.getValue(serializer.signature))
         (serializer as MessageSerializer<McuCommand>).write(message, builder)
-        return buffer.bytes.toUByteArray()
-    }
-
-    inline fun build(buffer: CommandBuffer, signature: String, block: CommandBuilder.()->Unit) {
-        val builder = CommandBuilder(this, buffer)
-        builder.addI(identify.commands.getValue(signature))
-        builder.block()
     }
 
     fun <CommandType: McuCommand> hasCommand(command: KClass<CommandType>): Boolean {

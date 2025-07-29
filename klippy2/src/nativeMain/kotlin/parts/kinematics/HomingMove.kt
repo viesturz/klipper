@@ -20,7 +20,7 @@ class HomingMove() {
         builder.addEndstop(endstop)
     }
 
-    fun start(startTime: MachineTime, timeoutTime: MachineTime) {
+    suspend fun start(startTime: MachineTime, timeoutTime: MachineTime) {
         if (result != null) throw IllegalStateException("Starting a homing move when one is already running")
         var s = sync
         if (s == null) {s = builder.build(); sync = s}
@@ -32,7 +32,7 @@ class HomingMove() {
         return r.await().also { result = null }
     }
 
-    fun release() {
+    suspend fun release() {
         result?.cancel()
         result = null
         sync?.release()
