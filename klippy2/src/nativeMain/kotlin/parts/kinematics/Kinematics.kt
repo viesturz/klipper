@@ -10,6 +10,7 @@ import machine.MoveOutsideRangeException
 import machine.SCHEDULING_TIME
 import machine.getNow
 import parts.motionplanner.KinMove2
+import parts.motionplanner.Position
 import parts.motionplanner.SimpleMotionPlanner
 
 enum class MotionType {
@@ -87,36 +88,75 @@ class LinearRailActuatorImpl(override val name: String, val rail: LinearRail): M
         require(axis[0] == 0)
         val homing = rail.homing ?: throw IllegalStateException("Homing not configured")
         val range = rail.range
-        val homingMove = HomingMove()
-        var startTime = getNow() + SCHEDULING_TIME
-        val endPosition = (range.positionMax - range.positionMin) * 1.2 * homing.direction.multipler
+
+        val startTime = getNow() + SCHEDULING_TIME
+        rail.initializePosition(startTime, 0.0, false)
         if (!rail.railStatus.powered) {
             rail.setPowered(time = startTime, value = true)
-            startTime += 0.2 // Wait a bit after powered
         }
-        rail.initializePosition(startTime, 0.0, false)
+
+        val homingMove = HomingMove()
         rail.setupHomingMove(homingMove)
         homing.endstopTrigger.setupHomingMove(homingMove)
+        homingMove.use {
+            val endPosition = (range.positionMax - range.positionMin) * 1.2 * homing.direction.multipler
+            val homeResult = doHomingMove(homingMove, listOf(endPosition), homing.speed)
+            if (homeResult !is EndstopSync.StateTriggered) {
+                return HomeResult.FAIL
+            }
+
+            rail.initializePosition(getNow(), homing.endstopPosition, true)
+
+            val retractedPosition = homing.endstopPosition - homing.direction.multipler * homing.retractDist
+            doRetract(listOf(retractedPosition), homing.speed)
+
+            val secondEndPosition = homing.endstopPosition + homing.direction.multipler * homing.retractDist * 2
+            val homingSamples = buildList {
+                repeat(homing.attempts - 1) {
+                    val homeResult = doHomingMove(homingMove, listOf(secondEndPosition), homing.secondSpeed)
+                    println("Homing move result: $homeResult")
+                    if (homeResult !is EndstopSync.StateTriggered) {
+                        return HomeResult.FAIL
+                    }
+                    // TODO: query the actual motor position
+                    add(rail.commandedPosition)
+                    rail.initializePosition(getNow(), homing.endstopPosition, true)
+                    doRetract(listOf(retractedPosition), homing.speed)
+                }
+            }
+            // TODO check homing sample accuracy.
+            rail.commandedPosition = retractedPosition
+            println("Homing success")
+            return HomeResult.SUCCESS
+        }
+    }
+
+    suspend fun doRetract(targetPosition: Position, speed: Double) {
+        val startTime = getNow() + SCHEDULING_TIME
         val endTime = SimpleMotionPlanner(startTime, checkLimits = false).moveTo(KinMove2(
             actuator = this,
-            position = listOf(endPosition),
-            speed = homing.speed,
+            position = targetPosition,
+            speed = speed,
+        )) + 0.1
+        rail.generate(endTime)
+        runtime.flushMoves(endTime)
+        runtime.reactor.waitUntil(endTime)
+    }
+
+    suspend fun doHomingMove(homingMove: HomingMove, targetPosition: Position, speed: Double): EndstopSync.State {
+        val startTime = getNow() + SCHEDULING_TIME
+        val endTime = SimpleMotionPlanner(startTime, checkLimits = false).moveTo(KinMove2(
+            actuator = this,
+            position = targetPosition,
+            speed = speed,
         ))
-        homingMove.start(startTime, endTime + 1.0)
+        homingMove.start(startTime, timeoutTime = endTime + 1.0)
         val flushTime = endTime + 0.1
         rail.generate(flushTime)
         runtime.flushMoves(flushTime)
         val result = homingMove.wait()
-        homingMove.release()
-        logger.info { "Homing result=$result" }
-        if (result is EndstopSync.StateTriggered) {
-            rail.setHomed(true)
-            rail.commandedPosition = homing.endstopPosition
-        }
-        return when (result) {
-            is EndstopSync.StateTriggered -> HomeResult.SUCCESS
-            else -> HomeResult.FAIL
-        }
+        homingMove.allowMoves()
+        return result
     }
 
     override fun moveTo(

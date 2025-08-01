@@ -106,9 +106,9 @@ private class StepperImpl(
         logger.info { "Initializing position $position at time $time" }
         if (externalKinematics != null) throw IllegalStateException("Stepper has external kinematics")
         generate(time)
-        if (commandedEndTime > time) throw IllegalStateException("Time before last time")
         commandedPosition = position
         commandedEndTime = time
+        chelper.itersolve_generate_steps(kinematics.ptr, time) // Reset itersolve time
         chelper.itersolve_set_position(kinematics.ptr, commandedPosition, 0.0, 0.0)
         chelper.trapq_set_position(trapq.ptr, time, commandedPosition, 0.0, 0.0)
         railStatus = railStatus.copy(homed = homed)
@@ -134,6 +134,7 @@ private class StepperImpl(
         val move = chelper.move_alloc() ?: throw OutOfMemoryError()
         val accel = (endSpeed - startSpeed) / duration
         // Sanity check
+        logger.debug { "move $startTime+$duration, Accel:$accel, Pos:$commandedPosition->$endPosition, speed:$startSpeed->$endSpeed" }
         val distanceFromSpeed = startSpeed * duration + accel * duration * duration * 0.5
         require((distanceFromSpeed - distance).absoluteValue < 0.001 ) { "Speeds and durations do not match: Position distanece: $distance, speedDistance: $distanceFromSpeed." }
         move.pointed.apply {

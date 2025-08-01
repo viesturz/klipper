@@ -90,8 +90,9 @@ data class Homing(
     val endstopTrigger: Trigger,
     val direction: HomingDirection,
     val speed: Double,
-    val secondSpeed: Double? = null,
-    val retractDist: Double,
+    val secondSpeed: Double = speed,
+    val retractDist: Double = 10.0,
+    val attempts: Int = 2,
 )
 
 enum class HomingDirection(val multipler: Int) {

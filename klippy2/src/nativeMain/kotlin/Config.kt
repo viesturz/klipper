@@ -83,12 +83,12 @@ fun MachineBuilder.buildMachine() {
             positionMin = 0.0,
             positionMax = 125.0),
         homing = Homing(
-            endstopPosition = 122.0,
+            endstopPosition = 2.0,
             endstopTrigger = zEndstop,
-            direction = HomingDirection.INCREASING,
+            direction = HomingDirection.DECREASING,
             speed = 20.0,
             secondSpeed = 3.0,
-            retractDist = 3.0,
+            retractDist = 10.0,
         )
     )
 
@@ -111,7 +111,7 @@ fun MachineBuilder.buildMachine() {
             direction = HomingDirection.DECREASING,
             speed = 20.0,
             secondSpeed = 3.0,
-            retractDist = 3.0
+            retractDist = 3.0,
         ),
         yRange = LinearRange(
             positionMin = 0.0,
@@ -123,7 +123,7 @@ fun MachineBuilder.buildMachine() {
             direction = HomingDirection.DECREASING,
             speed = 20.0,
             secondSpeed = 3.0,
-            retractDist = 3.0
+            retractDist = 3.0,
         ),
         xSpeed = LinearSpeeds(speed = 300.0, accel = 8000.0),
         ySpeed = LinearSpeeds(speed = 300.0, accel = 8000.0),

@@ -32,10 +32,22 @@ class HomingMove() {
         return r.await().also { result = null }
     }
 
+    suspend fun allowMoves() {
+        result?.cancel()
+        result = null
+        sync?.reset()
+    }
+
     suspend fun release() {
         result?.cancel()
         result = null
         sync?.release()
         sync = null
+    }
+
+    suspend inline fun <T> use(block: () -> T): T = try {
+        block()
+    } finally {
+        this.release()
     }
 }

@@ -114,6 +114,9 @@ class Reactor {
             }
         }
     }
+
+    suspend fun waitUntil(time: MachineTime) =
+        delay(max(0.0, time - getNow()).seconds)
 }
 
 @OptIn(ExperimentalForeignApi::class)
