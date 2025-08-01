@@ -102,13 +102,6 @@ private class StepperImpl(
         homingMove.addStepper(motor)
     }
 
-    override fun checkMove(start: Double, end: Double): LinearSpeeds {
-        if (range.outsideRange(end)) {
-            throw MoveOutsideRangeException("move=${end} is outside the range $range")
-        }
-        return speeds
-    }
-
     override fun initializePosition(time: MachineTime, position: Double, homed: Boolean) {
         logger.info { "Initializing position $position at time $time" }
         if (externalKinematics != null) throw IllegalStateException("Stepper has external kinematics")
@@ -139,11 +132,15 @@ private class StepperImpl(
             throw IllegalStateException("Nonzero move with zero duration")
         }
         val move = chelper.move_alloc() ?: throw OutOfMemoryError()
+        val accel = (endSpeed - startSpeed) / duration
+        // Sanity check
+        val distanceFromSpeed = startSpeed * duration + accel * duration * duration * 0.5
+        require((distanceFromSpeed - distance).absoluteValue < 0.001 ) { "Speeds and durations do not match: Position distanece: $distance, speedDistance: $distanceFromSpeed." }
         move.pointed.apply {
             print_time = startTime
             move_t = duration
             start_v = startSpeed
-            half_accel = (endSpeed - startSpeed) / duration * 0.5
+            half_accel = accel * 0.5
             start_pos.x = commandedPosition
             start_pos.y = 0.0
             start_pos.z = 0.0

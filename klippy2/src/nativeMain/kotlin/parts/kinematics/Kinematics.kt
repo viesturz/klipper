@@ -6,9 +6,17 @@ import MachineRuntime
 import MachineTime
 import PartLifecycle
 import io.github.oshai.kotlinlogging.KotlinLogging
+import machine.MoveOutsideRangeException
 import machine.SCHEDULING_TIME
 import machine.getNow
-import kotlin.math.absoluteValue
+import parts.motionplanner.KinMove2
+import parts.motionplanner.SimpleMotionPlanner
+
+enum class MotionType {
+    OTHER,
+    LINEAR,
+    ROTATION,
+}
 
 /** A motion actuator. Commands one or more axis simultaneously. */
 interface MotionActuator {
@@ -21,8 +29,9 @@ interface MotionActuator {
 
     val commandedEndTime: MachineTime
 
-    /** Check move validity and return speed restrictions for the move. */
-    fun checkMove(start: List<Double>, end: List<Double>): LinearSpeeds
+    /** Compute speed restrictions for the move. */
+    fun computeMaxSpeeds(start: List<Double>, end: List<Double>): LinearSpeeds
+    fun checkMoveInBounds(start: List<Double>, end: List<Double>): MoveOutsideRangeException?
 
     // Home at least the specified axis
     suspend fun home(axis: List<Int>): HomeResult
@@ -59,8 +68,11 @@ class LinearRailActuatorImpl(override val name: String, val rail: LinearRail): M
         this.runtime = runtime
     }
 
-    override fun checkMove(start: List<Double>, end: List<Double>): LinearSpeeds {
-        return rail.checkMove(start[0], end[0])
+    override fun computeMaxSpeeds(start: List<Double>, end: List<Double>): LinearSpeeds = rail.speeds
+    override fun checkMoveInBounds(start: List<Double>,end: List<Double>): MoveOutsideRangeException? {
+        if (rail.range.outsideRange(start[0])) return MoveOutsideRangeException("X=${start[0]} is outside the range ${rail.range}")
+        if (rail.range.outsideRange(end[0])) return MoveOutsideRangeException("X=${end[0]} is outside the range ${rail.range}")
+        return null
     }
 
     override fun initializePosition(time: MachineTime, position: List<Double>, homed: List<Boolean>) {
@@ -78,8 +90,6 @@ class LinearRailActuatorImpl(override val name: String, val rail: LinearRail): M
         val homingMove = HomingMove()
         var startTime = getNow() + SCHEDULING_TIME
         val endPosition = (range.positionMax - range.positionMin) * 1.2 * homing.direction.multipler
-        val accel = rail.speeds.accel
-        val speed = homing.speed.coerceAtMost(rail.speeds.speed) * homing.direction.multipler
         if (!rail.railStatus.powered) {
             rail.setPowered(time = startTime, value = true)
             startTime += 0.2 // Wait a bit after powered
@@ -87,31 +97,13 @@ class LinearRailActuatorImpl(override val name: String, val rail: LinearRail): M
         rail.initializePosition(startTime, 0.0, false)
         rail.setupHomingMove(homingMove)
         homing.endstopTrigger.setupHomingMove(homingMove)
-        // Acceleration move
-        val accelDuration = (speed / accel).absoluteValue
-        val accelDonePosition = accelDuration * speed * 0.5
-        val cruiseDuration = (endPosition - accelDonePosition) / speed
-        val endTime = startTime + accelDuration + cruiseDuration
-        logger.info { "Homing move, distance=$endPosition speed=$speed, accel=$accel, accelDuration=$accelDuration, cruiseDuration=$cruiseDuration" }
+        val endTime = SimpleMotionPlanner(startTime, checkLimits = false).moveTo(KinMove2(
+            actuator = this,
+            position = listOf(endPosition),
+            speed = homing.speed,
+        ))
         homingMove.start(startTime, endTime + 1.0)
-        rail.moveTo(
-            startTime = startTime,
-            endTime = startTime + accelDuration,
-            startSpeed = 0.0,
-            endSpeed = speed,
-            endPosition = accelDonePosition,
-        )
-        startTime += accelDuration
-        // Steady speed move
-        rail.moveTo(
-            startTime = startTime,
-            endTime = startTime + cruiseDuration,
-            startSpeed = speed,
-            endSpeed = speed,
-            endPosition = endPosition,
-        )
-        // No deccel if homing fails, this stops hard
-        val flushTime = startTime + cruiseDuration + 0.1
+        val flushTime = endTime + 0.1
         rail.generate(flushTime)
         runtime.flushMoves(flushTime)
         val result = homingMove.wait()

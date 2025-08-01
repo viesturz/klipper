@@ -7,12 +7,10 @@ import parts.drivers.TMC2209
 import parts.kinematics.CoreXYKinematics
 import parts.kinematics.Homing
 import parts.kinematics.HomingDirection
-import parts.kinematics.LinearRail
 import parts.kinematics.LinearRailActuator
 import parts.kinematics.LinearRange
 import parts.kinematics.LinearSpeeds
-import parts.kinematics.MotionPlanner
-import parts.kinematics.PinTrigger
+import parts.PinTrigger
 
 fun MachineBuilder.buildMachine() {
     val mcu =

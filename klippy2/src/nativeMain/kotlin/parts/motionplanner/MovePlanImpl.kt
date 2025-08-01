@@ -1,7 +1,9 @@
-package parts.kinematics
+package parts.motionplanner
 
 import MachineDuration
 import MachineTime
+import parts.kinematics.LinearSpeeds
+import parts.kinematics.MotionActuator
 import utils.distanceTo
 import utils.magnitude
 import utils.moveBy

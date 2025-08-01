@@ -5,7 +5,7 @@ import GCodeContext
 import GCodeHandler
 import MachineBuilder
 import PartLifecycle
-import parts.kinematics.MotionPlanner
+import parts.motionplanner.MotionPlanner
 
 fun MachineBuilder.GCodeHome(
     motion: MotionPlanner,

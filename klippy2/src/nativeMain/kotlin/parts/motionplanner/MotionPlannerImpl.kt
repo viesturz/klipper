@@ -1,12 +1,14 @@
-package parts.kinematics
+package parts.motionplanner
 
 import MachineTime
+import PartLifecycle
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.CommandQueue
 import machine.Planner
-import PartLifecycle
+import parts.kinematics.MotionActuator
 import utils.distanceTo
 import kotlin.math.abs
+import kotlin.text.iterator
 
 /**
  * The move planner.
@@ -175,7 +177,7 @@ class MotionPlannerImpl(val config: MotionPlannerConfig) : MotionPlanner, PartLi
                     }
                     distance = endPosition.distanceTo(startPosition)
                 }
-                val aSpeeds = actuator.checkMove(startPosition, endPosition)
+                val aSpeeds = actuator.computeMaxSpeeds(startPosition, endPosition)
                 val aMoveSpeeds = MoveSpeeds(
                         speedPerMm = if (distance > 0) (aSpeeds.speed.coerceAtMost(kMove.speed ?: Double.MAX_VALUE) / distance) else Double.MAX_VALUE,
                         accelPerMm = if (distance > 0) aSpeeds.accel / distance else Double.MAX_VALUE,

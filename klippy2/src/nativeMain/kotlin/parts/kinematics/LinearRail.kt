@@ -1,6 +1,7 @@
 package parts.kinematics
 
 import MachineTime
+import parts.Trigger
 
 interface LinearRail {
     val railStatus: RailStatus
@@ -13,7 +14,6 @@ interface LinearRail {
     suspend fun setPowered(time: MachineTime, value: Boolean)
     fun setHomed(value: Boolean)
     fun setupHomingMove(homingMove: HomingMove)
-    fun checkMove(start: Double, end: Double): LinearSpeeds
 
     // To drive the rail directly without kinematics
     fun initializePosition(time: MachineTime, position: Double, homed: Boolean)

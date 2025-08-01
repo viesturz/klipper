@@ -14,4 +14,5 @@ fun Double.deinterp(from: ClosedFloatingPointRange<Double>): Double =
 fun List<Double>.magnitude() = fold(0.0) { acc, d -> acc + d.squared() }.sqrt()
 fun List<Double>.distanceTo(other: List<Double>) = foldIndexed(0.0) { i, acc, x -> acc + (x-other[i]).squared() }.sqrt()
 fun List<Double>.moveBy(direction: List<Double>, distance: Double) = zip(direction) { s, d -> s + d * distance}
+fun List<Double>.vectorTo(endPosition: List<Double>) = zip(endPosition) { s, d -> d - s}
 fun dotProduct(prevVector: List<Double>, nextVector: List<Double>) = prevVector.zip(nextVector) { d1, d2 -> d1 * d2 }.sum()

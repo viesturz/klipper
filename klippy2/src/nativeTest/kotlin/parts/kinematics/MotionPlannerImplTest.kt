@@ -6,6 +6,10 @@ import machine.CommandQueue
 import machine.Planner
 import machine.QueueManager
 import machine.Reactor
+import parts.motionplanner.KinMove
+import parts.motionplanner.MotionPlannerConfig
+import parts.motionplanner.MotionPlannerImpl
+import parts.motionplanner.MovePlan
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

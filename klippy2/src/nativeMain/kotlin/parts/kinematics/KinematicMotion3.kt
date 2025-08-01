@@ -6,6 +6,7 @@ import chelper.trapq_alloc
 import chelper.trapq_free
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.pointed
+import machine.MoveOutsideRangeException
 import mcu.GcWrapper
 import parts.LinearStepper
 import platform.linux.free
@@ -18,9 +19,25 @@ class CartesianKinematics(val x: LinearStepper, val y: LinearStepper, val z: Lin
         {GcWrapper(cartesian_stepper_alloc('y'.code.toByte())) { free(it) }},
             {GcWrapper(cartesian_stepper_alloc('z'.code.toByte())) { free(it) }}),
 ) {
-    override fun checkMove(start: List<Double>, end: List<Double>): LinearSpeeds {
-        // TODO: consider the move
-        return x.speeds.intersection(y.speeds).intersection(z.speeds)
+    override fun computeMaxSpeeds(start: List<Double>, end: List<Double>): LinearSpeeds =
+        x.speeds.intersection(y.speeds).intersection(z.speeds)
+
+    override fun checkMoveInBounds(
+        start: List<Double>,
+        end: List<Double>
+    ): MoveOutsideRangeException? {
+        val xRange = x.range
+        val yRange = y.range
+        val zRange = z.range
+        val xOutside = xRange.outsideRange(end[0])
+        val yOutside = yRange.outsideRange(end[1])
+        val zOutside = zRange.outsideRange(end[2])
+        if (xOutside || yOutside || zOutside) {
+            return MoveOutsideRangeException(
+                "Move outside of range: X=${if (xOutside) "true" else "false"}, Y=${if (yOutside) "true" else "false"}, Z=${if (zOutside) "true" else "false"}"
+            )
+        }
+        return null
     }
 
     override suspend fun home(axis: List<Int>): HomeResult {

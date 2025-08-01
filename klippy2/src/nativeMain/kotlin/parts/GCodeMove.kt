@@ -5,8 +5,8 @@ import machine.CommandQueue
 import MachineBuilder
 import PartLifecycle
 import machine.waitUntil
-import parts.kinematics.MotionPlanner
-import parts.kinematics.KinMove
+import parts.motionplanner.MotionPlanner
+import parts.motionplanner.KinMove
 
 fun MachineBuilder.GCodeMove(
     motion: MotionPlanner,

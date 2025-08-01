@@ -1,8 +1,9 @@
-package parts.kinematics
+package parts
 
 import config.DigitalInPin
 import MachineBuilder
 import PartLifecycle
+import parts.kinematics.HomingMove
 
 interface Trigger {
     suspend fun state(): Boolean

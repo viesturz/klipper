@@ -1,5 +1,7 @@
 package parts.kinematics
 
+import parts.motionplanner.MoveSpeeds
+import parts.motionplanner.calculateJunctionSpeedSq
 import utils.squared
 import kotlin.math.absoluteValue
 import kotlin.math.sqrt
@@ -8,7 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class JunctionSpeedTest {
-    val speeds0 = MoveSpeeds(speedPerMm = 1.0, accelPerMm = 500.0, squareCornerVelocity = 2.0, minCruiseRatio = 0.0 )
+    val speeds0 = MoveSpeeds(speedPerMm = 1.0, accelPerMm = 500.0, squareCornerVelocity = 2.0, minCruiseRatio = 0.0)
     val speeds1 = MoveSpeeds(speedPerMm = 2.0, accelPerMm = 500.0, squareCornerVelocity = 4.0, minCruiseRatio = 0.0)
 
     @Test
@@ -17,7 +19,8 @@ class JunctionSpeedTest {
             listOf(0.0),
             listOf(10.0),
             prevSpeeds = speeds0,
-            nextSpeeds = speeds1)
+            nextSpeeds = speeds1
+        )
 
         assertEquals(2.0.squared(), speedSq)
     }
@@ -28,7 +31,8 @@ class JunctionSpeedTest {
             listOf(10.0),
             listOf(10.0),
             prevSpeeds = speeds0,
-            nextSpeeds = speeds1)
+            nextSpeeds = speeds1
+        )
 
         assertEquals(10.0.squared(), speedSq)
     }
@@ -39,7 +43,8 @@ class JunctionSpeedTest {
             listOf(10.0, 2.0),
             listOf(10.0, 2.0),
             prevSpeeds = speeds0,
-            nextSpeeds = speeds1)
+            nextSpeeds = speeds1
+        )
 
         assertEquals(104.0, speedSq, precision = 1e-5)
     }
@@ -48,9 +53,10 @@ class JunctionSpeedTest {
     fun angle30deg() {
         val speedSq = calculateJunctionSpeedSq(
             listOf(10.0, 0.0),
-            listOf(5*sqrt(3.0), 5.0),
+            listOf(5 * sqrt(3.0), 5.0),
             prevSpeeds = speeds0,
-            nextSpeeds = speeds0)
+            nextSpeeds = speeds0
+        )
 
         assertEquals(46.968073930, speedSq, precision = 1e-5)
     }
@@ -59,9 +65,10 @@ class JunctionSpeedTest {
     fun angle60deg() {
         val speedSq = calculateJunctionSpeedSq(
             listOf(10.0, 0.0),
-            listOf(5.0, 5*sqrt(3.0)),
+            listOf(5.0, 5 * sqrt(3.0)),
             prevSpeeds = speeds0,
-            nextSpeeds = speeds0)
+            nextSpeeds = speeds0
+        )
 
         assertEquals(10.7100742301915, speedSq, precision = 1e-5)
     }
@@ -72,7 +79,8 @@ class JunctionSpeedTest {
             listOf(10.0, 0.0),
             listOf(0.0, 10.0),
             prevSpeeds = speeds0,
-            nextSpeeds = speeds0)
+            nextSpeeds = speeds0
+        )
 
         assertEquals(2.0.squared(), speedSq, precision = 1e-5)
     }
@@ -81,9 +89,10 @@ class JunctionSpeedTest {
     fun angle120deg() {
         val speedSq = calculateJunctionSpeedSq(
             listOf(10.0, 0.0),
-            listOf(-5.0, 5*sqrt(3.0)),
+            listOf(-5.0, 5 * sqrt(3.0)),
             prevSpeeds = speeds0,
-            nextSpeeds = speeds0)
+            nextSpeeds = speeds0
+        )
 
         assertEquals(1.656854249, speedSq, precision = 1e-5)
     }
@@ -92,9 +101,10 @@ class JunctionSpeedTest {
     fun angle150deg() {
         val speedSq = calculateJunctionSpeedSq(
             listOf(10.0, 0.0),
-            listOf(-5*sqrt(3.0), 5.0),
+            listOf(-5 * sqrt(3.0), 5.0),
             prevSpeeds = speeds0,
-            nextSpeeds = speeds0)
+            nextSpeeds = speeds0
+        )
 
         assertEquals(0.5785704987346679, speedSq, precision = 1e-5)
     }
@@ -105,7 +115,8 @@ class JunctionSpeedTest {
             listOf(10.0, 0.0),
             listOf(-10.0, 0.0),
             prevSpeeds = speeds0,
-            nextSpeeds = speeds0)
+            nextSpeeds = speeds0
+        )
 
         assertEquals(0.0, speedSq)
     }

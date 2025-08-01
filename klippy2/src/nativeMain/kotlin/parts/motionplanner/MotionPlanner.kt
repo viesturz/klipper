@@ -1,9 +1,11 @@
-package parts.kinematics
+package parts.motionplanner
 
 import MachineTime
 import machine.CommandQueue
 import MachineBuilder
 import MachineDuration
+import parts.kinematics.LinearRail
+import parts.kinematics.MotionActuator
 
 typealias Position = List<Double>
 
@@ -24,12 +26,6 @@ class MotionPlannerConfig {
     fun axis(name: Char, value: LinearRail) {
 //        mapping[name.toString()] = LinearRailActuator(value)
     }
-}
-
-enum class MotionType {
-    OTHER,
-    LINEAR,
-    ROTATION,
 }
 
 interface MotionPlanner {

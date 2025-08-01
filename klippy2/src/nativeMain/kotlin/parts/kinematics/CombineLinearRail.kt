@@ -45,13 +45,6 @@ class CombineLinearStepper(vararg railArgs: LinearStepper) : LinearStepper {
     override val commandedEndTime: Double
         get() = steppers[0].commandedEndTime
 
-    override fun checkMove(start: Double, end: Double): LinearSpeeds {
-        var sp = steppers[0].checkMove(start, end)
-        for (a in steppers) {
-            sp = sp.intersection(a.checkMove(start, end))
-        }
-        return sp
-    }
     override fun initializePosition(time: MachineTime, position: Double,  homed: Boolean) {
         for (a in steppers) {
             a.initializePosition(time, position, homed)

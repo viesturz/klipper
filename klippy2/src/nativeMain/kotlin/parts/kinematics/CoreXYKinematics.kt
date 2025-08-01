@@ -54,10 +54,23 @@ class CoreXYKinematics(
         TODO("Not yet implemented")
     }
 
-    override fun checkMove(start: List<Double>, end: List<Double>): LinearSpeeds {
+    override fun checkMoveInBounds(
+        start: List<Double>,
+        end: List<Double>
+    ): MoveOutsideRangeException? {
         // Check XY range
-        if (xRange.outsideRange(end[0])) throw MoveOutsideRangeException("X=${end[0]} is outside the range $xRange")
-        if (yRange.outsideRange(end[1])) throw MoveOutsideRangeException("Y=${end[1]} is outside the range $yRange")
+        if (xRange.outsideRange(end[0])) return MoveOutsideRangeException("X=${end[0]} is outside the range $xRange")
+        if (yRange.outsideRange(end[1])) return MoveOutsideRangeException("Y=${end[1]} is outside the range $yRange")
+        val a2 = end[0] + end[1]
+        val b2 = end[0] - end[1]
+        val aRange = railA.range
+        val bRange = railB.range
+        if (aRange.outsideRange(a2)) return MoveOutsideRangeException("A=${end[0]} is outside the range $aRange")
+        if (bRange.outsideRange(b2)) return MoveOutsideRangeException("B=${end[1]} is outside the range $bRange")
+        return null
+    }
+
+    override fun computeMaxSpeeds(start: List<Double>, end: List<Double>): LinearSpeeds {
 
         var speeds = LinearSpeeds.UNLIMITED
         // Check XY speeds
@@ -76,12 +89,6 @@ class CoreXYKinematics(
         val a2 = end[0] + end[1]
         val b1 = start[0] - start[1]
         val b2 = end[0] - end[1]
-        // Check AB range
-        val aRange = railA.range
-        val bRange = railB.range
-        if (aRange.outsideRange(a2)) throw MoveOutsideRangeException("A=${end[0]} is outside the range $aRange")
-        if (bRange.outsideRange(b2)) throw MoveOutsideRangeException("B=${end[1]} is outside the range $bRange")
-
         // Check AB speeds
         val aDistance = (a2 - a1).absoluteValue
         val bDistance = (b2 - b1).absoluteValue

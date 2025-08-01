@@ -11,7 +11,8 @@ class MotionActuatorFake(
     override val positionTypes = MutableList(size) { MotionType.LINEAR }
     override var commandedPosition = List(size) { 0.0 }
     override var commandedEndTime: MachineTime = 0.0
-    override fun checkMove(start: List<Double>, end: List<Double>) = speeds
+    override fun computeMaxSpeeds(start: List<Double>, end: List<Double>) = speeds
+    override fun checkMoveInBounds(start: List<Double>, end: List<Double>) = null
     override suspend fun home(axis: List<Int>): HomeResult {
         return HomeResult.SUCCESS
     }

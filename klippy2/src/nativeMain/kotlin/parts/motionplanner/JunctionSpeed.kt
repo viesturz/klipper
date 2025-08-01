@@ -1,4 +1,4 @@
-package parts.kinematics
+package parts.motionplanner
 
 import utils.dotProduct
 import utils.magnitude
@@ -9,7 +9,8 @@ import kotlin.math.sqrt
 fun calculateJunctionSpeedSq(
     prevVector: List<Double>, nextVector: List<Double>,
     prevSpeeds: MoveSpeeds,
-    nextSpeeds: MoveSpeeds): Double {
+    nextSpeeds: MoveSpeeds
+): Double {
     val prevDistance = prevVector.magnitude()
     val nextDistance = nextVector.magnitude()
     val prevAccel = prevSpeeds.accelPerMm * prevDistance
@@ -25,7 +26,7 @@ fun calculateJunctionSpeedSq(
         // 180 flip
         return 0.0
     }
-    // lifed off from toolhead.py
+    // lifted off from toolhead.py
     val sinThetaD2 = sqrt(0.5*(1.0+cosTheta))
     val R_jd = sinThetaD2 / (1.0 - sinThetaD2)
     // Approximated circle must contact moves no further away than mid-move

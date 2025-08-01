@@ -1,5 +1,8 @@
 package parts.kinematics
 
+import parts.motionplanner.MovePlan
+import parts.motionplanner.MovePlanActuator
+import parts.motionplanner.MoveSpeeds
 import kotlin.test.Test
 
 class MovePlanImplTest {
