@@ -1,5 +1,6 @@
 package parts
 
+import EndstopSyncBuilder
 import MachineTime
 import config.StepperPins
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -12,11 +13,9 @@ import chelper.stepper_kinematics
 import chelper.trapq_alloc
 import chelper.trapq_free
 import io.github.oshai.kotlinlogging.KotlinLogging
-import machine.MoveOutsideRangeException
 import mcu.connection.StepQueueImpl
 import mcu.GcWrapper
 import parts.kinematics.Homing
-import parts.kinematics.HomingMove
 import parts.kinematics.LinearRail
 import parts.kinematics.LinearRange
 import parts.kinematics.LinearSpeeds
@@ -98,8 +97,8 @@ private class StepperImpl(
         )
     }
 
-    override fun setupHomingMove(homingMove: HomingMove) {
-        homingMove.addStepper(motor)
+    override fun setupTriggerSync(sync: EndstopSyncBuilder) {
+        sync.addStepperMotor(motor)
     }
 
     override fun initializePosition(time: MachineTime, position: Double, homed: Boolean) {

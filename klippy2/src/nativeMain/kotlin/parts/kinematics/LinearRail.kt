@@ -1,5 +1,6 @@
 package parts.kinematics
 
+import EndstopSyncBuilder
 import MachineTime
 import parts.Trigger
 
@@ -13,7 +14,7 @@ interface LinearRail {
 
     suspend fun setPowered(time: MachineTime, value: Boolean)
     fun setHomed(value: Boolean)
-    fun setupHomingMove(homingMove: HomingMove)
+    fun setupTriggerSync(sync: EndstopSyncBuilder)
 
     // To drive the rail directly without kinematics
     fun initializePosition(time: MachineTime, position: Double, homed: Boolean)

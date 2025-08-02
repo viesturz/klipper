@@ -9,6 +9,7 @@ import MachinePart
 import MachineRuntime
 import MachineTime
 import PartLifecycle
+import machine.getNextMoveTime
 import utils.interpolate
 
 fun MachineBuilder.Fan(
@@ -92,7 +93,7 @@ private class FanImpl(
     }
 
     private fun setPower(power: Double, time: MachineTime) {
-        if (time >= runtime.reactor.now + runtime.reactor.SCHEDULING_TIME) {
+        if (time >= getNextMoveTime()) {
             pin.set(time, power)
         } else {
             pin.setNow(power)

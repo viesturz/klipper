@@ -1,13 +1,13 @@
 package parts
 
+import EndstopSyncBuilder
 import config.DigitalInPin
 import MachineBuilder
 import PartLifecycle
-import parts.kinematics.HomingMove
 
 interface Trigger {
     suspend fun state(): Boolean
-    fun setupHomingMove(move: HomingMove)
+    fun setupTriggerSync(sync: EndstopSyncBuilder)
 }
 
 fun MachineBuilder.PinTrigger(
@@ -21,5 +21,5 @@ class PinTriggerImpl(
     val mcuEndstop = setup.setupMcu(pinConfig.mcu).addEndstop(pinConfig)
 
     override suspend fun state(): Boolean = mcuEndstop.queryState()
-    override fun setupHomingMove(move: HomingMove) = move.addEndstop(mcuEndstop)
+    override fun setupTriggerSync(sync: EndstopSyncBuilder) = sync.addEndstop(mcuEndstop)
 }

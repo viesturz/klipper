@@ -1,5 +1,6 @@
 package parts.kinematics
 
+import EndstopSyncBuilder
 import MachineTime
 import chelper.cartesian_stepper_alloc
 import chelper.trapq_alloc
@@ -38,6 +39,12 @@ class CartesianKinematics(val x: LinearStepper, val y: LinearStepper, val z: Lin
             )
         }
         return null
+    }
+
+    override fun setupTriggerSync(sync: EndstopSyncBuilder) {
+        x.setupTriggerSync(sync)
+        y.setupTriggerSync(sync)
+        z.setupTriggerSync(sync)
     }
 
     override suspend fun home(axis: List<Int>): HomeResult {
@@ -81,7 +88,7 @@ abstract class KinematicMotion3(
         chelper.trapq_set_position(trapq.ptr, 0.0, _position[0], _position[1], _position[2])
     }
 
-    override fun initializePosition(time: MachineTime, position: List<Double>, homed: List<Boolean>) {
+    override fun initializePosition(time: MachineTime, position: List<Double>) {
         require(position.size == 3)
         generate(time)
         if (this.commandedEndTime > time) throw IllegalStateException("Time before last time")

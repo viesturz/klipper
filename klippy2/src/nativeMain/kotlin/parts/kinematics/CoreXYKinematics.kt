@@ -1,5 +1,6 @@
 package parts.kinematics
 
+import EndstopSyncBuilder
 import MachineTime
 import machine.MoveOutsideRangeException
 import utils.distanceTo
@@ -39,15 +40,18 @@ class CoreXYKinematics(
     // a = x + y
     // b = x - y
 
-    override fun initializePosition(time: MachineTime, position: List<Double>, homed: List<Boolean>) {
+    override fun initializePosition(time: MachineTime, position: List<Double>) {
         require(position.size == 2)
         val a = position[0] + position[1]
         val b = position[0] - position[1]
-        axisStatus[0] = axisStatus[0].copy(homed = homed[0])
-        axisStatus[1] = axisStatus[1].copy(homed = homed[1])
         // The motors are never homed, they have no meaningful positions.
         railA.initializePosition(time, a, false)
         railB.initializePosition(time, b, false)
+    }
+
+    override fun setupTriggerSync(sync: EndstopSyncBuilder) {
+        railA.setupTriggerSync(sync)
+        railB.setupTriggerSync(sync)
     }
 
     override suspend fun home(axis: List<Int>): HomeResult {

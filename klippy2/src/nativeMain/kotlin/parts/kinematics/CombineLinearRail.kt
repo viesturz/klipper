@@ -1,5 +1,6 @@
 package parts.kinematics
 
+import EndstopSyncBuilder
 import MachineTime
 import chelper.stepper_kinematics
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -26,8 +27,8 @@ class CombineLinearStepper(vararg railArgs: LinearStepper) : LinearStepper {
         range = ra
     }
 
-    override fun setupHomingMove(homingMove: HomingMove) {
-        steppers.forEach { it.setupHomingMove(homingMove) }
+    override fun setupTriggerSync(sync: EndstopSyncBuilder) {
+        steppers.forEach { it.setupTriggerSync(sync) }
     }
 
     @OptIn(ExperimentalForeignApi::class)

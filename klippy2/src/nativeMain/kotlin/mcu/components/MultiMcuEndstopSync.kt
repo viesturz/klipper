@@ -133,6 +133,13 @@ class MultiMcuEndstopSync(
     override suspend fun start(startTime: MachineTime, timeoutTime: MachineTime): Deferred<EndstopSync.State> {
         logger.debug { "start startTime=$startTime timeoutTime=$timeoutTime" }
         reset()
+
+        // Check that we are not triggered already
+        for (endstop in endstops) {
+            if (endstop.queryState()) {
+                return CompletableDeferred(EndstopSync.StateAlreadyTriggered)
+            }
+        }
         state.value = EndstopSync.StateRunning
         for (endstop in endstops) {
             val trsync = mcuToTrsync[endstop.mcu] ?: throw RuntimeException("Not supposed to happen")

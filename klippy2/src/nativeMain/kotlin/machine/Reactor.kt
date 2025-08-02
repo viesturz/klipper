@@ -123,6 +123,8 @@ class Reactor {
 fun getNow(): MachineTime = chelper.get_monotonic()
 
 /** Time to add to ensure reliable scheduling */
+fun getNextMoveTime() = getNow() + SCHEDULING_TIME
+
 val SCHEDULING_TIME = 0.1
 
 suspend fun waitUntil(time: MachineTime) =
