@@ -22,14 +22,13 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
             return HomeResult.FAIL
         }
         actuator.initializePosition(getNow(), endstopPosition)
-        val retractedPosition = endstopPosition.moveBy(direction, -homing.direction.multipler * homing.retractDist)
+        val retractedPosition = endstopPosition.moveBy(direction, -homing.retractDist)
         doRetract(retractedPosition, homing.speed)
 
-        val secondEndPosition = endstopPosition.moveBy(direction, homing.direction.multipler * homing.retractDist * 2)
+        val secondEndPosition = endstopPosition.moveBy(direction, homing.retractDist * 2)
         val homingSamples = buildList {
             repeat(homing.attempts - 1) {
                 val homeResult = doHomingMove(secondEndPosition, homing.secondSpeed)
-                println("Homing move result: $homeResult")
                 if (homeResult !is EndstopSync.StateTriggered) {
                     return HomeResult.FAIL
                 }

@@ -8,7 +8,6 @@ import PartLifecycle
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.MoveOutsideRangeException
 import machine.getNextMoveTime
-import machine.getNow
 
 fun MachineBuilder.LinearRailActuator(rail: LinearRail) = LinearRailActuatorImpl(defaultName("LinearActuator"), rail).also { addPart(it) }
 

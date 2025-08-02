@@ -182,8 +182,10 @@ fun MachineBuilder.buildMachine() {
     }
     val zAxis = LinearRailActuator(zStepper)
     ControlLoop { runtime ->
-        delay(1000)
-        zAxis.home(listOf(0))
+        while (true) {
+            delay(1000)
+            zAxis.home(listOf(0))
+        }
     }
 
 }
