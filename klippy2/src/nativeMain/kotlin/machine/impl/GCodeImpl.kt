@@ -45,6 +45,14 @@ class GCodeImpl {
 class GCodeRunnerImpl(val commandQueue: CommandQueue, val gCode: GCodeImpl, val machineRuntime: MachineRuntime, val outputHandler: GCodeOutputSink): GCodeContext {
 
     override suspend fun gcode(command: String) {
+        val lines = command.split("\n")
+        for (line in lines) {
+            if (line.isBlank()) continue
+            gcodeLine(line)
+        }
+    }
+
+    suspend fun gcodeLine(command: String) {
         logger.info { command }
         var command = command
         val name = command.split(" ")[0].uppercase()
