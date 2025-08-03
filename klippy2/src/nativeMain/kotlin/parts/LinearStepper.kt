@@ -6,6 +6,7 @@ import config.StepperPins
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.pointed
 import MachineBuilder
+import MachineRuntime
 import PartLifecycle
 import StepperDriver
 import chelper.cartesian_stepper_alloc
@@ -72,6 +73,11 @@ private class StepperImpl(
     override var commandedPosition: Double = 0.0
     override var commandedEndTime: MachineTime = 0.0
     override var railStatus = RailStatus(false, false)
+    override lateinit var runtime: MachineRuntime
+
+    override suspend fun onStart(runtime: MachineRuntime) {
+        this.runtime = runtime
+    }
 
     override suspend fun setPowered(time: MachineTime, value: Boolean) {
         railStatus = railStatus.copy(powered = value, homed = if (!value) false else railStatus.homed)

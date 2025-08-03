@@ -3,11 +3,12 @@ import kotlin.math.sqrt
 
 fun Double.squared() = this * this
 fun Double.sqrt() = sqrt(this)
+fun List<Double>.setValue(index: Int, value: Double) = toMutableList().apply { set(index, value) }.toList()
 
 /** Linear interpolate 0.11 to the given range */
 fun Double.interpolate(to: ClosedFloatingPointRange<Double>): Double =
     this * (to.endInclusive - to.start) + to.start
-/** Calculate value as a fraction of linear range */
+/** Calculate value as a fraction of a linear range */
 fun Double.deinterp(from: ClosedFloatingPointRange<Double>): Double =
     (this - from.start) / (from.endInclusive - from.start)
 

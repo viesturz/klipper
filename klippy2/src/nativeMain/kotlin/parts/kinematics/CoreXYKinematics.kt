@@ -2,7 +2,9 @@ package parts.kinematics
 
 import EndstopSyncBuilder
 import MachineTime
+import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.MoveOutsideRangeException
+import machine.getNextMoveTime
 import utils.distanceTo
 import kotlin.math.absoluteValue
 
@@ -18,6 +20,7 @@ class CoreXYKinematics(
     val xHoming: Homing? = null,
     val yHoming: Homing? = null,
 ): MotionActuator {
+    val logger = KotlinLogging.logger("CoreXYKinematics")
     override val size = 2
     override val positionTypes = listOf(MotionType.LINEAR, MotionType.LINEAR)
     override var commandedEndTime: MachineTime = 0.0
@@ -55,7 +58,63 @@ class CoreXYKinematics(
     }
 
     override suspend fun home(axis: List<Int>): HomeResult {
-        TODO("Not yet implemented")
+        val startTime = getNextMoveTime()
+        if (!railA.railStatus.powered) {
+            railA.setPowered(time = startTime, value = true)
+            axisStatus[0] = axisStatus[0].copy(powered = true)
+        }
+        if (!railB.railStatus.powered) {
+            railB.setPowered(time = startTime, value = true)
+            axisStatus[0] = axisStatus[0].copy(powered = true)
+        }
+
+        for (i in axis) {
+            val result = when (i) {
+                0 -> homeX()
+                1 -> homeY()
+                else -> throw IllegalArgumentException("Invalid axis index $i")
+            }
+            if (result != HomeResult.SUCCESS) {
+                return result
+            }
+        }
+        return HomeResult.SUCCESS
+    }
+
+    suspend fun homeX(): HomeResult {
+        val homing = xHoming ?: throw RuntimeException("X Homing not configured")
+        val range = xRange
+        logger.info { "X Homing start" }
+        makeProbingSession {
+            addActuator(this@CoreXYKinematics)
+            addTrigger(homing.endstopTrigger)
+        }.use { session ->
+            val homingMove = HomingMove(session, this, railA.runtime)
+            val result = homingMove.homeOneAxis(0, homing, range)
+            logger.info { "X Homing result $result" }
+            if (result == HomeResult.SUCCESS) {
+                axisStatus[0] = axisStatus[0].copy(homed = true)
+            }
+            return result
+        }
+    }
+
+    suspend fun homeY(): HomeResult {
+        val homing = yHoming ?: throw RuntimeException("Y Homing not configured")
+        val range = yRange
+        logger.info { "Y Homing start" }
+        makeProbingSession {
+            addActuator(this@CoreXYKinematics)
+            addTrigger(homing.endstopTrigger)
+        }.use { session ->
+            val homingMove = HomingMove(session, this, railA.runtime)
+            val result = homingMove.homeOneAxis(1, homing, range)
+            logger.info { "Y Homing result $result" }
+            if (result == HomeResult.SUCCESS) {
+                axisStatus[1] = axisStatus[1].copy(homed = true)
+            }
+            return result
+        }
     }
 
     override fun checkMoveInBounds(

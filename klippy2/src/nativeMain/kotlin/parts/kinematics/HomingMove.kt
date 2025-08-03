@@ -8,9 +8,17 @@ import parts.motionplanner.Position
 import parts.motionplanner.SimpleMotionPlanner
 import utils.direction
 import utils.moveBy
+import utils.setValue
 import utils.vectorTo
 
 class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val runtime: MachineRuntime) {
+
+    suspend fun homeOneAxis(index: Int, homing: Homing, range: LinearRange): HomeResult {
+        val initialPosition = actuator.commandedPosition.setValue(index, getInitialPosition(homing, range))
+        val homedPosition = actuator.commandedPosition.setValue(index, homing.endstopPosition)
+        actuator.initializePosition(getNow(), initialPosition)
+        return home(homedPosition, homing)
+    }
 
     suspend fun home(endstopPosition: Position, homing: Homing): HomeResult {
         val initalPosition = actuator.commandedPosition
@@ -18,10 +26,10 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
         val direction = vector.direction()
         val initialEndPosition = initalPosition.moveBy(vector, 1.2)
         val homeResult = doHomingMove(initialEndPosition, homing.speed)
+        actuator.initializePosition(getNow(), endstopPosition)
         if (homeResult !is EndstopSync.StateTriggered) {
             return HomeResult.FAIL
         }
-        actuator.initializePosition(getNow(), endstopPosition)
         val retractedPosition = endstopPosition.moveBy(direction, -homing.retractDist)
         doRetract(retractedPosition, homing.speed)
 
@@ -30,6 +38,7 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
             repeat(homing.attempts - 1) {
                 val homeResult = doHomingMove(secondEndPosition, homing.secondSpeed)
                 if (homeResult !is EndstopSync.StateTriggered) {
+                    actuator.initializePosition(getNow(), endstopPosition)
                     return HomeResult.FAIL
                 }
                 // TODO: query the actual motor position
@@ -73,4 +82,11 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
         session.allowMoves()
         return result
     }
+
+    companion object {
+        fun getInitialPosition(homing: Homing, range: LinearRange) = when (homing.direction) {
+                HomingDirection.INCREASING -> range.positionMin - (homing.endstopPosition - range.positionMin) * 0.2
+                HomingDirection.DECREASING -> range.positionMax + (range.positionMax - homing.endstopPosition) * 0.2
+            }
+        }
 }

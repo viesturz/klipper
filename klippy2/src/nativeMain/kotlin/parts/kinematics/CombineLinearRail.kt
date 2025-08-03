@@ -1,6 +1,7 @@
 package parts.kinematics
 
 import EndstopSyncBuilder
+import MachineRuntime
 import MachineTime
 import chelper.stepper_kinematics
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -13,6 +14,8 @@ class CombineLinearStepper(vararg railArgs: LinearStepper) : LinearStepper {
     override val speeds: LinearSpeeds
     override val range: LinearRange
     override val homing: Homing? = null
+    override val runtime: MachineRuntime
+        get() = steppers[0].runtime
     init {
         require(railArgs.isNotEmpty())
         var sp = railArgs[0].speeds

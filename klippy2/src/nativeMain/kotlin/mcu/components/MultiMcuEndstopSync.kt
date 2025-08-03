@@ -23,7 +23,6 @@ import mcu.McuObjectResponse
 import mcu.McuRuntime
 import mcu.ObjectId
 import utils.RegisterMcuMessage
-import kotlin.math.min
 
 class McuEndstopSyncStaticBuilder(): EndstopSyncBuilder {
     private val endstops = ArrayList<McuEndstop>()
@@ -137,13 +136,15 @@ class MultiMcuEndstopSync(
         // Check that we are not triggered already
         for (endstop in endstops) {
             if (endstop.queryState()) {
-                return CompletableDeferred(EndstopSync.StateAlreadyTriggered)
+                return CompletableDeferred(EndstopSync.StateAlreadyTriggered(endstop))
             }
         }
         state.value = EndstopSync.StateRunning
         for (endstop in endstops) {
             val trsync = mcuToTrsync[endstop.mcu] ?: throw RuntimeException("Not supposed to happen")
             val runtime = trsync.runtime
+            val triggerReason = (TriggerReason.ENDSTOP_HIT_WITH_ID.id + endstop.id).toUByte()
+            trsync.addTrigger(triggerReason, endstop)
             trsync.queue.send(CommandEndstopHome(
                 id = endstop.id,
                 clock = runtime.timeToClock32(startTime),
@@ -152,7 +153,7 @@ class MultiMcuEndstopSync(
                 restTicks = runtime.durationToClock(endstop.config.restTime),
                 pinValue = !endstop.config.invert,
                 trssyncId = trsync.id,
-                triggerReason = TriggerResult.ENDSTOP_HIT.id))
+                triggerReason = triggerReason))
         }
         val commsTimeout = 0.25
         val reportInterval = commsTimeout * 0.3
@@ -172,7 +173,7 @@ class MultiMcuEndstopSync(
             val trsync = mcuToTrsync[stepper.mcu] ?: throw RuntimeException("Not supposed to happen")
             trsync.queue.send(CommandStepperStopOnTrigger(stepper.id, trsync.id))
         }
-        chelper.trdispatch_start(trdispatch, TriggerResult.HOST_REQUEST.id.toUInt())
+        chelper.trdispatch_start(trdispatch, TriggerReason.HOST_REQUEST.id.toUInt())
         return reactor.async {
             return@async try {
                 logger.debug { "wait start" }
@@ -197,6 +198,7 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
     var timeoutTime: MachineTime? = null
     var trdispatchMcu: CPointer<trdispatch_mcu>? = null
     var activeTrigger: CompletableDeferred<EndstopSync.State>? = null
+    val triggers = mutableMapOf<UByte, Endstop>()
     lateinit var runtime: McuRuntime
 
     init {
@@ -209,18 +211,22 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
         this.runtime = runtime
     }
 
+    fun addTrigger(reason: UByte, endstop: Endstop) {
+        triggers[reason] = endstop
+    }
+
     fun handleTrsyncState(state: ResponseTrsyncState) {
         val timeout = timeoutTime
         val trigger = activeTrigger
         logger.debug { "state $state" }
         if (trigger != null && state.canTrigger == false) {
             // Triggered
-            val result = parseTriggerResult(state.reason, runtime.clockToTime(state.clock))
+            val result = parseTriggerReason(state.reason, runtime.clockToTime(state.clock))
             trigger.complete(result)
             activeTrigger = null
         } else if (timeout != null && timeout < runtime.clockToTime(state.clock)) {
             // Send timeout trigger; will be re-invoked with a timeout state.
-            sendTrigger(TriggerResult.PAST_END_TIME)
+            sendTrigger(TriggerReason.PAST_END_TIME)
             timeoutTime = null
         }
     }
@@ -244,11 +250,12 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
         trdispatchMcu = null
     }
 
-    fun sendTrigger(reason: TriggerResult) {
+    fun sendTrigger(reason: TriggerReason) {
         queue.send(CommandTrsyncTrigger(id, reason.id))
     }
 
     fun reset() {
+        sendTrigger(TriggerReason.HOST_REQUEST)
         queue.send(CommandTrsyncStart(id, 0U,0U,0U))
     }
 
@@ -267,11 +274,20 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
             CommandTrsyncStart(
                 id, runtime.timeToClock32(firstReportTime),
                 runtime.durationToClock(reportInterval),
-                TriggerResult.COMMS_TIMEOUT.id
+                TriggerReason.COMMS_TIMEOUT.id
             )
         )
         queue.send(CommandTrsyncSetTimeout(id, runtime.timeToClock32(startTime + reportInterval * 3)))
         return result
+    }
+
+    fun parseTriggerReason(num: UByte, time: MachineTime) = when(num.toUInt()) {
+        0U -> EndstopSync.StateRunning
+        1u -> throw RuntimeException("Invalid trigger reason $num")
+        2u -> EndstopSync.StateCommsTimeout
+        3u -> EndstopSync.StateReset
+        4u -> EndstopSync.StatePastEndTime
+        else -> EndstopSync.StateTriggered(triggers.getValue(num), time)
     }
 }
 
@@ -312,25 +328,16 @@ data class CommandTrsyncSetTimeout(override val id: ObjectId, val clock: McuCloc
 @RegisterMcuMessage(signature = "trsync_state oid=%c can_trigger=%c trigger_reason=%c clock=%u")
 data class ResponseTrsyncState(override val id: ObjectId, val canTrigger: Boolean, val reason: UByte, val clock: McuClock32) : McuObjectResponse
 
-fun parseTriggerResult(num: UByte, time: MachineTime) = when(num.toUInt()) {
-    0U -> EndstopSync.StateRunning
-    1u -> EndstopSync.StateTriggered(time)
-    2u -> EndstopSync.StateCommsTimeout
-    3u -> EndstopSync.StateReset
-    4u -> EndstopSync.StatePastEndTime
-    else -> throw RuntimeException("Invalid trigger result $num")
-}
-
-enum class TriggerResult(val id: UByte) {
-    ENDSTOP_HIT(id = 1u),
-    HOST_REQUEST(id = 2u),
-    PAST_END_TIME(id = 3u),
-    COMMS_TIMEOUT(id = 4u),
+enum class TriggerReason(val id: UByte) {
+    HOST_REQUEST(id = 1u),
+    PAST_END_TIME(id = 2u),
+    COMMS_TIMEOUT(id = 3u),
+    ENDSTOP_HIT_WITH_ID(id = 4u), // + endstop object ID to identify exact endstop that was triggered.
 }
 
 fun combineStates(a: EndstopSync.State, b: EndstopSync.State): EndstopSync.State {
     if (a is EndstopSync.StateTriggered && b is EndstopSync.StateTriggered) {
-        return EndstopSync.StateTriggered(min(a.triggerTime, b.triggerTime))
+        return if (a.triggerTime <= b.triggerTime) a else b
     }
     return a
 }

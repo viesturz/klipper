@@ -1,6 +1,7 @@
 package parts.kinematics
 
 import EndstopSyncBuilder
+import MachineRuntime
 import MachineTime
 import parts.Trigger
 
@@ -11,6 +12,7 @@ interface LinearRail {
     val range: LinearRange
     val speeds: LinearSpeeds
     val homing: Homing?
+    val runtime: MachineRuntime
 
     suspend fun setPowered(time: MachineTime, value: Boolean)
     fun setHomed(value: Boolean)

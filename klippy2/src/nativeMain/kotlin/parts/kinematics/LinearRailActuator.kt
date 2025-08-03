@@ -1,18 +1,13 @@
 package parts.kinematics
 
 import EndstopSyncBuilder
-import MachineBuilder
-import MachineRuntime
 import MachineTime
-import PartLifecycle
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.MoveOutsideRangeException
 import machine.getNextMoveTime
 
-fun MachineBuilder.LinearRailActuator(rail: LinearRail) = LinearRailActuatorImpl(defaultName("LinearActuator"), rail).also { addPart(it) }
-
 /** An actuator that has a single linear rail. */
-class LinearRailActuatorImpl(override val name: String, val rail: LinearRail): MotionActuator, PartLifecycle {
+class LinearRailActuator(val rail: LinearRail): MotionActuator {
     override val size = 1
     override val positionTypes = listOf(MotionType.LINEAR)
     override var commandedPosition: List<Double>
@@ -20,12 +15,7 @@ class LinearRailActuatorImpl(override val name: String, val rail: LinearRail): M
         set(value) { rail.commandedPosition = value[0]}
     override val commandedEndTime: MachineTime
         get() = rail.commandedEndTime
-    lateinit var runtime: MachineRuntime
-    val logger = KotlinLogging.logger(name)
-
-    override suspend fun onStart(runtime: MachineRuntime) {
-        this.runtime = runtime
-    }
+    val logger = KotlinLogging.logger("Linear rail actuator")
 
     override fun computeMaxSpeeds(start: List<Double>, end: List<Double>): LinearSpeeds = rail.speeds
     override fun checkMoveInBounds(start: List<Double>,end: List<Double>): MoveOutsideRangeException? {
@@ -46,27 +36,22 @@ class LinearRailActuatorImpl(override val name: String, val rail: LinearRail): M
         get() = listOf(rail.railStatus)
 
     override suspend fun home(axis: List<Int>): HomeResult {
+        if (axis.isEmpty()) return HomeResult.SUCCESS
         require(axis.size == 1)
         require(axis[0] == 0)
         val homing = rail.homing ?: throw IllegalStateException("Homing not configured")
         logger.info { "Homing start" }
 
-        val initialPosition = when (homing.direction) {
-            HomingDirection.INCREASING -> rail.range.positionMin - (homing.endstopPosition - rail.range.positionMin) * 0.2
-            HomingDirection.DECREASING -> rail.range.positionMax + (rail.range.positionMax - homing.endstopPosition) * 0.2
-        }
         val startTime = getNextMoveTime()
-        initializePosition(startTime, listOf(initialPosition))
         if (!rail.railStatus.powered) {
             rail.setPowered(time = startTime, value = true)
         }
-        val session = makeProbingSession {
-            addActuator(this@LinearRailActuatorImpl)
+        makeProbingSession {
+            addActuator(this@LinearRailActuator)
             addTrigger(homing.endstopTrigger)
-        }
-        session.use {
-            val homingMove = HomingMove(session, this, runtime)
-            val result = homingMove.home(listOf(homing.endstopPosition),homing)
+        }.use { session ->
+            val homingMove = HomingMove(session, this, rail.runtime)
+            val result = homingMove.homeOneAxis(0, homing, rail.range)
             logger.info { "Homing result $result" }
             if (result == HomeResult.SUCCESS) {
                 rail.setHomed(true)

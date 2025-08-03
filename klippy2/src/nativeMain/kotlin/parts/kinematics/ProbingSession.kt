@@ -6,11 +6,7 @@ import kotlinx.coroutines.Deferred
 import mcu.components.McuEndstopSyncRuntimeBuilder
 import parts.Trigger
 
-fun makeProbingSession(block: ProbingSessionBuilder.() -> Unit): ProbingSession {
-    val b = ProbingSessionBuilder()
-    b.block()
-    return ProbingSession(b.builder.build())
-}
+fun makeProbingSession(block: ProbingSessionBuilder.() -> Unit) = ProbingSessionBuilder().also { it.block() }
 
 class ProbingSessionBuilder {
     val builder = McuEndstopSyncRuntimeBuilder()
@@ -21,6 +17,15 @@ class ProbingSessionBuilder {
 
     fun addTrigger(trigger: Trigger) {
         trigger.setupTriggerSync(builder)
+    }
+
+    suspend inline fun <T> use(block: (session: ProbingSession) -> T): T {
+        val session = ProbingSession(builder.build())
+        try {
+            return block(session)
+        } finally {
+            session.release()
+        }
     }
 }
 
@@ -53,11 +58,5 @@ class ProbingSession(var sync: EndstopSync) {
         result?.cancel()
         result = null
         sync.release()
-    }
-
-    suspend inline fun <T> use(block: () -> T): T = try {
-        block()
-    } finally {
-        this.release()
     }
 }

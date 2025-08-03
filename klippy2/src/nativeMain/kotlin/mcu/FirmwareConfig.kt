@@ -50,6 +50,7 @@ data class FirmwareConfig @OptIn(ExperimentalSerializationApi::class) constructo
 
     fun enumerationIdToValue(name: String): Map<Int, String> = enumerationsIdToValue.getValue(name)
     fun enumerationValueToId(name: String): Map<String, Int> = enumerationsValueToId.getValue(name)
+    fun getStaticString(id: UShort, default: String): String = enumerationIdToValue("static_string_id").getOrElse(id.toInt(), { default })
 
     fun buildEnumerationsLookup(): Map<String, Map<String, Int>> = enumerations.mapValues { e ->
         buildMap {

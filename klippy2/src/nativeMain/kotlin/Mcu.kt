@@ -156,8 +156,8 @@ interface EndstopSync {
     sealed interface State
     object StateIdle: State
     object StateRunning: State
-    data class StateTriggered(val triggerTime: MachineTime): State
-    object StateAlreadyTriggered: State
+    data class StateTriggered(val endstop: Endstop, val triggerTime: MachineTime): State
+    data class StateAlreadyTriggered(val endstop: Endstop): State
     object StateReleased: State
     object StatePastEndTime: State
     object StateReset: State
