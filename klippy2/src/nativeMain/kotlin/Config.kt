@@ -31,6 +31,16 @@ fun MachineBuilder.buildMachine() {
         pin = mcu.fan0.copy(shutdownValue = 1.0),
         maxPower = 0.6,
     ))
+    val bedHeater = Heater(
+        pin = mcu.heaterBed,
+        sensor = AdcTemperatureSensor(
+            pin = mcu.bedTemp,
+            sensor = NTC100K,
+            minTemp = 0.celsius,
+            maxTemp = 120.celsius,
+        ),
+        control = PID(kP = 63.0, kI = 2.4, kD = 412.0)
+    )
     val aDriver = TMC2209(
         pins = mcu.stepper0Uart,
         enablePin = mcu.stepper0.enablePin,
@@ -140,7 +150,7 @@ fun MachineBuilder.buildMachine() {
     GCodePrinter(
         heater = he0,
         partFan = fan1,
-        bedHeater = null
+        bedHeater = bedHeater,
     )
     GCodeScript("PRINT_START") { params ->
         val bedTemp = params.getInt("BED_TEMP", 0)
