@@ -11,6 +11,7 @@ import parts.kinematics.LinearRailActuator
 import parts.kinematics.LinearRange
 import parts.kinematics.LinearSpeeds
 import parts.PinTrigger
+import parts.kinematics.LinearStepper
 
 fun MachineBuilder.buildMachine() {
     val mcu =
@@ -58,7 +59,7 @@ fun MachineBuilder.buildMachine() {
     val zDriver = TMC2209(
         pins = mcu.stepper2Uart,
         enablePin = mcu.stepper2.enablePin,
-        microsteps = 1,
+        microsteps = 16,
         interpolate = true,
         runCurrent = 0.42,
         senseResistor = 0.110.ohms
@@ -93,12 +94,12 @@ fun MachineBuilder.buildMachine() {
             positionMin = 0.0,
             positionMax = 125.0),
         homing = Homing(
-            endstopPosition = 2.0,
+            endstopPosition = 120.0,
             endstopTrigger = zEndstop,
-            direction = HomingDirection.DECREASING,
+            direction = HomingDirection.INCREASING,
             speed = 20.0,
             secondSpeed = 3.0,
-            retractDist = 10.0,
+            retractDist = 3.0,
         )
     )
 

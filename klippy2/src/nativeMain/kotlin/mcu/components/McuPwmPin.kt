@@ -39,7 +39,7 @@ class McuPwmPin(override val mcu: Mcu, val config: DigitalOutPin, initialize: Mc
 
     private fun dutyToTicks(d: Double) = (d * cycleTicks.toDouble() + 0.5f).toUInt()
 
-    override fun start(runtime: McuRuntime) {
+    override suspend fun start(runtime: McuRuntime) {
         this.runtime = runtime
     }
 

@@ -1,8 +1,8 @@
 package parts.kinematics
 
+import EndstopSync
 import EndstopSyncBuilder
 import MachineTime
-import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.MoveOutsideRangeException
 import machine.getNextMoveTime
 
@@ -10,12 +10,10 @@ import machine.getNextMoveTime
 class LinearRailActuator(val rail: LinearRail): MotionActuator {
     override val size = 1
     override val positionTypes = listOf(MotionType.LINEAR)
-    override var commandedPosition: List<Double>
+    override val commandedPosition: List<Double>
         get() = listOf(rail.commandedPosition)
-        set(value) { rail.commandedPosition = value[0]}
     override val commandedEndTime: MachineTime
         get() = rail.commandedEndTime
-    val logger = KotlinLogging.logger("Linear rail actuator")
 
     override fun computeMaxSpeeds(start: List<Double>, end: List<Double>): LinearSpeeds = rail.speeds
     override fun checkMoveInBounds(start: List<Double>,end: List<Double>): MoveOutsideRangeException? {
@@ -24,7 +22,7 @@ class LinearRailActuator(val rail: LinearRail): MotionActuator {
         return null
     }
 
-    override fun initializePosition(time: MachineTime, position: List<Double>) {
+    override suspend fun initializePosition(time: MachineTime, position: List<Double>) {
         rail.initializePosition(time, position[0], false)
     }
 
@@ -40,7 +38,6 @@ class LinearRailActuator(val rail: LinearRail): MotionActuator {
         require(axis.size == 1)
         require(axis[0] == 0)
         val homing = rail.homing ?: throw IllegalStateException("Homing not configured")
-        logger.info { "Homing start" }
 
         val startTime = getNextMoveTime()
         if (!rail.railStatus.powered) {
@@ -52,12 +49,15 @@ class LinearRailActuator(val rail: LinearRail): MotionActuator {
         }.use { session ->
             val homingMove = HomingMove(session, this, rail.runtime)
             val result = homingMove.homeOneAxis(0, homing, rail.range)
-            logger.info { "Homing result $result" }
             if (result == HomeResult.SUCCESS) {
                 rail.setHomed(true)
             }
             return result
         }
+    }
+
+    override suspend fun updatePositionAfterTrigger(sync: EndstopSync) {
+        rail.updatePositionAfterTrigger(sync)
     }
 
     override fun moveTo(

@@ -118,7 +118,7 @@ class MachineImpl : MachineRuntime, MachineBuilder {
     override fun flushMoves(machineTime: MachineTime) {
         val flushDelay = STEPCOMPRESS_FLUSH_TIME + SDS_CHECK_TIME
         val flushTime = machineTime - flushDelay
-        val clearHistoryTime = flushTime - 30.0
+        val clearHistoryTime = flushTime - 50.0
         for (mcu in mcuList) {
             mcu.flushMoves(flushTime, clearHistoryTime)
         }

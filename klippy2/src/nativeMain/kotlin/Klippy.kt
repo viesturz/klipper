@@ -79,4 +79,5 @@ fun main(args: Array<String>) = runBlocking {
             }
         }
     }
+    logWriter.close()
 }

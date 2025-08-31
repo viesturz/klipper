@@ -43,7 +43,7 @@ class McuHwPwmPin(
             maxDuration = configure.firmware.durationToTicks(config.watchdogDuration)))
     }
 
-    override fun start(runtime: McuRuntime) {
+    override suspend fun start(runtime: McuRuntime) {
         this.runtime = runtime
     }
 

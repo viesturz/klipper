@@ -1,5 +1,6 @@
 package parts.kinematics
 
+import EndstopSync
 import EndstopSyncBuilder
 import MachineRuntime
 import MachineTime
@@ -7,7 +8,7 @@ import parts.Trigger
 
 interface LinearRail {
     val railStatus: RailStatus
-    var commandedPosition: Double
+    val commandedPosition: Double
     val commandedEndTime: Double
     val range: LinearRange
     val speeds: LinearSpeeds
@@ -19,7 +20,7 @@ interface LinearRail {
     fun setupTriggerSync(sync: EndstopSyncBuilder)
 
     // To drive the rail directly without kinematics
-    fun initializePosition(time: MachineTime, position: Double, homed: Boolean)
+    suspend fun initializePosition(time: MachineTime, position: Double, homed: Boolean)
     fun moveTo(
         startTime: MachineTime,
         endTime: MachineTime,
@@ -29,6 +30,8 @@ interface LinearRail {
     )
     /** Generates move commands up to the given time. */
     fun generate(time: MachineTime)
+    /** Sets the triggered position after trigger and re-enables the rail for movement. */
+    suspend fun updatePositionAfterTrigger(sync: EndstopSync)
 }
 
 data class RailStatus(
@@ -95,11 +98,10 @@ data class Homing(
     val speed: Double,
     val secondSpeed: Double = speed,
     val retractDist: Double = 10.0,
-    val attempts: Int = 2,
+    val samples: Int = 1,
 )
 
 enum class HomingDirection(val multipler: Int) {
     INCREASING(multipler = 1),
     DECREASING(multipler = -1),
 }
-

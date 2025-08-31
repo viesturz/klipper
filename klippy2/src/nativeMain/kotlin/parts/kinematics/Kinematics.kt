@@ -1,5 +1,6 @@
 package parts.kinematics
 
+import EndstopSync
 import EndstopSyncBuilder
 import MachineTime
 import machine.MoveOutsideRangeException
@@ -16,7 +17,7 @@ interface MotionActuator {
     val size: Int
     val positionTypes: List<MotionType>
     /** The position requested by the commands.  */
-    var commandedPosition: List<Double>
+    val commandedPosition: List<Double>
     val axisStatus: List<RailStatus>
 
     val commandedEndTime: MachineTime
@@ -30,10 +31,12 @@ interface MotionActuator {
 
     /** Setup actuator and endstop/probe trigger sync */
     fun setupTriggerSync(sync: EndstopSyncBuilder)
+    /** Sets the commanded position after trigger and re-enables the rail for movement. */
+    suspend fun updatePositionAfterTrigger(sync: EndstopSync)
 
     /** Sets a position for the actuator. Should not perform any moves.
      *  Clears any planned moves after the time. */
-    fun initializePosition(time: MachineTime, position: List<Double>)
+    suspend fun initializePosition(time: MachineTime, position: List<Double>)
     /* A constant-acceleration move to a new position. */
     fun moveTo(startTime: MachineTime, endTime: MachineTime,
                startSpeed: Double, endSpeed: Double,

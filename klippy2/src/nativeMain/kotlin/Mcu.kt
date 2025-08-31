@@ -120,9 +120,12 @@ interface StepperMotor {
     val mcu: Mcu
     val stepQueue: StepQueue
     val driver: StepperDriver
-    fun setPosition(time: MachineTime, pos: Long)
-    suspend fun getPosition(): Long
+    suspend fun queryPosition(): Long
+    suspend fun getTriggerPosition(sync: EndstopSync): TriggerPosition
+    /** Resets the step queue and clears the triggered state. */
+    suspend fun reset()
 
+    data class TriggerPosition(val triggerSteps: Long, val stopSteps: Long)
     interface StepQueue
 }
 
@@ -147,6 +150,9 @@ interface EndstopSync {
 
     /** Initiates the endstop sync and returns a deferred trigger result. */
     suspend fun start(startTime: MachineTime, timeoutTime: MachineTime): Deferred<State>
+    /** Returns the time at which movement was stopped on the specific MCU.
+     * Due to communication delays, this will be different per MCU. */
+    fun getTriggerClock(mcu: Mcu): McuClock
 
     /** Resets any ongoing triggering. Allows stopped motors to move again. */
     suspend fun reset()
@@ -156,7 +162,7 @@ interface EndstopSync {
     sealed interface State
     object StateIdle: State
     object StateRunning: State
-    data class StateTriggered(val endstop: Endstop, val triggerTime: MachineTime): State
+    data class StateTriggered(val endstop: Endstop, val triggerClock: McuClock, val triggerTime: MachineTime): State
     data class StateAlreadyTriggered(val endstop: Endstop): State
     object StateReleased: State
     object StatePastEndTime: State

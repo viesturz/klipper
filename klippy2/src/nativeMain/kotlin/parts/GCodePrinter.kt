@@ -5,6 +5,7 @@ import MachineBuilder
 import PartLifecycle
 import celsius
 import getPartsImplementing
+import parts.kinematics.LinearStepper
 
 fun MachineBuilder.GCodePrinter(
     heater: Heater?,

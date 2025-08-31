@@ -37,6 +37,28 @@ class StepQueueImpl(firmware: FirmwareConfig, var connection: McuConnection?, va
         chelper.stepcompress_fill(stepcompress.ptr, maxErrorTicks, stepCmdTag, dirCmdTag)
     }
 
+//    suspend inline fun <reified ResponseType: McuResponse> sendWithResponse(command: McuCommand, retry: Double = 0.01) =
+//        sendWithResponse(command, ResponseType::class, retry)
+//
+//    suspend fun <ResponseType: McuResponse> sendWithResponse(command: McuCommand, response: KClass<ResponseType>, retry: Double = 0.01): ResponseType {
+//        val connection = this.connection ?: throw RuntimeException("Trying to send before setup is finished")
+//        var wait = retry.seconds
+//        val id = if (command is McuObjectCommand) command.id else 0u
+//        val received = connection.setResponseHandlerOnce(response, id)
+//        repeat(5) {
+//            appendCommand(command)
+//            try {
+//                return withTimeout(wait) {
+//                    received.await()
+//                }
+//            } catch (e: TimeoutCancellationException) {
+//                delay(wait)
+//                wait *= 2
+//            }
+//        }
+//        throw RuntimeException("Timeout out waiting for response")
+//    }
+
     fun appendCommand(command: McuCommand) {
         val connection = this.connection ?:
             throw RuntimeException("Trying to send before setup is finished")
@@ -59,6 +81,10 @@ class StepQueueImpl(firmware: FirmwareConfig, var connection: McuConnection?, va
 
     fun setLastPosition(clock: McuClock, pos: Long) {
         chelper.stepcompress_set_last_position(stepcompress.ptr, clock, pos)
+    }
+
+    fun findPastPosition(clock: McuClock): Long {
+        return chelper.stepcompress_find_past_position(stepcompress.ptr, clock)
     }
 
     /** Clears the queued steps and resets. */

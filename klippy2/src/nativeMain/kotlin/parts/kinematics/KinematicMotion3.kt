@@ -1,5 +1,6 @@
 package parts.kinematics
 
+import EndstopSync
 import EndstopSyncBuilder
 import MachineTime
 import chelper.cartesian_stepper_alloc
@@ -9,7 +10,6 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.pointed
 import machine.MoveOutsideRangeException
 import mcu.GcWrapper
-import parts.LinearStepper
 import platform.linux.free
 import utils.distanceTo
 
@@ -58,16 +58,11 @@ abstract class KinematicMotion3(
     kinProviders: List<() -> GcWrapper<chelper.stepper_kinematics>>,
 ): MotionActuator {
     val trapq = GcWrapper(trapq_alloc()) { trapq_free(it) }
-    var _position: List<Double> = listOf(0.0, 0.0, 0.0)
-    override var commandedEndTime: MachineTime = 0.0
     val kinematics: List<GcWrapper<chelper.stepper_kinematics>>
     override val size = 3
     override val positionTypes = listOf(MotionType.LINEAR, MotionType.LINEAR, MotionType.LINEAR)
-    override var commandedPosition: List<Double>
-        get() = _position
-        set(value) {
-            _position = value
-        }
+    override var commandedPosition: List<Double> = listOf(0.0, 0.0, 0.0)
+    override var commandedEndTime: MachineTime = 0.0
     override var axisStatus = mutableListOf(RailStatus.INITIAL, RailStatus.INITIAL, RailStatus.INITIAL)
 
     init {
@@ -80,24 +75,30 @@ abstract class KinematicMotion3(
                     val k = kinProviders[i].invoke()
                     add(k)
                     chelper.itersolve_set_trapq(k.ptr, trapq.ptr)
-                    chelper.itersolve_set_position(k.ptr, _position[0], _position[1], _position[2])
+                    chelper.itersolve_set_position(k.ptr, 0.0,0.0,0.0)
                     return@assignToKinematics k
                 }
             }
         }
-        chelper.trapq_set_position(trapq.ptr, 0.0, _position[0], _position[1], _position[2])
+        chelper.trapq_set_position(trapq.ptr, 0.0, 0.0,0.0,0.0)
     }
 
-    override fun initializePosition(time: MachineTime, position: List<Double>) {
+    override suspend fun initializePosition(time: MachineTime, position: List<Double>) {
         require(position.size == 3)
         generate(time)
         if (this.commandedEndTime > time) throw IllegalStateException("Time before last time")
-        _position = position
+        commandedPosition = position
         this.commandedEndTime = time
         for (kin in kinematics) {
-            chelper.itersolve_set_position(kin.ptr, _position[0], _position[1], _position[2])
+            chelper.itersolve_set_position(kin.ptr, position[0], position[1], position[2])
         }
-        chelper.trapq_set_position(trapq.ptr, time, _position[0], _position[1], _position[2])
+        chelper.trapq_set_position(trapq.ptr, time, position[0], position[1], position[2])
+    }
+
+    override suspend fun updatePositionAfterTrigger(sync: EndstopSync) {
+        motors.forEach { it.updatePositionAfterTrigger(sync) }
+        // TODO - update commanded position
+        // TODO - update trapq and itersolve
     }
 
     override fun moveTo(
@@ -106,7 +107,7 @@ abstract class KinematicMotion3(
         endPosition: List<Double>
     ) {
         require(startTime >= this.commandedEndTime, { "startTime < _time" })
-        val distance = endPosition.distanceTo(_position)
+        val distance = endPosition.distanceTo(commandedPosition)
         val duration = endTime - startTime
         if (duration <= 0.0) {
             if (distance == 0.0) return
@@ -119,15 +120,15 @@ abstract class KinematicMotion3(
             move_t = duration
             start_v = startSpeed
             half_accel = (endSpeed - startSpeed) / duration * 0.5
-            start_pos.x = _position[0]
-            start_pos.y = _position[1]
-            start_pos.z = _position[2]
-            axes_r.x = (endPosition[0] - _position[0]) * invDist
-            axes_r.y = (endPosition[1] - _position[1]) * invDist
-            axes_r.z = (endPosition[2] - _position[2]) * invDist
+            start_pos.x = commandedPosition[0]
+            start_pos.y = commandedPosition[1]
+            start_pos.z = commandedPosition[2]
+            axes_r.x = (endPosition[0] - commandedPosition[0]) * invDist
+            axes_r.y = (endPosition[1] - commandedPosition[1]) * invDist
+            axes_r.z = (endPosition[2] - commandedPosition[2]) * invDist
         }
         chelper.trapq_add_move(trapq.ptr, move)
-        _position = endPosition
+        commandedPosition = endPosition
         this.commandedEndTime = endTime
     }
 

@@ -30,7 +30,7 @@ class McuDigitalPin(override val mcu: Mcu, val config: config.DigitalOutPin, ini
         configure.initCommand(CommandUpdateDigitalOut(id, _enabled != config.invert))
     }
 
-    override fun start(runtime: McuRuntime) {
+    override suspend fun start(runtime: McuRuntime) {
         this.runtime = runtime
     }
 

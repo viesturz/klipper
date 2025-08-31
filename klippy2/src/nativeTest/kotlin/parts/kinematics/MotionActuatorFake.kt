@@ -1,5 +1,6 @@
 package parts.kinematics
 
+import EndstopSync
 import EndstopSyncBuilder
 import MachineTime
 
@@ -18,9 +19,12 @@ class MotionActuatorFake(
 
     override fun setupTriggerSync(sync: EndstopSyncBuilder) {}
 
-    override fun initializePosition(time: MachineTime, position: List<Double>) {
+    override suspend fun initializePosition(time: MachineTime, position: List<Double>) {
         commandedPosition = position
         commandedEndTime = time
+    }
+
+    override suspend fun updatePositionAfterTrigger(sync: EndstopSync) {
     }
 
     override fun moveTo(

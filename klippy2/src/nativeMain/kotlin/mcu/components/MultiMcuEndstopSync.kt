@@ -6,6 +6,7 @@ import EndstopSyncBuilder
 import MachineDuration
 import MachineTime
 import Mcu
+import McuClock
 import StepperMotor
 import chelper.trdispatch_mcu
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -13,6 +14,7 @@ import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import mcu.McuClock32
 import mcu.McuComponent
@@ -114,7 +116,7 @@ class MultiMcuEndstopSync(
             endstop.reset()
         }
         for (stepper in motors) {
-            stepper.resetTrigger()
+            stepper.reset()
         }
         state.value = EndstopSync.StateIdle
     }
@@ -186,6 +188,14 @@ class MultiMcuEndstopSync(
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun getTriggerClock(mcu: Mcu): McuClock {
+        val trsync = mcuToTrsync.getValue(mcu as McuImpl)
+        val triggerReason = trsync.finishedTrigger ?: throw RuntimeException("No active trigger or not completed")
+        if (triggerReason !is EndstopSync.StateTriggered) throw RuntimeException("Trigger reason is not triggered: $triggerReason")
+        return triggerReason.triggerClock
+    }
+
     data class McuTrsyncEntry(val trsync: McuTrsync, val result: Deferred<EndstopSync.State> )
 }
 
@@ -198,6 +208,7 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
     var timeoutTime: MachineTime? = null
     var trdispatchMcu: CPointer<trdispatch_mcu>? = null
     var activeTrigger: CompletableDeferred<EndstopSync.State>? = null
+    var finishedTrigger: EndstopSync.State? = null
     val triggers = mutableMapOf<UByte, Endstop>()
     lateinit var runtime: McuRuntime
 
@@ -207,7 +218,7 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
         initialize.responseHandler(ResponseTrsyncState::class, id, ::handleTrsyncState)
     }
 
-    override fun start(runtime: McuRuntime) {
+    override suspend fun start(runtime: McuRuntime) {
         this.runtime = runtime
     }
 
@@ -221,8 +232,9 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
         logger.debug { "state $state" }
         if (trigger != null && state.canTrigger == false) {
             // Triggered
-            val result = parseTriggerReason(state.reason, runtime.clockToTime(state.clock))
+            val result = parseTriggerReason(state.reason, runtime.clock32ToClock(state.clock), runtime.clockToTime(state.clock))
             trigger.complete(result)
+            finishedTrigger = result
             activeTrigger = null
         } else if (timeout != null && timeout < runtime.clockToTime(state.clock)) {
             // Send timeout trigger; will be re-invoked with a timeout state.
@@ -269,6 +281,7 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
         logger.debug { "start" }
         val result = CompletableDeferred<EndstopSync.State>()
         activeTrigger = result
+        finishedTrigger = null
         val firstReportTime = startTime + firstReportOffset
         queue.send(
             CommandTrsyncStart(
@@ -281,13 +294,13 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
         return result
     }
 
-    fun parseTriggerReason(num: UByte, time: MachineTime) = when(num.toUInt()) {
+    fun parseTriggerReason(num: UByte, clock: McuClock, time: MachineTime) = when(num.toUInt()) {
         0U -> EndstopSync.StateRunning
         1u -> throw RuntimeException("Invalid trigger reason $num")
         2u -> EndstopSync.StateCommsTimeout
         3u -> EndstopSync.StateReset
         4u -> EndstopSync.StatePastEndTime
-        else -> EndstopSync.StateTriggered(triggers.getValue(num), time)
+        else -> EndstopSync.StateTriggered(triggers.getValue(num), clock, time)
     }
 }
 

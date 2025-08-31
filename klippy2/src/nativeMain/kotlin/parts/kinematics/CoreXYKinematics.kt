@@ -1,5 +1,6 @@
 package parts.kinematics
 
+import EndstopSync
 import EndstopSyncBuilder
 import MachineTime
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -7,6 +8,12 @@ import machine.MoveOutsideRangeException
 import machine.getNextMoveTime
 import utils.distanceTo
 import kotlin.math.absoluteValue
+
+
+// x = 0.5 * (a+b)
+// y = 0.5 * (a-b)
+// a = x + y
+// b = x - y
 
 /** Creates CoreXY kinematics from two linear rails.
  * Uses a simple forward calculation instead of the solver, so can be used on any rail. */
@@ -24,26 +31,18 @@ class CoreXYKinematics(
     override val size = 2
     override val positionTypes = listOf(MotionType.LINEAR, MotionType.LINEAR)
     override var commandedEndTime: MachineTime = 0.0
-
-    var _commandedPosition: List<Double> = listOf(0.0,0.0)
-    override var commandedPosition: List<Double>
-        get() = _commandedPosition
-        set(value) {
-            _commandedPosition = value
-            val a = value[0] + value[1]
-            val b = value[0] - value[1]
-            railA.commandedPosition = a
-            railB.commandedPosition = b
-        }
-
     override var axisStatus: MutableList<RailStatus> = mutableListOf(RailStatus.INITIAL, RailStatus.INITIAL)
 
-    // x = 0.5 * (a+b)
-    // y = 0.5 * (a-b)
-    // a = x + y
-    // b = x - y
+    override val commandedPosition: List<Double>
+        get() {
+            val a = railA.commandedPosition // x+y
+            val b = railB.commandedPosition // x-y
+            val x = (a + b) * 0.5
+            val y  = x - b
+            return listOf(x, y)
+        }
 
-    override fun initializePosition(time: MachineTime, position: List<Double>) {
+    override suspend fun initializePosition(time: MachineTime, position: List<Double>) {
         require(position.size == 2)
         val a = position[0] + position[1]
         val b = position[0] - position[1]
@@ -115,6 +114,11 @@ class CoreXYKinematics(
             }
             return result
         }
+    }
+
+    override suspend fun updatePositionAfterTrigger(sync: EndstopSync) {
+        railA.updatePositionAfterTrigger(sync)
+        railB.updatePositionAfterTrigger(sync)
     }
 
     override fun checkMoveInBounds(

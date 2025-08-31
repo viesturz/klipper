@@ -26,7 +26,7 @@ class McuButton(override val mcu: Mcu, val config: DigitalInPin, configure: McuC
         configure.configCommand(CommandButtonsAdd(id, 1u, config.pin, config.pullup))
     }
 
-    override fun start(runtime: McuRuntime) {
+    override suspend fun start(runtime: McuRuntime) {
         this.reactor = runtime.reactor
         runtime.responseHandler<ResponseButtonsState>(id, this::onButtonState)
     }

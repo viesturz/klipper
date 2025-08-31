@@ -41,7 +41,7 @@ class TMC2209Impl(
     val _microsteps: TmcMicrosteps,
     val stealthchopTreshold: Int,
 ) : PartLifecycle, StepperDriver {
-    private val logger = KotlinLogging.logger("Tmc2209 $name")
+    private val logger = KotlinLogging.logger(name)
     override val stepBothEdges = true
     override val pulseDuration = 0.000_000_100
     override val microsteps: Int
@@ -65,7 +65,7 @@ class TMC2209Impl(
     }
 
     override suspend fun onStart(runtime: MachineRuntime) {
-        logger.info { "OnStart" }
+        logger.trace { "OnStart" }
         // Setup fields for UART
         fields.set(TmcField.pdn_disable, true)
         fields.set(TmcField.senddelay, 2)  // Avoid tx errors on shared uart

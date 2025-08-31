@@ -44,7 +44,7 @@ class McuAnalogPin(override val mcu: Mcu, val config: config.AnalogInPin, config
         }
     }
 
-    override fun start(runtime: McuRuntime) {
+    override suspend fun start(runtime: McuRuntime) {
         this.runtime = runtime
         runtime.responseHandler<ResponseAnalogInState>(id, this::handleAnalogInState)
     }

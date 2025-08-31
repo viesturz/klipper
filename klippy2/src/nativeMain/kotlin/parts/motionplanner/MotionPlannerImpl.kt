@@ -73,12 +73,13 @@ class MotionPlannerImpl(val config: MotionPlannerConfig) : MotionPlanner, PartLi
     }
 
     override fun setPosition(axes: String, position: Position) {
-        for (i in axes.indices) {
-            val mapping = axisMapping[axes[i]] ?: throw RuntimeException("No axis for $axes")
-            val value = position[i]
-            mapping.actuator.commandedPosition =
-                mapping.actuator.commandedPosition.mapIndexed { index, current -> if (index == mapping.index) value else current }
-        }
+        // TODO: update this
+        //        for (i in axes.indices) {
+        //            val mapping = axisMapping[axes[i]] ?: throw RuntimeException("No axis for $axes")
+        //            val value = position[i]
+        //            mapping.actuator.commandedPosition =
+        //                mapping.actuator.commandedPosition.mapIndexed { index, current -> if (index == mapping.index) value else current }
+        //        }
     }
 
     override fun move(queue: CommandQueue, vararg moves: KinMove) {

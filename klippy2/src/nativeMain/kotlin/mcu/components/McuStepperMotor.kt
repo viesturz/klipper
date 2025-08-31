@@ -1,5 +1,6 @@
 package mcu.components
 
+import EndstopSync
 import MachineTime
 import config.StepperPins
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -34,24 +35,28 @@ class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, overri
         configure.restartCommand(CommandResetStepClock(id, 0u))
     }
 
-    override fun start(runtime: McuRuntime) {
+    override suspend fun start(runtime: McuRuntime) {
         this.runtime = runtime
+        queryPosition()
     }
 
-    override fun setPosition(time: MachineTime, pos: Long) {
-        stepQueue.setLastPosition(runtime.timeToClock(time), pos)
-    }
-
-    override suspend fun getPosition(): Long {
+    override suspend fun queryPosition(): Long {
         val position = runtime.defaultQueue.sendWithResponse<ResponseStepperGetPosition>(CommandStepperGetPosition(id))
-        setPosition(position.time, position.position)
+        stepQueue.setLastPosition(runtime.timeToClock(position.time), position.position)
+        logger.debug { "Query position ${position.position}" }
         return position.position
     }
 
-    suspend fun resetTrigger() {
+    override suspend fun getTriggerPosition(sync: EndstopSync): StepperMotor.TriggerPosition {
+        val triggerClock = sync.getTriggerClock(mcu)
+        val triggerPosition = stepQueue.findPastPosition(triggerClock)
+        val stopPosition = queryPosition()
+        return StepperMotor.TriggerPosition(triggerPosition, stopPosition)
+    }
+
+    override suspend fun reset() {
         stepQueue.reset()
         stepQueue.appendCommand(CommandResetStepClock(id, 0U))
-        getPosition()
     }
 }
 

@@ -178,6 +178,8 @@ class McuImpl(
         override fun timeToClock(time: MachineTime) = clocksync.estimate.timeToClock(time)
         override fun timeToClock32(time: MachineTime) = timeToClock(time).toUInt()
         override fun clockToTime(clock: McuClock32) = clocksync.estimate.clockToTime(clock)
+        override fun clock32ToClock(clock: McuClock32) = clocksync.estimate.clock32ToClock64(clock)
+
         override fun <ResponseType : McuResponse> responseHandler(
             response: KClass<ResponseType>,
             id: ObjectId,

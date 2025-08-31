@@ -1,6 +1,8 @@
 package parts.kinematics
 
 import MachineRuntime
+import getBestTriggerPosition
+import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.getNextMoveTime
 import machine.getNow
 import parts.motionplanner.KinMove2
@@ -12,6 +14,7 @@ import utils.setValue
 import utils.vectorTo
 
 class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val runtime: MachineRuntime) {
+    val logger = KotlinLogging.logger("Homing move for $actuator")
 
     suspend fun homeOneAxis(index: Int, homing: Homing, range: LinearRange): HomeResult {
         val initialPosition = actuator.commandedPosition.setValue(index, getInitialPosition(homing, range))
@@ -21,6 +24,7 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
     }
 
     suspend fun home(endstopPosition: Position, homing: Homing): HomeResult {
+        logger.info { "Homing to $endstopPosition" }
         val initalPosition = actuator.commandedPosition
         val vector = initalPosition.vectorTo(endstopPosition)
         val direction = vector.direction()
@@ -28,26 +32,30 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
         val homeResult = doHomingMove(initialEndPosition, homing.speed)
         actuator.initializePosition(getNow(), endstopPosition)
         if (homeResult !is EndstopSync.StateTriggered) {
+            logger.info { "Homing fail. State = $homeResult" }
             return HomeResult.FAIL
         }
-        val retractedPosition = endstopPosition.moveBy(direction, -homing.retractDist)
-        doRetract(retractedPosition, homing.speed)
+        // The first homing move result is used just to establish an initial position, it's not counted towards homing probes.
 
+        val retractedPosition = endstopPosition.moveBy(direction, -homing.retractDist)
         val secondEndPosition = endstopPosition.moveBy(direction, homing.retractDist * 2)
+        doRetract(retractedPosition, homing.speed)
         val homingSamples = buildList {
-            repeat(homing.attempts - 1) {
+            repeat(homing.samples) {
                 val homeResult = doHomingMove(secondEndPosition, homing.secondSpeed)
                 if (homeResult !is EndstopSync.StateTriggered) {
-                    actuator.initializePosition(getNow(), endstopPosition)
+                    logger.info { "Homing fail. State = $homeResult" }
                     return HomeResult.FAIL
                 }
-                // TODO: query the actual motor position
                 add(actuator.commandedPosition)
-                actuator.initializePosition(getNow(), endstopPosition)
                 doRetract(retractedPosition, homing.speed)
             }
         }
-        // TODO check homing sample accuracy.
+        // Adjust position so that bestTriggerPos matches endstopPosition.
+        val (bestTriggerPos, maxError, stdDev) = getBestTriggerPosition(homingSamples, direction)
+        logger.info { "Homing success. Best trigger position: $bestTriggerPos, max error: $maxError, std dev: $stdDev" }
+        val offset = bestTriggerPos.vectorTo(endstopPosition)
+        actuator.initializePosition(getNow(), actuator.commandedPosition.moveBy(offset))
         return HomeResult.SUCCESS
     }
 
@@ -78,8 +86,7 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
         val flushTime = endTime + 0.1
         actuator.generate(flushTime)
         runtime.flushMoves(flushTime)
-        val result = session.wait()
-        session.allowMoves()
+        val result = session.waitAndFinalize()
         return result
     }
 

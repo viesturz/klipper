@@ -42,7 +42,7 @@ class TmcUartBus(override val mcu: McuImpl, val config: UartPins, initialize: Mc
             bitTime = baudTicks))
     }
 
-    override fun start(runtime: McuRuntime) {
+    override suspend fun start(runtime: McuRuntime) {
         this.runtime = runtime
     }
 

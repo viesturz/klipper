@@ -1,12 +1,12 @@
 package parts.kinematics
 
+import EndstopSync
 import EndstopSyncBuilder
 import MachineRuntime
 import MachineTime
 import chelper.stepper_kinematics
 import kotlinx.cinterop.ExperimentalForeignApi
 import mcu.GcWrapper
-import parts.LinearStepper
 
 /** Multiple motors driving the same rail. */
 class CombineLinearStepper(vararg railArgs: LinearStepper) : LinearStepper {
@@ -39,20 +39,17 @@ class CombineLinearStepper(vararg railArgs: LinearStepper) : LinearStepper {
         steppers.forEach { assignToKinematics(kinematicsProvider)}
     }
 
-    override var commandedPosition: Double
+    override val commandedPosition: Double
         get() = steppers[0].commandedPosition
-        set(value) {
-            for (a in steppers) {
-                a.commandedPosition = value
-            }
-        }
     override val commandedEndTime: Double
         get() = steppers[0].commandedEndTime
 
-    override fun initializePosition(time: MachineTime, position: Double,  homed: Boolean) {
-        for (a in steppers) {
-            a.initializePosition(time, position, homed)
-        }
+    override suspend fun initializePosition(time: MachineTime, position: Double,  homed: Boolean) {
+        steppers.forEach { it.initializePosition(time, position, homed) }
+    }
+
+    override suspend fun updatePositionAfterTrigger(sync: EndstopSync) {
+        steppers.forEach { it.updatePositionAfterTrigger(sync) }
     }
 
     override val railStatus: RailStatus

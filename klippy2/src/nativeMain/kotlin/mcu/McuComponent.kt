@@ -16,7 +16,7 @@ interface McuComponent {
     /** Run to configure the part, with basic MCU identification data available. */
     fun configure(configure: McuConfigure){}
     /** Run when MCU is configured and time synchronized, can send initial commands. */
-    fun start(runtime: McuRuntime){}
+    suspend fun start(runtime: McuRuntime){}
     fun shutdown(){}
 }
 
@@ -57,6 +57,7 @@ interface McuRuntime {
     fun timeToClock(time: MachineTime): McuClock
     fun timeToClock32(time: MachineTime): McuClock32
     fun clockToTime(clock: McuClock32): MachineTime
+    fun clock32ToClock(clock: McuClock32): McuClock
     /** Add a handler for an event sent by the MCU. */
     fun <ResponseType: McuResponse> responseHandler(response: KClass<ResponseType>, id: ObjectId, handler: suspend (message: ResponseType) -> Unit)
 }
