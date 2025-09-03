@@ -1,7 +1,5 @@
 package parts.kinematics
 
-import EndstopSync
-import EndstopSyncBuilder
 import MachineTime
 import machine.MoveOutsideRangeException
 import machine.getNextMoveTime
@@ -22,12 +20,8 @@ class LinearRailActuator(val rail: LinearRail): MotionActuator {
         return null
     }
 
-    override suspend fun initializePosition(time: MachineTime, position: List<Double>) {
-        rail.initializePosition(time, position[0], false)
-    }
-
-    override fun setupTriggerSync(sync: EndstopSyncBuilder) {
-        rail.setupTriggerSync(sync)
+    override suspend fun initializePosition(time: MachineTime, position: List<Double>, homed: Boolean) {
+        rail.initializePosition(time, position[0], homed)
     }
 
     override val axisStatus: List<RailStatus>
@@ -44,7 +38,7 @@ class LinearRailActuator(val rail: LinearRail): MotionActuator {
             rail.setPowered(time = startTime, value = true)
         }
         makeProbingSession {
-            addActuator(this@LinearRailActuator)
+            addRail(rail, this@LinearRailActuator)
             addTrigger(homing.endstopTrigger)
         }.use { session ->
             val homingMove = HomingMove(session, this, rail.runtime)
@@ -54,10 +48,6 @@ class LinearRailActuator(val rail: LinearRail): MotionActuator {
             }
             return result
         }
-    }
-
-    override suspend fun updatePositionAfterTrigger(sync: EndstopSync) {
-        rail.updatePositionAfterTrigger(sync)
     }
 
     override fun moveTo(

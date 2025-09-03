@@ -30,42 +30,36 @@ class CoreXYKinematics(
     val logger = KotlinLogging.logger("CoreXYKinematics")
     override val size = 2
     override val positionTypes = listOf(MotionType.LINEAR, MotionType.LINEAR)
-    override var commandedEndTime: MachineTime = 0.0
-    override var axisStatus: MutableList<RailStatus> = mutableListOf(RailStatus.INITIAL, RailStatus.INITIAL)
-
+    override val axisStatus: MutableList<RailStatus> = mutableListOf(RailStatus.INITIAL, RailStatus.INITIAL)
     override val commandedPosition: List<Double>
         get() {
             val a = railA.commandedPosition // x+y
             val b = railB.commandedPosition // x-y
             val x = (a + b) * 0.5
-            val y  = x - b
+            val y = x - b
             return listOf(x, y)
         }
+    override var commandedEndTime: MachineTime = 0.0
 
-    override suspend fun initializePosition(time: MachineTime, position: List<Double>) {
+    override suspend fun initializePosition(time: MachineTime, position: List<Double>, homed: Boolean) {
         require(position.size == 2)
         val a = position[0] + position[1]
         val b = position[0] - position[1]
         // The motors are never homed, they have no meaningful positions.
-        railA.initializePosition(time, a, false)
-        railB.initializePosition(time, b, false)
-    }
-
-    override fun setupTriggerSync(sync: EndstopSyncBuilder) {
-        railA.setupTriggerSync(sync)
-        railB.setupTriggerSync(sync)
+        railA.initializePosition(time, a, homed)
+        railB.initializePosition(time, b, homed)
     }
 
     override suspend fun home(axis: List<Int>): HomeResult {
         val startTime = getNextMoveTime()
         if (!railA.railStatus.powered) {
             railA.setPowered(time = startTime, value = true)
-            axisStatus[0] = axisStatus[0].copy(powered = true)
         }
         if (!railB.railStatus.powered) {
             railB.setPowered(time = startTime, value = true)
-            axisStatus[0] = axisStatus[0].copy(powered = true)
         }
+        axisStatus[0] = axisStatus[0].copy(powered = true)
+        axisStatus[1] = axisStatus[1].copy(powered = true)
 
         for (i in axis) {
             val result = when (i) {
@@ -83,14 +77,13 @@ class CoreXYKinematics(
     suspend fun homeX(): HomeResult {
         val homing = xHoming ?: throw RuntimeException("X Homing not configured")
         val range = xRange
-        logger.info { "X Homing start" }
         makeProbingSession {
-            addActuator(this@CoreXYKinematics)
+            addRail(railA, this@CoreXYKinematics)
+            addRail(railB, this@CoreXYKinematics)
             addTrigger(homing.endstopTrigger)
         }.use { session ->
             val homingMove = HomingMove(session, this, railA.runtime)
             val result = homingMove.homeOneAxis(0, homing, range)
-            logger.info { "X Homing result $result" }
             if (result == HomeResult.SUCCESS) {
                 axisStatus[0] = axisStatus[0].copy(homed = true)
             }
@@ -101,24 +94,18 @@ class CoreXYKinematics(
     suspend fun homeY(): HomeResult {
         val homing = yHoming ?: throw RuntimeException("Y Homing not configured")
         val range = yRange
-        logger.info { "Y Homing start" }
         makeProbingSession {
-            addActuator(this@CoreXYKinematics)
+            addRail(railA, this@CoreXYKinematics)
+            addRail(railB, this@CoreXYKinematics)
             addTrigger(homing.endstopTrigger)
         }.use { session ->
             val homingMove = HomingMove(session, this, railA.runtime)
             val result = homingMove.homeOneAxis(1, homing, range)
-            logger.info { "Y Homing result $result" }
             if (result == HomeResult.SUCCESS) {
                 axisStatus[1] = axisStatus[1].copy(homed = true)
             }
             return result
         }
-    }
-
-    override suspend fun updatePositionAfterTrigger(sync: EndstopSync) {
-        railA.updatePositionAfterTrigger(sync)
-        railB.updatePositionAfterTrigger(sync)
     }
 
     override fun checkMoveInBounds(

@@ -1,7 +1,5 @@
 package parts.kinematics
 
-import EndstopSync
-import EndstopSyncBuilder
 import MachineTime
 
 class MotionActuatorFake(
@@ -17,14 +15,10 @@ class MotionActuatorFake(
     override fun checkMoveInBounds(start: List<Double>, end: List<Double>) = null
     override suspend fun home(axis: List<Int>): HomeResult = HomeResult.SUCCESS
 
-    override fun setupTriggerSync(sync: EndstopSyncBuilder) {}
-
-    override suspend fun initializePosition(time: MachineTime, position: List<Double>) {
+    override suspend fun initializePosition(time: MachineTime, position: List<Double>, homed: Boolean) {
         commandedPosition = position
         commandedEndTime = time
-    }
-
-    override suspend fun updatePositionAfterTrigger(sync: EndstopSync) {
+        axisStatus = axisStatus.map { it.copy(homed = homed) }
     }
 
     override fun moveTo(

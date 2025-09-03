@@ -148,8 +148,13 @@ interface EndstopSyncBuilder {
 interface EndstopSync {
     val state: StateFlow<State>
 
-    /** Initiates the endstop sync and returns a deferred trigger result. */
-    suspend fun start(startTime: MachineTime, timeoutTime: MachineTime): Deferred<State>
+    /** Initiates the endstop sync and returns a deferred trigger result.
+     */
+    suspend fun start(startTime: MachineTime): Deferred<State>
+    /** Set or update timeout time for currently running session.
+     * If not called the default is to never timeout.
+     * Cleared on every start. */
+    fun setTimeoutTime(timeoutTime: MachineTime)
     /** Returns the time at which movement was stopped on the specific MCU.
      * Due to communication delays, this will be different per MCU. */
     fun getTriggerClock(mcu: Mcu): McuClock
@@ -174,4 +179,19 @@ interface EndstopSync {
 interface Neopixel{
     val mcu: Mcu
     fun update(color: Int, pos: Int = 0)
+}
+
+fun combineStates(a: EndstopSync.State, b: EndstopSync.State): EndstopSync.State {
+    if (b is EndstopSync.StateAlreadyTriggered) return b
+    if (a is EndstopSync.StateAlreadyTriggered) return a
+    if (b is EndstopSync.StateRunning) return b
+    if (a is EndstopSync.StateRunning) return a
+    if (b is EndstopSync.StatePastEndTime) return b
+    if (b is EndstopSync.StateCommsTimeout) return b
+    if (b is EndstopSync.StateReset) return b
+    if (b is EndstopSync.StateReleased) return b
+    if (a is EndstopSync.StateTriggered && b is EndstopSync.StateTriggered) {
+        return if (a.triggerTime <= b.triggerTime) a else b
+    }
+    return a
 }

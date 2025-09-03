@@ -41,12 +41,6 @@ class CartesianKinematics(val x: LinearStepper, val y: LinearStepper, val z: Lin
         return null
     }
 
-    override fun setupTriggerSync(sync: EndstopSyncBuilder) {
-        x.setupTriggerSync(sync)
-        y.setupTriggerSync(sync)
-        z.setupTriggerSync(sync)
-    }
-
     override suspend fun home(axis: List<Int>): HomeResult {
         TODO("Not yet implemented")
     }
@@ -63,7 +57,7 @@ abstract class KinematicMotion3(
     override val positionTypes = listOf(MotionType.LINEAR, MotionType.LINEAR, MotionType.LINEAR)
     override var commandedPosition: List<Double> = listOf(0.0, 0.0, 0.0)
     override var commandedEndTime: MachineTime = 0.0
-    override var axisStatus = mutableListOf(RailStatus.INITIAL, RailStatus.INITIAL, RailStatus.INITIAL)
+    override var axisStatus = listOf(RailStatus.INITIAL, RailStatus.INITIAL, RailStatus.INITIAL)
 
     init {
         require(motors.size == 3)
@@ -83,7 +77,7 @@ abstract class KinematicMotion3(
         chelper.trapq_set_position(trapq.ptr, 0.0, 0.0,0.0,0.0)
     }
 
-    override suspend fun initializePosition(time: MachineTime, position: List<Double>) {
+    override suspend fun initializePosition(time: MachineTime, position: List<Double>, homed: Boolean) {
         require(position.size == 3)
         generate(time)
         if (this.commandedEndTime > time) throw IllegalStateException("Time before last time")
@@ -93,10 +87,10 @@ abstract class KinematicMotion3(
             chelper.itersolve_set_position(kin.ptr, position[0], position[1], position[2])
         }
         chelper.trapq_set_position(trapq.ptr, time, position[0], position[1], position[2])
+        axisStatus = axisStatus.map { it.copy(homed = homed) }
     }
 
-    override suspend fun updatePositionAfterTrigger(sync: EndstopSync) {
-        motors.forEach { it.updatePositionAfterTrigger(sync) }
+    override fun updatePositionAfterTrigger() {
         // TODO - update commanded position
         // TODO - update trapq and itersolve
     }

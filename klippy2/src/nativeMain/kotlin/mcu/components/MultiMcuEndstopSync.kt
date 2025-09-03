@@ -9,6 +9,7 @@ import Mcu
 import McuClock
 import StepperMotor
 import chelper.trdispatch_mcu
+import combineStates
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -131,8 +132,8 @@ class MultiMcuEndstopSync(
         releaseF()
     }
 
-    override suspend fun start(startTime: MachineTime, timeoutTime: MachineTime): Deferred<EndstopSync.State> {
-        logger.debug { "start startTime=$startTime timeoutTime=$timeoutTime" }
+    override suspend fun start(startTime: MachineTime): Deferred<EndstopSync.State> {
+        logger.debug { "start startTime=$startTime" }
         reset()
 
         // Check that we are not triggered already
@@ -168,7 +169,7 @@ class MultiMcuEndstopSync(
                 runtime.timeToClock(startTime + commsTimeout),
                 runtime.durationToClock(commsTimeout).toULong(),
                 runtime.durationToClock(commsTimeout * 0.24).toULong() + 1u)
-            val result = trsync.start(startTime, timeoutTime, reportInterval, reportInterval)
+            val result = trsync.start(startTime, reportInterval, reportInterval)
             return@map McuTrsyncEntry(trsync, result)
         }
         for (stepper in motors) {
@@ -186,6 +187,10 @@ class MultiMcuEndstopSync(
                 chelper.trdispatch_stop(trdispatch)
             }
         }
+    }
+
+    override fun setTimeoutTime(timeoutTime: MachineTime) {
+        mcuToTrsync.values.forEach { it.setTimeoutTime(timeoutTime) }
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -273,10 +278,9 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
 
     fun start(
         startTime: MachineTime,
-        timeoutTime: MachineTime,
         firstReportOffset: MachineDuration,
         reportInterval: MachineDuration): Deferred<EndstopSync.State> {
-        this.timeoutTime = timeoutTime
+        this.timeoutTime = null
         if (activeTrigger != null) throw RuntimeException("Already running")
         logger.debug { "start" }
         val result = CompletableDeferred<EndstopSync.State>()
@@ -292,6 +296,10 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
         )
         queue.send(CommandTrsyncSetTimeout(id, runtime.timeToClock32(startTime + reportInterval * 3)))
         return result
+    }
+
+    fun setTimeoutTime(timeoutTime: MachineTime) {
+        this.timeoutTime = timeoutTime
     }
 
     fun parseTriggerReason(num: UByte, clock: McuClock, time: MachineTime) = when(num.toUInt()) {
@@ -346,11 +354,4 @@ enum class TriggerReason(val id: UByte) {
     PAST_END_TIME(id = 2u),
     COMMS_TIMEOUT(id = 3u),
     ENDSTOP_HIT_WITH_ID(id = 4u), // + endstop object ID to identify exact endstop that was triggered.
-}
-
-fun combineStates(a: EndstopSync.State, b: EndstopSync.State): EndstopSync.State {
-    if (a is EndstopSync.StateTriggered && b is EndstopSync.StateTriggered) {
-        return if (a.triggerTime <= b.triggerTime) a else b
-    }
-    return a
 }

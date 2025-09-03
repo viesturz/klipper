@@ -19,7 +19,7 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
     suspend fun homeOneAxis(index: Int, homing: Homing, range: LinearRange): HomeResult {
         val initialPosition = actuator.commandedPosition.setValue(index, getInitialPosition(homing, range))
         val homedPosition = actuator.commandedPosition.setValue(index, homing.endstopPosition)
-        actuator.initializePosition(getNow(), initialPosition)
+        actuator.initializePosition(getNow(), initialPosition, false)
         return home(homedPosition, homing)
     }
 
@@ -30,7 +30,7 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
         val direction = vector.direction()
         val initialEndPosition = initalPosition.moveBy(vector, 1.2)
         val homeResult = doHomingMove(initialEndPosition, homing.speed)
-        actuator.initializePosition(getNow(), endstopPosition)
+        actuator.initializePosition(getNow(), endstopPosition, true)
         if (homeResult !is EndstopSync.StateTriggered) {
             logger.info { "Homing fail. State = $homeResult" }
             return HomeResult.FAIL
@@ -55,7 +55,7 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
         val (bestTriggerPos, maxError, stdDev) = getBestTriggerPosition(homingSamples, direction)
         logger.info { "Homing success. Best trigger position: $bestTriggerPos, max error: $maxError, std dev: $stdDev" }
         val offset = bestTriggerPos.vectorTo(endstopPosition)
-        actuator.initializePosition(getNow(), actuator.commandedPosition.moveBy(offset))
+        actuator.initializePosition(getNow(), actuator.commandedPosition.moveBy(offset), true)
         return HomeResult.SUCCESS
     }
 
@@ -74,20 +74,19 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
 
     suspend fun doHomingMove(targetPosition: Position, speed: Double): EndstopSync.State {
         val startTime = getNextMoveTime()
-        val endTime = SimpleMotionPlanner(startTime, checkLimits = false).moveTo(
-            KinMove2(
-                actuator = actuator,
-                position = targetPosition,
-                speed = speed,
+        return session.probingMove(startTime) {
+            val endTime = SimpleMotionPlanner(startTime, checkLimits = false).moveTo(
+                KinMove2(
+                    actuator = actuator,
+                    position = targetPosition,
+                    speed = speed,
+                )
             )
-        )
-        val maybeAlreadyTriggered = session.start(startTime, timeoutTime = endTime + 1.0)
-        if (maybeAlreadyTriggered != null) { return maybeAlreadyTriggered }
-        val flushTime = endTime + 0.1
-        actuator.generate(flushTime)
-        runtime.flushMoves(flushTime)
-        val result = session.waitAndFinalize()
-        return result
+            val flushTime = endTime + 0.1
+            actuator.generate(flushTime)
+            runtime.flushMoves(flushTime)
+            return@probingMove flushTime
+        }
     }
 
     companion object {
