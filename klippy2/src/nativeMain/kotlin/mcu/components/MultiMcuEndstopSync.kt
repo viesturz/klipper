@@ -116,9 +116,6 @@ class MultiMcuEndstopSync(
         for (endstop in endstops) {
             endstop.reset()
         }
-        for (stepper in motors) {
-            stepper.reset()
-        }
         state.value = EndstopSync.StateIdle
     }
 
@@ -235,12 +232,13 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
         val timeout = timeoutTime
         val trigger = activeTrigger
         logger.debug { "state $state" }
-        if (trigger != null && state.canTrigger == false) {
+        if (finishedTrigger == null && trigger != null && state.canTrigger == false) {
             // Triggered
             val result = parseTriggerReason(state.reason, runtime.clock32ToClock(state.clock), runtime.clockToTime(state.clock))
             trigger.complete(result)
             finishedTrigger = result
             activeTrigger = null
+            logger.info { "triggered with $state" }
         } else if (timeout != null && timeout < runtime.clockToTime(state.clock)) {
             // Send timeout trigger; will be re-invoked with a timeout state.
             sendTrigger(TriggerReason.PAST_END_TIME)
@@ -261,8 +259,8 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
 
     fun release() {
         logger.debug { "release" }
-        require(activeTrigger == null)
-        val tm = trdispatchMcu ?: throw RuntimeException("Relasing without acquire")
+        require(activeTrigger == null) { "Release while active" }
+        val tm = trdispatchMcu ?: throw RuntimeException("Releasing without acquire")
         chelper.trdispatch_mcu_free(tm)
         trdispatchMcu = null
     }
@@ -304,7 +302,7 @@ class McuTrsync(initialize: McuConfigure): McuComponent {
 
     fun parseTriggerReason(num: UByte, clock: McuClock, time: MachineTime) = when(num.toUInt()) {
         0U -> EndstopSync.StateRunning
-        1u -> throw RuntimeException("Invalid trigger reason $num")
+        1u -> EndstopSync.StateCancelledAfterOtherTrigger
         2u -> EndstopSync.StateCommsTimeout
         3u -> EndstopSync.StateReset
         4u -> EndstopSync.StatePastEndTime

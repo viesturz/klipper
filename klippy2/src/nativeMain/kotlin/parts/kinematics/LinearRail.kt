@@ -94,6 +94,8 @@ data class LinearSpeeds(
 data class Homing(
     val endstopPosition: Double,
     val endstopTrigger: Trigger,
+    /** More triggers that will also stop the homing motion. */
+    val secondaryTriggers: List<Trigger> = listOf(),
     val direction: HomingDirection,
     val speed: Double,
     val secondSpeed: Double = speed,

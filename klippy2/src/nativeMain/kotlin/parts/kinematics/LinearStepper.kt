@@ -12,6 +12,8 @@ import PartLifecycle
 import StepperDriver
 import StepsToPosition
 import io.github.oshai.kotlinlogging.KotlinLogging
+import machine.MOVE_HISTORY_TIME
+import machine.SCHEDULING_TIME
 import machine.getNow
 import mcu.connection.StepQueueImpl
 import mcu.GcWrapper
@@ -104,7 +106,7 @@ private class StepperImpl(
     }
 
     override suspend fun initializePosition(time: MachineTime, position: Double, homed: Boolean) {
-        logger.info { "Initializing position $position at time $time" }
+        logger.debug { "Initializing position $position at time $time" }
         if (externalKinematics != null) throw IllegalStateException("Stepper has external kinematics")
         generate(time)
         commandedPosition = position
@@ -127,6 +129,7 @@ private class StepperImpl(
         require(stepsToPos != null)
         val triggerPosition = stepsToPos.toPosition(triggerSteps)
         val stopPosition = stepsToPos.toPosition(stopSteps)
+        logger.debug { "updatePositionAfterTrigger, triggerSteps = $triggerSteps, stopSteps = $stopSteps" }
         logger.debug { "updatePositionAfterTrigger, triggerPosition=$triggerPosition, stopPosition=$stopPosition" }
         commandedPosition = stopPosition
         commandedEndTime = getNow()
@@ -134,6 +137,7 @@ private class StepperImpl(
         chelper.itersolve_set_position(kinematics.ptr, commandedPosition, 0.0, 0.0)
         chelper.trapq_set_position(trapq.ptr, commandedEndTime, commandedPosition, 0.0, 0.0)
         chelper.trapq_finalize_moves(trapq.ptr, commandedEndTime, commandedEndTime)
+        motor.clearQueuedSteps()
     }
 
     override fun moveTo(
@@ -143,7 +147,7 @@ private class StepperImpl(
         endSpeed: Double,
         endPosition: Double
     ) {
-        logger.debug  { "moveTo $endPosition at time $endTime" }
+        logger.debug  { "moveTo t=$startTime -> $endTime, p=$commandedPosition -> $endPosition" }
         if (externalKinematics != null) throw IllegalStateException("Stepper has external kinematics")
         val delta = endPosition - commandedPosition
         val direction = delta.sign
@@ -158,7 +162,7 @@ private class StepperImpl(
         // Sanity check
         logger.debug { "move $startTime+$duration, Accel:$accel, Pos:$commandedPosition->$endPosition, speed:$startSpeed->$endSpeed" }
         val distanceFromSpeed = startSpeed * duration + accel * duration * duration * 0.5
-        require((distanceFromSpeed - distance).absoluteValue < 0.001 ) { "Speeds and durations do not match: Position distanece: $distance, speedDistance: $distanceFromSpeed." }
+        require((distanceFromSpeed - distance).absoluteValue < 0.001 ) { "Speeds and durations do not match: Position distance: $distance, speedDistance: $distanceFromSpeed." }
         move.pointed.apply {
             print_time = startTime
             move_t = duration
@@ -182,6 +186,6 @@ private class StepperImpl(
         chelper.itersolve_generate_steps(kinematics.ptr, time).let { ret ->
             if (ret != 0) throw RuntimeException("Internal error in stepcompress $ret")
         }
-        chelper.trapq_finalize_moves(trapq.ptr, time, time)
+        chelper.trapq_finalize_moves(trapq.ptr, time - SCHEDULING_TIME, time - MOVE_HISTORY_TIME)
     }
 }

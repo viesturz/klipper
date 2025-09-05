@@ -92,4 +92,4 @@ interface QueuedMove {
  *  Which means that the speed will be distributed and junction speeds estimated jointly. */
 data class KinMove(val axis: String, val position: Position, var speed: Double?)
 
-data class KinMove2(val actuator: MotionActuator, val position: Position, var speed: Double?)
+data class KinMove2(val actuator: MotionActuator, val position: Position, var speed: Double? = null)

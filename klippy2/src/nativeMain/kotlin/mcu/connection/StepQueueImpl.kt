@@ -11,7 +11,6 @@ import chelper.stepcompress_free
 import chelper.steppersync_alloc
 import chelper.steppersync_free
 import mcu.CommandBuffer
-import mcu.CommandBuilder
 import mcu.Commands
 import mcu.FirmwareConfig
 import mcu.GcWrapper
@@ -19,6 +18,7 @@ import mcu.McuClock32
 import mcu.McuCommand
 import mcu.McuObjectCommand
 import mcu.ObjectId
+import mcu.components.CommandResetStepClock
 import utils.RegisterMcuMessage
 
 /** Queue for sending commands to MCU. */
@@ -88,8 +88,9 @@ class StepQueueImpl(firmware: FirmwareConfig, var connection: McuConnection?, va
     }
 
     /** Clears the queued steps and resets. */
-    fun reset() {
-        chelper.stepcompress_reset(stepcompress.ptr, 0u)
+    fun reset(stepClock: McuClock) {
+        chelper.stepcompress_reset(stepcompress.ptr, stepClock)
+        appendCommand(CommandResetStepClock(id, 0U))
     }
 
     // Probably don't need this.

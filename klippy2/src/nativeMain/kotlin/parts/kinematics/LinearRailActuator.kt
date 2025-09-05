@@ -39,7 +39,7 @@ class LinearRailActuator(val rail: LinearRail): MotionActuator {
         }
         makeProbingSession {
             addRail(rail, this@LinearRailActuator)
-            addTrigger(homing.endstopTrigger)
+            addTrigger(homing)
         }.use { session ->
             val homingMove = HomingMove(session, this, rail.runtime)
             val result = homingMove.homeOneAxis(0, homing, rail.range)

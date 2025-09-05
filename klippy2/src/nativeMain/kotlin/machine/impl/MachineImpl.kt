@@ -10,7 +10,6 @@ import buildMachine
 import config.Connection
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import Machine.State
@@ -20,23 +19,19 @@ import machine.Reactor
 import Mcu
 import McuSetup
 import McuState
+import machine.MOVE_HISTORY_TIME
 import mcu.connection.McuConnection
 import mcu.connection.connectSerial
 import mcu.McuSetupImpl
 import parts.Stats
 
 class MachineImpl : MachineRuntime, MachineBuilder {
-    private var _state = MutableStateFlow(State.NEW)
-    override val state: StateFlow<State>
-        get() = _state
-
+    override val state = MutableStateFlow(State.NEW)
     override val reactor = Reactor()
     override val logger = KotlinLogging.logger("MachineImpl")
     val gCode = GCodeImpl()
     val queueManager: QueueManager = QueueManagerImpl(reactor)
-    var _shutdownReason = ""
-    override val shutdownReason: String
-        get() = _shutdownReason
+    override var shutdownReason = ""
     val partsList = ArrayList<PartLifecycle>()
     override val parts
         get() = partsList
@@ -46,7 +41,7 @@ class MachineImpl : MachineRuntime, MachineBuilder {
     private val commandsQueue = queueManager.newQueue()
 
     override suspend fun start() {
-        _state.value = State.CONFIGURING
+        state.value = State.CONFIGURING
         try {
             buildMachine()
             addCommonParts()
@@ -61,7 +56,7 @@ class MachineImpl : MachineRuntime, MachineBuilder {
                 }
                 logger.info { "Initializing MCU: ${mcu.config.name} done" }
             }
-            _state.value = State.STARTING
+            state.value = State.STARTING
             partsList.forEach { it.onStart(this@MachineImpl) }
         } catch (e: Exception) {
             logger.error(e) { "Machine start failed, ${e.message}" }
@@ -69,7 +64,7 @@ class MachineImpl : MachineRuntime, MachineBuilder {
             throw e
         }
         if (state.value != State.STARTING) return
-        _state.value = State.RUNNING
+        state.value = State.RUNNING
     }
 
     private fun addCommonParts() {
@@ -78,13 +73,14 @@ class MachineImpl : MachineRuntime, MachineBuilder {
 
     override fun shutdown(reason: String, emergency: Boolean) {
         if (state.value != State.RUNNING) return
-        _state.value = State.STOPPING
+        state.value = State.STOPPING
+        shutdownReason = reason
         logger.warn { "Shutting down the machine, reason: $reason" }
         reactor.launch {
             partsList.reversed().forEach { it.shutdown() }
             mcuList.reversed().forEach { it.shutdown(reason, emergency) }
             logger.warn { "Machine shutdown finished" }
-            _state.value = State.SHUTDOWN
+            state.value = State.SHUTDOWN
             reactor.shutdown()
         }
     }
@@ -118,7 +114,7 @@ class MachineImpl : MachineRuntime, MachineBuilder {
     override fun flushMoves(machineTime: MachineTime) {
         val flushDelay = STEPCOMPRESS_FLUSH_TIME + SDS_CHECK_TIME
         val flushTime = machineTime - flushDelay
-        val clearHistoryTime = flushTime - 50.0
+        val clearHistoryTime = flushTime - MOVE_HISTORY_TIME
         for (mcu in mcuList) {
             mcu.flushMoves(flushTime, clearHistoryTime)
         }

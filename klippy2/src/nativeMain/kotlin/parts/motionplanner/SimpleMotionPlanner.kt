@@ -47,7 +47,11 @@ class SimpleMotionPlanner(var startTime: Double, val checkLimits: Boolean = true
             val endPosition = m.position
             val direction = startPosition.vectorTo(endPosition)
             val distance = direction.magnitude()
-            if (distance == 0.0) continue
+            if (distance == 0.0) {
+                // Schedule noop move to update commanded time.
+                m.actuator.moveTo(startTime, endTime, startSpeed = 0.0, endSpeed = 0.0, endPosition = endPosition)
+                continue
+            }
 
             val cruiseStartPosition = startPosition.moveBy(direction, accelDistancePerMm)
             val cruiseEndPosition = endPosition.moveBy(direction, -accelDistancePerMm)

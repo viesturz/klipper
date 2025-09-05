@@ -173,11 +173,11 @@ class CommandBuilder(private val parser: Commands, private val buffer: CommandBu
 }
 
 class ParserContext(val array: ByteArray, var pos: Int = 0, val sendTime: MachineTime, val receiveTime: MachineTime) {
-    fun parseU() = parseVLQ(false).toUInt()
+    fun parseL() = parseVLQ(true)
     fun parseI() = parseVLQ(true).toInt()
-    fun parseL() = parseVLQ(false)
-    fun parseC() = parseVLQ(false).toUByte()
     fun parseB() = parseVLQ(true).toByte()
+    fun parseC() = parseVLQ(false).toUByte()
+    fun parseU() = parseVLQ(false).toUInt()
     fun parseHU() = parseVLQ(false).toUShort()
     fun parseH() = parseVLQ(false).toShort()
     fun parseStr() = parseBytes().decodeToString()

@@ -53,7 +53,7 @@ class GantryActuator(val rails: List<GantryRail>, val homing: Homing? = null): M
     private suspend fun homeWithSingleEndstop(homing: Homing): HomeResult {
         makeProbingSession {
             rails.forEach { addRail(it.rail, this@GantryActuator) }
-            addTrigger(homing.endstopTrigger)
+            addTrigger(homing)
         }.use { session ->
             val homingMove = HomingMove(session, this, mainRail.runtime)
             val result = homingMove.homeOneAxis(0, homing, range)
@@ -70,7 +70,7 @@ class GantryActuator(val rails: List<GantryRail>, val homing: Homing? = null): M
             for (rail in rails) {
                 val h = rail.rail.homing ?: continue
                 addGroup {
-                    addTrigger(h.endstopTrigger)
+                    addTrigger(h)
                     addRail(rail.rail, this@GantryActuator)
                 }
             }

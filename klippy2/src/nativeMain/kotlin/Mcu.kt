@@ -123,7 +123,7 @@ interface StepperMotor {
     suspend fun queryPosition(): Long
     suspend fun getTriggerPosition(sync: EndstopSync): TriggerPosition
     /** Resets the step queue and clears the triggered state. */
-    suspend fun reset()
+    suspend fun clearQueuedSteps()
 
     data class TriggerPosition(val triggerSteps: Long, val stopSteps: Long)
     interface StepQueue
@@ -167,6 +167,7 @@ interface EndstopSync {
     sealed interface State
     object StateIdle: State
     object StateRunning: State
+    object StateCancelledAfterOtherTrigger: State
     data class StateTriggered(val endstop: Endstop, val triggerClock: McuClock, val triggerTime: MachineTime): State
     data class StateAlreadyTriggered(val endstop: Endstop): State
     object StateReleased: State

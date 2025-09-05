@@ -28,6 +28,11 @@ class ProbingSessionBuilder() {
         trigger.setupTriggerSync(_currentSync)
     }
 
+    fun addTrigger(homing: Homing) {
+        homing.endstopTrigger.setupTriggerSync(_currentSync)
+        homing.secondaryTriggers.forEach { it.setupTriggerSync(_currentSync) }
+    }
+
     fun addRail(rail: LinearRail, actuator: MotionActuator) {
         _actuators.add(actuator)
         rail.setupTriggerSync(_currentSync)
@@ -88,6 +93,7 @@ class ProbingSession(var syncs: List<SyncData>, val actuators: List<MotionActuat
             val timeoutTime = block()
             syncs.forEach { it.sync.setTimeoutTime(timeoutTime) }
             val x = rlist.awaitAll().reduce { a, b -> combineStates(a,b)}
+            syncs.forEach { it.sync.reset() }
             if (x is EndstopSync.StateTriggered) {
                 syncs.forEach { sync -> sync.rails.forEach { it.updatePositionAfterTrigger(sync.sync) } }
                 actuators.forEach { it.updatePositionAfterTrigger() }

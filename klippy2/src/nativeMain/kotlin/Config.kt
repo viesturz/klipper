@@ -102,7 +102,7 @@ fun MachineBuilder.buildMachine() {
             retractDist = 3.0,
         )
     )
-    val z1Endstop = PinTrigger(pin = mcu.endstop2.copy(invert = false, pullup = false))
+    val z1Endstop = PinTrigger(pin = mcu.endstop1.copy(invert = false, pullup = false))
     val z1Stepper = LinearStepper(
         pins = mcu.stepper1,
         driver = TMC2209(
@@ -137,10 +137,11 @@ fun MachineBuilder.buildMachine() {
         homing = Homing(
             endstopPosition = 120.0,
             endstopTrigger = zEndstop,
+            secondaryTriggers = listOf(z1Endstop),
             direction = HomingDirection.INCREASING,
             speed = 20.0,
             secondSpeed = 3.0,
-            retractDist = 3.0,
+            retractDist = 10.0,
         )
     )
 

@@ -126,6 +126,7 @@ fun getNow(): MachineTime = chelper.get_monotonic()
 fun getNextMoveTime() = getNow() + SCHEDULING_TIME
 
 val SCHEDULING_TIME = 0.1
+val MOVE_HISTORY_TIME = 50.0
 
 suspend fun waitUntil(time: MachineTime) =
     delay(max(0.0, time - getNow()).seconds)

@@ -78,7 +78,7 @@ class CoreXYKinematics(
         makeProbingSession {
             addRail(railA, this@CoreXYKinematics)
             addRail(railB, this@CoreXYKinematics)
-            addTrigger(homing.endstopTrigger)
+            addTrigger(homing)
         }.use { session ->
             val homingMove = HomingMove(session, this, railA.runtime)
             val result = homingMove.homeOneAxis(0, homing, range)
@@ -95,7 +95,7 @@ class CoreXYKinematics(
         makeProbingSession {
             addRail(railA, this@CoreXYKinematics)
             addRail(railB, this@CoreXYKinematics)
-            addTrigger(homing.endstopTrigger)
+            addTrigger(homing)
         }.use { session ->
             val homingMove = HomingMove(session, this, railA.runtime)
             val result = homingMove.homeOneAxis(1, homing, range)

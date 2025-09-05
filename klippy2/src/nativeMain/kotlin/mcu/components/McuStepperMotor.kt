@@ -16,6 +16,7 @@ import mcu.McuRuntime
 import mcu.ObjectId
 import mcu.PinName
 import utils.RegisterMcuMessage
+import kotlin.math.absoluteValue
 
 class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, override val driver: StepperDriver, configuration: McuConfigure) : StepperMotor,
     McuComponent {
@@ -51,12 +52,12 @@ class McuStepperMotor(override val mcu: McuImpl, val config: StepperPins, overri
         val triggerClock = sync.getTriggerClock(mcu)
         val triggerPosition = stepQueue.findPastPosition(triggerClock)
         val stopPosition = queryPosition()
+        require((triggerPosition - stopPosition).absoluteValue < 1000) { "Crazy trigger and stop position skew: $triggerPosition, $stopPosition" }
         return StepperMotor.TriggerPosition(triggerPosition, stopPosition)
     }
 
-    override suspend fun reset() {
-        stepQueue.reset()
-        stepQueue.appendCommand(CommandResetStepClock(id, 0U))
+    override suspend fun clearQueuedSteps() {
+        stepQueue.reset(0U)
     }
 }
 
