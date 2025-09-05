@@ -11,7 +11,7 @@ interface LinearRail {
     val commandedPosition: Double
     val commandedEndTime: Double
     val range: LinearRange
-    val speeds: LinearSpeeds
+    val speed: LinearSpeeds
     val homing: Homing?
     val runtime: MachineRuntime
 

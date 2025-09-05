@@ -11,6 +11,7 @@ import parts.kinematics.LinearRailActuator
 import parts.kinematics.LinearRange
 import parts.kinematics.LinearSpeeds
 import parts.PinTrigger
+import parts.kinematics.CombineLinearStepper
 import parts.kinematics.LinearStepper
 
 fun MachineBuilder.buildMachine() {
@@ -56,14 +57,6 @@ fun MachineBuilder.buildMachine() {
         runCurrent = 0.32,
         senseResistor = 0.110.ohms
     )
-    val zDriver = TMC2209(
-        pins = mcu.stepper2Uart,
-        enablePin = mcu.stepper2.enablePin,
-        microsteps = 16,
-        interpolate = true,
-        runCurrent = 0.42,
-        senseResistor = 0.110.ohms
-    )
     val eDriver = TMC2209(
         pins = mcu.stepper3Uart,
         enablePin = mcu.stepper3.enablePin,
@@ -86,9 +79,57 @@ fun MachineBuilder.buildMachine() {
     val zEndstop = PinTrigger(pin = mcu.endstop2.copy(invert = false, pullup = false))
     val zStepper = LinearStepper(
         pins = mcu.stepper2,
-        driver = zDriver,
+        driver = TMC2209(
+            pins = mcu.stepper2Uart,
+            enablePin = mcu.stepper2.enablePin,
+            microsteps = 16,
+            interpolate = true,
+            runCurrent = 0.42,
+            senseResistor = 0.110.ohms
+        ),
         stepsPerRotation = 200,
         rotationDistance = 40.0,
+        speed = LinearSpeeds(speed = 40.0, accel = 100.0),
+        range = LinearRange(
+            positionMin = 0.0,
+            positionMax = 125.0),
+        homing = Homing(
+            endstopPosition = 120.0,
+            endstopTrigger = zEndstop,
+            direction = HomingDirection.INCREASING,
+            speed = 20.0,
+            secondSpeed = 3.0,
+            retractDist = 3.0,
+        )
+    )
+    val z1Endstop = PinTrigger(pin = mcu.endstop2.copy(invert = false, pullup = false))
+    val z1Stepper = LinearStepper(
+        pins = mcu.stepper1,
+        driver = TMC2209(
+            pins = mcu.stepper1Uart,
+            enablePin = mcu.stepper1.enablePin,
+            microsteps = 16,
+            interpolate = true,
+            runCurrent = 0.42,
+            senseResistor = 0.110.ohms
+            ),
+        stepsPerRotation = 400,
+        rotationDistance = 40.0,
+        speed = LinearSpeeds(speed = 40.0, accel = 100.0),
+        range = LinearRange(
+            positionMin = 0.0,
+            positionMax = 125.0),
+        homing = Homing(
+            endstopPosition = 120.0,
+            endstopTrigger = z1Endstop,
+            direction = HomingDirection.INCREASING,
+            speed = 20.0,
+            secondSpeed = 3.0,
+            retractDist = 3.0,
+        )
+    )
+
+    val combinedZ = CombineLinearStepper(zStepper, z1Stepper,
         speed = LinearSpeeds(speed = 40.0, accel = 100.0),
         range = LinearRange(
             positionMin = 0.0,
@@ -191,7 +232,7 @@ fun MachineBuilder.buildMachine() {
             servo.setAngle(closedDegrees + (openDegrees - closedDegrees) * value)
         }
     }
-    val zAxis = LinearRailActuator(zStepper)
+    val zAxis = LinearRailActuator(combinedZ)
     ControlLoop { runtime ->
         while (true) {
             delay(1000)

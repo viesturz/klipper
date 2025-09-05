@@ -1,7 +1,5 @@
 package parts.kinematics
 
-import EndstopSync
-import EndstopSyncBuilder
 import MachineTime
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.MoveOutsideRangeException
@@ -146,8 +144,8 @@ class CoreXYKinematics(
         // Check AB speeds
         val aDistance = (a2 - a1).absoluteValue
         val bDistance = (b2 - b1).absoluteValue
-        val aSpeeds = railA.speeds
-        val bSpeeds = railB.speeds
+        val aSpeeds = railA.speed
+        val bSpeeds = railB.speed
         if (aDistance > 0) {
             speeds = speeds.intersection(aSpeeds * (xyDist / aDistance))
         }

@@ -19,7 +19,7 @@ class GantryActuator(val rails: List<GantryRail>, val homing: Homing? = null): M
 
     val range = rails.fold(LinearRange.UNLIMITED) { cur, next -> cur.intersection(next.rail.range) }
 
-    override fun computeMaxSpeeds(start: List<Double>, end: List<Double>): LinearSpeeds = mainRail.speeds
+    override fun computeMaxSpeeds(start: List<Double>, end: List<Double>): LinearSpeeds = mainRail.speed
     override fun checkMoveInBounds(start: List<Double>,end: List<Double>): MoveOutsideRangeException? {
         if (mainRail.range.outsideRange(start[0])) return MoveOutsideRangeException("X=${start[0]} is outside the range ${mainRail.range}")
         if (mainRail.range.outsideRange(end[0])) return MoveOutsideRangeException("X=${end[0]} is outside the range ${mainRail.range}")

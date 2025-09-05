@@ -13,7 +13,7 @@ class LinearRailActuator(val rail: LinearRail): MotionActuator {
     override val commandedEndTime: MachineTime
         get() = rail.commandedEndTime
 
-    override fun computeMaxSpeeds(start: List<Double>, end: List<Double>): LinearSpeeds = rail.speeds
+    override fun computeMaxSpeeds(start: List<Double>, end: List<Double>): LinearSpeeds = rail.speed
     override fun checkMoveInBounds(start: List<Double>,end: List<Double>): MoveOutsideRangeException? {
         if (rail.range.outsideRange(start[0])) return MoveOutsideRangeException("X=${start[0]} is outside the range ${rail.range}")
         if (rail.range.outsideRange(end[0])) return MoveOutsideRangeException("X=${end[0]} is outside the range ${rail.range}")

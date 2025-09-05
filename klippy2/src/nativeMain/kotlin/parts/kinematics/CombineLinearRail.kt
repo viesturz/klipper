@@ -8,28 +8,14 @@ import chelper.stepper_kinematics
 import kotlinx.cinterop.ExperimentalForeignApi
 import mcu.GcWrapper
 
-/** Multiple motors driving the same rail. */
-class CombineLinearStepper(vararg railArgs: LinearStepper) : LinearStepper {
+/** Multiple motors driving the same rail, both moving in lock-step. */
+class CombineLinearStepper(vararg railArgs: LinearStepper,
+                           override val speed: LinearSpeeds,
+                           override val range: LinearRange,
+                           override val homing: Homing? = null) : LinearStepper {
     private val steppers: List<LinearStepper> = railArgs.toList()
-    override val speeds: LinearSpeeds
-    override val range: LinearRange
-    override val homing: Homing? = null
     override val runtime: MachineRuntime
         get() = steppers[0].runtime
-    init {
-        require(railArgs.isNotEmpty())
-        var sp = railArgs[0].speeds
-        var ra = railArgs[0].range
-        for (a in railArgs) {
-            val s = a.speeds
-            val r = a.range
-            sp = sp.intersection(s)
-            ra = ra.intersection(r)
-        }
-        speeds = sp
-        range = ra
-    }
-
     override fun setupTriggerSync(sync: EndstopSyncBuilder) {
         steppers.forEach { it.setupTriggerSync(sync) }
     }

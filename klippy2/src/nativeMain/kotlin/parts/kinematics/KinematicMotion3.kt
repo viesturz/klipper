@@ -1,7 +1,5 @@
 package parts.kinematics
 
-import EndstopSync
-import EndstopSyncBuilder
 import MachineTime
 import chelper.cartesian_stepper_alloc
 import chelper.trapq_alloc
@@ -21,7 +19,7 @@ class CartesianKinematics(val x: LinearStepper, val y: LinearStepper, val z: Lin
             {GcWrapper(cartesian_stepper_alloc('z'.code.toByte())) { free(it) }}),
 ) {
     override fun computeMaxSpeeds(start: List<Double>, end: List<Double>): LinearSpeeds =
-        x.speeds.intersection(y.speeds).intersection(z.speeds)
+        x.speed.intersection(y.speed).intersection(z.speed)
 
     override fun checkMoveInBounds(
         start: List<Double>,
