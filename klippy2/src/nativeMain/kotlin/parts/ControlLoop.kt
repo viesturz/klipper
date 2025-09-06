@@ -44,7 +44,7 @@ private class LocalControlImpl(
                 logger.info { "Cancelled" }
             } catch (e: Exception) {
                 logger.error(e) { "Crashed" }
-                runtime.shutdown(reason = "$name crashed", emergency = true)
+                runtime.shutdown(reason = "$name crashed with ${e.message}", emergency = true)
             } finally {
                 job = null
             }

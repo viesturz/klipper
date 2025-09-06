@@ -5,6 +5,7 @@ import getBestTriggerPosition
 import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.getNextMoveTime
 import machine.getNow
+import moveRailsTo
 import parts.motionplanner.KinMove2
 import parts.motionplanner.Position
 import parts.motionplanner.SimpleMotionPlanner
@@ -72,6 +73,14 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
         runtime.reactor.waitUntil(endTime)
     }
 
+    /** Retracts each rail individually, bringing them all to the same position. */
+    suspend fun doRetractRails(rails: List<LinearRail>, targetPosition: Double, speed: Double) {
+        val endTime = moveRailsTo(rails, targetPosition, speed)
+        actuator.generate(endTime)
+        runtime.flushMoves(endTime)
+        runtime.reactor.waitUntil(endTime)
+    }
+
     suspend fun doHomingMove(targetPosition: Position, speed: Double): EndstopSync.State {
         val startTime = getNextMoveTime()
         return session.probingMove(startTime) {
@@ -87,6 +96,61 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
             runtime.flushMoves(flushTime)
             return@probingMove flushTime
         }
+    }
+
+    suspend fun homeGantry(rails: List<LinearRail>): HomeResult {
+        val homing = rails.first().homing ?: throw RuntimeException("Homing not configured")
+        val combinedRange = rails.fold(LinearRange.UNLIMITED) { cur, next -> cur.intersection(next.range) }
+        val retractDist = rails.fold(homing.retractDist) { cur, next -> cur.coerceAtLeast(next.homing!!.retractDist) }
+        val initialPosition = getInitialPosition(homing, combinedRange)
+        val direction = if (homing.direction == HomingDirection.INCREASING) 1.0 else -1.0
+        val homedNearPosition = if (homing.direction == HomingDirection.INCREASING)
+            rails.fold(homing.endstopPosition) { c, new -> c.coerceAtMost(new.homing!!.endstopPosition) }
+        else
+            rails.fold(homing.endstopPosition) { c, new -> c.coerceAtLeast(new.homing!!.endstopPosition) }
+        val homedFarPosition = if (homing.direction == HomingDirection.INCREASING)
+            rails.fold(homing.endstopPosition) { c, new -> c.coerceAtLeast(new.homing!!.endstopPosition) }
+        else
+            rails.fold(homing.endstopPosition) { c, new -> c.coerceAtMost(new.homing!!.endstopPosition) }
+
+        rails.forEach { it.initializePosition(getNow(), initialPosition, false) }
+
+        logger.info { "Homing Gantry to $homedNearPosition" }
+        val initialEndPosition = initialPosition + (homedFarPosition - initialPosition) * 1.2
+        val homeResult = doHomingMove(listOf(initialEndPosition), homing.speed)
+
+        // Initialize the same position for all rails initially.
+        rails.forEach { it.initializePosition(getNow(), homedNearPosition, true) }
+        if (homeResult !is EndstopSync.StateTriggered) {
+            logger.info { "Homing fail. State = $homeResult" }
+            return HomeResult.FAIL
+        }
+        // The first homing move result is used just to establish an initial position, it's not counted towards homing probes.
+
+        val retractedPosition = homedNearPosition - retractDist * direction
+        val secondEndPosition = homedFarPosition  + retractDist * direction
+        val homingSamples = buildList {
+            repeat(homing.samples) { index ->
+                doRetractRails(rails, retractedPosition, homing.speed)
+                val homeResult = doHomingMove(listOf(secondEndPosition), homing.secondSpeed)
+                if (homeResult !is EndstopSync.StateTriggered) {
+                    logger.info { "Homing fail. State = $homeResult" }
+                    return HomeResult.FAIL
+                }
+                add(rails.map { it.commandedPosition })
+            }
+        }
+        // Adjust position so that bestTriggerPos matches individual endstopPosition.
+        rails.forEachIndexed { index, rail ->
+            val sample = if (homingSamples.isNotEmpty()) homingSamples.map { it[index] } else listOf(homedNearPosition)
+            val endstopPos = rail.homing!!.endstopPosition
+            val triggerPos = getBestTriggerPosition(sample).position
+            val actualPos = triggerPos - homedNearPosition + endstopPos
+            rail.initializePosition(getNow(), actualPos, true)
+        }
+        doRetractRails(rails, retractedPosition, homing.speed)
+        logger.info { "Homing success." }
+        return HomeResult.SUCCESS
     }
 
     companion object {

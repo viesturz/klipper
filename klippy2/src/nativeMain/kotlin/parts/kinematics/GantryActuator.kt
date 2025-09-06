@@ -1,6 +1,8 @@
 package parts.kinematics
 
 import MachineTime
+import alignPositionsAfterTrigger
+import io.github.oshai.kotlinlogging.KotlinLogging
 import machine.MoveOutsideRangeException
 import machine.getNextMoveTime
 
@@ -8,8 +10,11 @@ data class GantryRail(val rail: LinearRail, val x: Double = 0.0, val y: Double =
 
 /** A single axis actuator via a 1d or 2d gantry supported by multiple linear rails.
  * Supports manual or automatic tramming. */
-class GantryActuator(val rails: List<GantryRail>, val homing: Homing? = null): MotionActuator {
-    val mainRail = rails[0].rail
+class GantryActuator(vararg _rails: GantryRail, val homing: Homing? = null): MotionActuator {
+    val rails = _rails.toList()
+    val rawRails = rails.map { it.rail }
+    val mainRail = rawRails.first()
+    private val logger = KotlinLogging.logger("GantryActuator")
     override val size = 1
     override val positionTypes = listOf(MotionType.LINEAR)
     override val commandedPosition: List<Double>
@@ -66,6 +71,7 @@ class GantryActuator(val rails: List<GantryRail>, val homing: Homing? = null): M
 
     private suspend fun homeWithRailEndstops(): HomeResult {
         val homingToUse = mainRail.homing ?: throw IllegalStateException("Homing not configured")
+        require(rails.all { it.rail.homing != null && it.rail.homing!!.direction == homingToUse.direction }) { "Homing direction mismatch" }
         makeCompoundProbingSession {
             for (rail in rails) {
                 val h = rail.rail.homing ?: continue
@@ -76,11 +82,24 @@ class GantryActuator(val rails: List<GantryRail>, val homing: Homing? = null): M
             }
         }.use { session ->
             val homingMove = HomingMove(session, this, mainRail.runtime)
-            val result = homingMove.homeOneAxis(0, homingToUse, range)
+            val result = homingMove.homeGantry( rawRails)
             if (result == HomeResult.SUCCESS) {
                 rails.forEach { it.rail.setHomed(true) }
             }
             return result
+        }
+    }
+
+    override suspend fun updatePositionAfterTrigger() {
+        if (homing == null) return
+        // When using common homing, the positions need to be aligned.
+        // When using per-rail homing, the positions will depend on each endstop position.
+        val alignEndTime = alignPositionsAfterTrigger(rawRails, logger)
+        if (alignEndTime != null) {
+            generate(alignEndTime)
+            mainRail.runtime.flushMoves(alignEndTime)
+            mainRail.runtime.reactor.waitUntil(alignEndTime)
+            requireRailsNotSkewed()
         }
     }
 
@@ -92,7 +111,14 @@ class GantryActuator(val rails: List<GantryRail>, val homing: Homing? = null): M
         endPosition: List<Double>
     ) {
         require(endPosition.size == 1)
+        requireRailsNotSkewed()
         rails.forEach { it.rail.moveTo(startTime, endTime, startSpeed, endSpeed, endPosition[0]) }
+    }
+
+    private fun requireRailsNotSkewed() {
+        val pos = rails[0].rail.commandedPosition
+        val skewed = rails.any { it.rail.commandedPosition != pos }
+        if (skewed) throw IllegalStateException("Gantry rails are skewed")
     }
 
     override fun generate(time: MachineTime) {

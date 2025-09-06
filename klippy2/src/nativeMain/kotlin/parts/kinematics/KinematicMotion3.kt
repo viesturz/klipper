@@ -88,7 +88,7 @@ abstract class KinematicMotion3(
         axisStatus = axisStatus.map { it.copy(homed = homed) }
     }
 
-    override fun updatePositionAfterTrigger() {
+    override suspend fun updatePositionAfterTrigger() {
         // TODO - update commanded position
         // TODO - update trapq and itersolve
     }

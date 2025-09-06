@@ -28,7 +28,7 @@ interface MotionActuator {
 
     /** Updates the commanded position after trigger.
      * The rails are updated automatically, this is just for any extra logic for the actuator. */
-    fun updatePositionAfterTrigger() {}
+    suspend fun updatePositionAfterTrigger() {}
 
     /** Sets a position for the actuator. Should not perform any moves.
      *  Clears any planned moves after the time. */
