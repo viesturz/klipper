@@ -155,6 +155,10 @@ class CoreXYKinematics(
         return speeds
     }
 
+    override suspend fun updatePositionAfterTrigger() {
+        commandedEndTime = 0.0
+    }
+
     override fun moveTo(
         startTime: MachineTime,
         endTime: MachineTime,
@@ -162,11 +166,17 @@ class CoreXYKinematics(
         endSpeed: Double,
         endPosition: List<Double>
     ) {
-        require(startTime >= commandedEndTime)
+        require(startTime >= commandedEndTime) { "startTime $startTime < commandedEndTime $commandedEndTime" }
         val a = endPosition[0] + endPosition[1]
         val b = endPosition[0] - endPosition[1]
-        railA.moveTo(startTime, endTime, startSpeed, endSpeed, a)
-        railB.moveTo(startTime, endTime, startSpeed, endSpeed, b)
+        val aDelta = (a - railA.commandedPosition).absoluteValue
+        val bDelta = (b - railB.commandedPosition).absoluteValue
+        val distance = commandedPosition.distanceTo(endPosition)
+        val aFraction = if (distance > 0) aDelta / distance else 1.0
+        val bFraction = if (distance > 0) bDelta / distance else 1.0
+
+        railA.moveTo(startTime, endTime, startSpeed*aFraction, endSpeed*aFraction, a)
+        railB.moveTo(startTime, endTime, startSpeed*bFraction, endSpeed*bFraction, b)
         commandedEndTime = endTime
     }
 

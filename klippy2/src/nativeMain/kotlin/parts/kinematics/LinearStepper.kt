@@ -108,7 +108,6 @@ private class StepperImpl(
     override suspend fun initializePosition(time: MachineTime, position: Double, homed: Boolean) {
         logger.debug { "Initializing position $position at time $time" }
         if (externalKinematics != null) throw IllegalStateException("Stepper has external kinematics")
-        generate(time)
         commandedPosition = position
         commandedEndTime = time
         chelper.itersolve_generate_steps(kinematics.ptr, time) // Reset itersolve time

@@ -3,6 +3,7 @@ package parts.kinematics
 import MachineRuntime
 import getBestTriggerPosition
 import io.github.oshai.kotlinlogging.KotlinLogging
+import machine.SCHEDULING_TIME
 import machine.getNextMoveTime
 import machine.getNow
 import moveRailsTo
@@ -67,7 +68,7 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
                 position = targetPosition,
                 speed = speed,
             )
-        ) + 0.1
+        ) + SCHEDULING_TIME
         actuator.generate(endTime)
         runtime.flushMoves(endTime)
         runtime.reactor.waitUntil(endTime)
@@ -91,7 +92,7 @@ class HomingMove(val session: ProbingSession, val actuator: MotionActuator, val 
                     speed = speed,
                 )
             )
-            val flushTime = endTime + 0.1
+            val flushTime = endTime + SCHEDULING_TIME
             actuator.generate(flushTime)
             runtime.flushMoves(flushTime)
             return@probingMove flushTime
