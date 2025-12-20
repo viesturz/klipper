@@ -16,13 +16,9 @@ interface LinearRail {
     val runtime: MachineRuntime
 
     suspend fun setPowered(time: MachineTime, value: Boolean)
-    fun setHomed(value: Boolean)
-    fun setupTriggerSync(sync: EndstopSyncBuilder)
-    /** Sets the triggered position after trigger and re-enables the rail for movement. */
-    suspend fun updatePositionAfterTrigger(sync: EndstopSync)
-
-    // To drive the rail directly without kinematics
     suspend fun initializePosition(time: MachineTime, position: Double, homed: Boolean)
+    fun setHomed(value: Boolean)
+    // To drive the rail directly without kinematics
     fun moveTo(
         startTime: MachineTime,
         endTime: MachineTime,
@@ -32,6 +28,10 @@ interface LinearRail {
     )
     /** Generates move commands up to the given time. */
     fun generate(time: MachineTime)
+
+    fun setupTriggerSync(sync: EndstopSyncBuilder)
+    /** Sets the triggered position after trigger and re-enables the rail for movement. */
+    suspend fun updatePositionAfterTrigger(sync: EndstopSync)
 }
 
 data class RailStatus(

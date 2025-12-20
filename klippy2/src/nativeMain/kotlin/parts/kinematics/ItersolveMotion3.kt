@@ -6,20 +6,37 @@ import chelper.trapq_alloc
 import chelper.trapq_free
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.pointed
+import machine.MOVE_HISTORY_TIME
 import machine.MoveOutsideRangeException
+import machine.SCHEDULING_TIME
+import machine.getNextMoveTime
+import machine.getNow
 import mcu.GcWrapper
+import parts.motionplanner.Position
 import platform.linux.free
 import utils.distanceTo
 
 @OptIn(ExperimentalForeignApi::class)
-class CartesianKinematics(val x: LinearStepper, val y: LinearStepper, val z: LinearStepper): KinematicMotion3(
+class CartesianKinematics(val x: LinearStepper, val y: LinearStepper, val z: LinearStepper): ItersolveMotion3(
     listOf(x, y, z),
     listOf({ GcWrapper(cartesian_stepper_alloc('x'.code.toByte())) { free(it) }},
         {GcWrapper(cartesian_stepper_alloc('y'.code.toByte())) { free(it) }},
             {GcWrapper(cartesian_stepper_alloc('z'.code.toByte())) { free(it) }}),
 ) {
-    override fun computeMaxSpeeds(start: List<Double>, end: List<Double>): LinearSpeeds =
-        x.speed.intersection(y.speed).intersection(z.speed)
+    override fun positionToRails(position: Position) = position
+    override fun railsToPosition() = motors.map { it.commandedPosition }
+
+    override fun computeMaxSpeeds(start: Position, end: Position): LinearSpeeds {
+        val distance = end.distanceTo(start)
+        var speed = LinearSpeeds.UNLIMITED
+        val xDelta = end[0] - start[0]
+        if (xDelta != 0.0) speed = speed.intersection(x.speed * (xDelta / distance))
+        val yDelta = end[1] - start[1]
+        if (yDelta != 0.0) speed = speed.intersection(y.speed * (yDelta / distance))
+        val zDelta = end[2] - start[2]
+        if (zDelta != 0.0) speed = speed.intersection(z.speed * (zDelta / distance))
+        return speed
+    }
 
     override fun checkMoveInBounds(
         start: List<Double>,
@@ -40,12 +57,39 @@ class CartesianKinematics(val x: LinearStepper, val y: LinearStepper, val z: Lin
     }
 
     override suspend fun home(axis: List<Int>): HomeResult {
-        TODO("Not yet implemented")
+        if (axis.isEmpty()) return HomeResult.SUCCESS
+        val startTime = getNextMoveTime()
+        x.setPowered(startTime, true)
+        y.setPowered(startTime, true)
+        z.setPowered(startTime, true)
+        for (index in axis) {
+            val rail = when (index) {
+                0 -> x
+                1 -> y
+                2 -> z
+                else -> throw IllegalArgumentException("Invalid axis index $index")
+            }
+            val homing = rail.homing ?: throw IllegalStateException("Homing not configured for axis index $index")
+            makeProbingSession {
+                addRail(x, this@CartesianKinematics)
+                addRail(y, this@CartesianKinematics)
+                addRail(z, this@CartesianKinematics)
+                addTrigger(homing)
+            }.use { session ->
+                val homingMove = HomingMove(session, this, rail.runtime)
+                val result = homingMove.homeOneAxis(index, homing, rail.range)
+                if (result == HomeResult.SUCCESS) {
+                    rail.setHomed(true)
+                }
+                return result
+            }
+        }
+        return HomeResult.SUCCESS
     }
 }
 
 @OptIn(ExperimentalForeignApi::class)
-abstract class KinematicMotion3(
+abstract class ItersolveMotion3(
     val motors: List<LinearStepper>,
     kinProviders: List<() -> GcWrapper<chelper.stepper_kinematics>>,
 ): MotionActuator {
@@ -63,12 +107,16 @@ abstract class KinematicMotion3(
         kinematics = buildList {
             for (i in kinProviders.indices) {
                 val motor = motors[i]
-                motor.assignToKinematics {
+                motor.assignToKinematics { stepDistance, stepQueue ->
                     val k = kinProviders[i].invoke()
                     add(k)
                     chelper.itersolve_set_trapq(k.ptr, trapq.ptr)
                     chelper.itersolve_set_position(k.ptr, 0.0,0.0,0.0)
-                    return@assignToKinematics k
+                    chelper.itersolve_set_stepcompress(
+                        k.ptr,
+                        stepQueue.stepcompress.ptr,
+                        stepDistance,
+                    )
                 }
             }
         }
@@ -82,22 +130,41 @@ abstract class KinematicMotion3(
         commandedPosition = position
         this.commandedEndTime = time
         for (kin in kinematics) {
+            chelper.itersolve_generate_steps(kin.ptr, time) // Reset itersolve time
             chelper.itersolve_set_position(kin.ptr, position[0], position[1], position[2])
         }
         chelper.trapq_set_position(trapq.ptr, time, position[0], position[1], position[2])
+        chelper.trapq_finalize_moves(trapq.ptr, time, time)
+        val railsPosition = positionToRails(position)
+        motors.forEachIndexed { index, motor ->
+            motor.initializePosition(time, railsPosition[index], homed)
+        }
         axisStatus = axisStatus.map { it.copy(homed = homed) }
     }
 
+    abstract fun positionToRails(position: Position): Position
+    abstract fun railsToPosition(): Position
+
     override suspend fun updatePositionAfterTrigger() {
-        // TODO - update commanded position
-        // TODO - update trapq and itersolve
+        // Rails already updated by trigger.
+        val pos = railsToPosition()
+        val time = getNow()
+        commandedPosition = pos
+        commandedEndTime = time
+        for (kin in kinematics) {
+            chelper.itersolve_generate_steps(kin.ptr, time) // Reset itersolve time
+            chelper.itersolve_set_position(kin.ptr, pos[0], pos[1], pos[2])
+        }
+        chelper.trapq_set_position(trapq.ptr, time, pos[0], pos[1], pos[2])
+        chelper.trapq_finalize_moves(trapq.ptr, time,time)
     }
 
     override fun moveTo(
         startTime: MachineTime, endTime: MachineTime,
         startSpeed: Double, endSpeed: Double,
-        endPosition: List<Double>
+        endPosition: Position
     ) {
+        require(endPosition.size == 3)
         require(startTime >= this.commandedEndTime, { "startTime < _time" })
         val distance = endPosition.distanceTo(commandedPosition)
         val duration = endTime - startTime
@@ -130,6 +197,6 @@ abstract class KinematicMotion3(
                 if (ret != 0) throw RuntimeException("Internal error in stepcompress $ret")
             }
         }
-        chelper.trapq_finalize_moves(trapq.ptr, time, time)
+        chelper.trapq_finalize_moves(trapq.ptr, time - SCHEDULING_TIME, time - MOVE_HISTORY_TIME)
     }
 }

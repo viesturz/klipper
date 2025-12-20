@@ -34,9 +34,7 @@ class LinearRailActuator(val rail: LinearRail): MotionActuator {
         val homing = rail.homing ?: throw IllegalStateException("Homing not configured")
 
         val startTime = getNextMoveTime()
-        if (!rail.railStatus.powered) {
-            rail.setPowered(time = startTime, value = true)
-        }
+        rail.setPowered(time = startTime, value = true)
         makeProbingSession {
             addRail(rail, this@LinearRailActuator)
             addTrigger(homing)

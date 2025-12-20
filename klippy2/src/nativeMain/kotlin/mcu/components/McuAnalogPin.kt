@@ -38,8 +38,10 @@ class McuAnalogPin(override val mcu: Mcu, val config: config.AnalogInPin, config
             sampleTicks = configure.durationToClock(config.sampleInterval),
             sampleCount = config.sampleCount,
             restTicks = configure.durationToClock(config.reportInterval),
-            minValue = (config.minValue * configure.firmware.adcMax * config.sampleCount.toDouble()).toUInt().toUShort(),
-            maxValue = (config.maxValue * configure.firmware.adcMax * config.sampleCount.toDouble()).toUInt().toUShort(),
+            minValue = (config.minValue * configure.firmware.adcMax * config.sampleCount.toDouble()).coerceIn(0.0,
+                UShort.MAX_VALUE.toDouble()).toUInt().toUShort(),
+            maxValue = (config.maxValue * configure.firmware.adcMax * config.sampleCount.toDouble()).coerceIn(0.0,
+                UShort.MAX_VALUE.toDouble()).toUInt().toUShort(),
             rangeCeheckCount = config.rangeCheckCount)
         }
     }

@@ -59,106 +59,7 @@ fun MachineBuilder.buildMachine() {
         stepsPerRotation = 200,
         rotationDistance = 40.0,
         speed = LinearSpeeds(speed = 400.0, accel = 500.0),
-//        range = LinearRange(
-//            positionMin = 0.0,
-//            positionMax = 125.0),
-//        homing = Homing(
-//            endstopPosition = 120.0,
-//            endstopTrigger = PinTrigger(pin = mcu.endstop2.copy(invert = false, pullup = false)),
-//            direction = HomingDirection.INCREASING,
-//            speed = 20.0,
-//            secondSpeed = 3.0,
-//            retractDist = 3.0,
-//        )
-    )
-    val z1Stepper = LinearStepper(
-        pins = mcu.stepper1,
-        driver = TMC2209(
-            pins = mcu.stepper1Uart,
-            enablePin = mcu.stepper1.enablePin,
-            microsteps = 16,
-            interpolate = true,
-            runCurrent = 0.22,
-            senseResistor = 0.110.ohms
-            ),
-        stepsPerRotation = 400,
-        rotationDistance = 40.0,
-        speed = LinearSpeeds(speed = 400.0, accel = 1000.0),
-//        range = LinearRange(
-//            positionMin = 0.0,
-//            positionMax = 125.0),
-//        homing = Homing(
-//            endstopPosition = 125.0,
-//            endstopTrigger = PinTrigger(pin = mcu.endstop1.copy(invert = false, pullup = false)),
-//            direction = HomingDirection.INCREASING,
-//            speed = 20.0,
-//            secondSpeed = 3.0,
-//            retractDist = 3.0,
-//        )
-    )
-
-//    val zAxis = GantryActuator(GantryRail(zStepper, x=0.0), GantryRail(z1Stepper, x=100.0))
-
-//    val combinedZ = CombineLinearStepper(zStepper, z1Stepper,
-//        speed = LinearSpeeds(speed = 40.0, accel = 100.0),
-//        range = LinearRange(
-//            positionMin = 0.0,
-//            positionMax = 125.0),
-//        homing = Homing(
-//            endstopPosition = 120.0,
-//            endstopTrigger = zEndstop,
-//            secondaryTriggers = listOf(z1Endstop),
-//            direction = HomingDirection.INCREASING,
-//            speed = 20.0,
-//            secondSpeed = 3.0,
-//            retractDist = 10.0,
-//        )
-//    )
-
-    val aStepper = LinearStepper(
-        pins = mcu.stepper0,
-        driver = TMC2209(
-            pins = mcu.stepper0Uart,
-            enablePin = mcu.stepper0.enablePin,
-            microsteps = 16,
-            runCurrent = 0.32,
-            senseResistor = 0.110.ohms
-        ),
-        rotationDistance = 40.0,
-        speed = LinearSpeeds(speed = 20.0)
-    )
-    val bStepper = LinearStepper(
-        pins = mcu.stepper1,
-        driver = TMC2209(
-            pins = mcu.stepper1Uart,
-            enablePin = mcu.stepper1.enablePin,
-            microsteps = 16,
-            runCurrent = 0.32,
-            senseResistor = 0.110.ohms
-        ),
-        rotationDistance = 40.0,
-        speed = LinearSpeeds(speed = 20.0)
-    )
-
-//
-//    val eStepper = LinearStepper(
-//        pins = mcu.stepper3,
-//        driver = TMC2209(
-//            pins = mcu.stepper3Uart,
-//            enablePin = mcu.stepper3.enablePin,
-//            microsteps = 16,
-//            interpolate = true,
-//            runCurrent = 0.32,
-//            senseResistor = 0.110.ohms
-//        ),
-//        rotationDistance = 50.0,
-//        gearRatio = 1.0 / 5,
-//    )
-
-    val xyAxis = CoreXYKinematics(
-        railA = zStepper,
-        railB = z1Stepper,
-        xRange = LinearRange(
+        range = LinearRange(
             positionMin = 0.0,
             positionMax = 125.0,
         ),
@@ -220,13 +121,12 @@ fun MachineBuilder.buildMachine() {
         maxAngle = 180.0,
     )
 
-    val openDegrees = 28
-    val closedDegrees = 105
+    val openDegrees = 180
+    val closedDegrees = 83
 
     ControlLoop {
         potSensor.flow.collect {
-            val value = ((it.value-0.3)*3).coerceIn(0.0,1.0)
-            servo.setAngle(closedDegrees + (openDegrees - closedDegrees) * value)
+            servo.setAngle(closedDegrees + (openDegrees - closedDegrees) * it.value*3)
         }
     }
 

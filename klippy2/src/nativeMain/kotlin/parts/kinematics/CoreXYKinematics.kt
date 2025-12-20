@@ -50,12 +50,8 @@ class CoreXYKinematics(
 
     override suspend fun home(axis: List<Int>): HomeResult {
         val startTime = getNextMoveTime()
-        if (!railA.railStatus.powered) {
-            railA.setPowered(time = startTime, value = true)
-        }
-        if (!railB.railStatus.powered) {
-            railB.setPowered(time = startTime, value = true)
-        }
+        railA.setPowered(time = startTime, value = true)
+        railB.setPowered(time = startTime, value = true)
         axisStatus[0] = axisStatus[0].copy(powered = true)
         axisStatus[1] = axisStatus[1].copy(powered = true)
 

@@ -5,10 +5,8 @@ import EndstopSyncBuilder
 import MachineRuntime
 import MachineTime
 import alignPositionsAfterTrigger
-import chelper.stepper_kinematics
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.cinterop.ExperimentalForeignApi
-import mcu.GcWrapper
+import mcu.connection.StepQueueImpl
 
 /** Multiple motors driving the same rail, both moving in lock-step. */
 class CombineLinearStepper(vararg railArgs: LinearStepper,
@@ -24,9 +22,8 @@ class CombineLinearStepper(vararg railArgs: LinearStepper,
         steppers.forEach { it.setupTriggerSync(sync) }
     }
 
-    @OptIn(ExperimentalForeignApi::class)
-    override fun assignToKinematics(kinematicsProvider: () -> GcWrapper<stepper_kinematics>) {
-        steppers.forEach { assignToKinematics(kinematicsProvider)}
+    override fun assignToKinematics(register: (stepDistance: Double, s: StepQueueImpl) -> Unit ) {
+        steppers.forEach { assignToKinematics(register)}
     }
 
     override val commandedPosition: Double

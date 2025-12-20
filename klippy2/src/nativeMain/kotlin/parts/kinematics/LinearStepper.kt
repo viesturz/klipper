@@ -44,8 +44,7 @@ fun MachineBuilder.LinearStepper(
 
 interface LinearStepper: LinearRail {
     // To drive directly via stepQueue for external kinematics
-    @OptIn(ExperimentalForeignApi::class)
-    fun assignToKinematics(kinematicsProvider: () -> GcWrapper<chelper.stepper_kinematics>)
+    fun assignToKinematics(register: (stepDistance: Double, s: StepQueueImpl) -> Unit )
 }
 
 /** Implementation */
@@ -69,7 +68,7 @@ private class StepperImpl(
     val motor = builder.setupMcu(pins.mcu).addStepperMotor(pins, driver)
     val stepQueue = motor.stepQueue as StepQueueImpl
     val kinematics = GcWrapper(chelper.cartesian_stepper_alloc('x'.code.toByte())) { free(it) }
-    var externalKinematics: GcWrapper<chelper.stepper_kinematics>? = null
+    var internalKinematics = true
     val trapq = GcWrapper(chelper.trapq_alloc()) { chelper.trapq_free(it) }
     var stepsToPostion: StepsToPosition? = null
 
@@ -78,6 +77,7 @@ private class StepperImpl(
     }
 
     override suspend fun setPowered(time: MachineTime, value: Boolean) {
+        if (value == railStatus.powered) return
         railStatus = railStatus.copy(powered = value, homed = if (!value) false else railStatus.homed)
         driver.setEnabled( time, value)
     }
@@ -88,17 +88,12 @@ private class StepperImpl(
     init {
         chelper.itersolve_set_stepcompress(kinematics.ptr, stepQueue.stepcompress.ptr, stepDistance)
         chelper.itersolve_set_trapq(kinematics.ptr, trapq.ptr)
-        chelper.itersolve_set_position(kinematics.ptr, commandedPosition, 0.0, 0.0)
+        chelper.itersolve_set_position(kinematics.ptr, 0.0, 0.0, 0.0)
     }
 
-    override fun assignToKinematics(kinematicsProvider: () -> GcWrapper<chelper.stepper_kinematics>) {
-        val kin = kinematicsProvider.invoke()
-        externalKinematics = kin
-        chelper.itersolve_set_stepcompress(
-            kin.ptr,
-            stepQueue.stepcompress.ptr,
-            stepDistance,
-        )
+    override fun assignToKinematics(register: (stepDistance: Double, stepQueue: StepQueueImpl) -> Unit ) {
+        internalKinematics = false
+        register.invoke(stepDistance,stepQueue)
     }
 
     override fun setupTriggerSync(sync: EndstopSyncBuilder) {
@@ -107,13 +102,7 @@ private class StepperImpl(
 
     override suspend fun initializePosition(time: MachineTime, position: Double, homed: Boolean) {
         logger.debug { "Initializing position $position at time $time" }
-        if (externalKinematics != null) throw IllegalStateException("Stepper has external kinematics")
-        commandedPosition = position
-        commandedEndTime = time
-        chelper.itersolve_generate_steps(kinematics.ptr, time) // Reset itersolve time
-        chelper.itersolve_set_position(kinematics.ptr, commandedPosition, 0.0, 0.0)
-        chelper.trapq_set_position(trapq.ptr, time, commandedPosition, 0.0, 0.0)
-        chelper.trapq_finalize_moves(trapq.ptr, time, time)
+        resetPosition(position, time)
         stepsToPostion = StepsToPosition(
             referenceSteps = motor.queryPosition(),
             referencePosition = position,
@@ -130,13 +119,19 @@ private class StepperImpl(
         val stopPosition = stepsToPos.toPosition(stopSteps)
         logger.debug { "updatePositionAfterTrigger, triggerSteps = $triggerSteps, stopSteps = $stopSteps" }
         logger.debug { "updatePositionAfterTrigger, triggerPosition=$triggerPosition, stopPosition=$stopPosition" }
-        commandedPosition = stopPosition
-        commandedEndTime = getNow()
-        chelper.itersolve_generate_steps(kinematics.ptr, commandedEndTime) // Reset itersolve time
-        chelper.itersolve_set_position(kinematics.ptr, commandedPosition, 0.0, 0.0)
-        chelper.trapq_set_position(trapq.ptr, commandedEndTime, commandedPosition, 0.0, 0.0)
-        chelper.trapq_finalize_moves(trapq.ptr, commandedEndTime, commandedEndTime)
+        resetPosition(stopPosition, getNow())
         motor.clearQueuedSteps()
+    }
+
+    private fun resetPosition(position: Double, time: MachineTime) {
+        commandedPosition = position
+        commandedEndTime = getNow()
+        if (internalKinematics) {
+            chelper.trapq_set_position(trapq.ptr, commandedEndTime, commandedPosition, 0.0, 0.0)
+            chelper.trapq_finalize_moves(trapq.ptr, commandedEndTime, commandedEndTime)
+            chelper.itersolve_set_position(kinematics.ptr, commandedPosition, 0.0, 0.0)
+            chelper.itersolve_generate_steps(kinematics.ptr, commandedEndTime) // Reset itersolve time
+        }
     }
 
     override fun moveTo(
@@ -147,7 +142,7 @@ private class StepperImpl(
         endPosition: Double
     ) {
         logger.debug  { "moveTo t=$startTime -> $endTime, p=$commandedPosition -> $endPosition" }
-        if (externalKinematics != null) throw IllegalStateException("Stepper has external kinematics")
+        if (internalKinematics) throw IllegalStateException("moveTo: Stepper has external kinematics")
         val delta = endPosition - commandedPosition
         val direction = delta.sign
         val distance = delta.absoluteValue
@@ -181,7 +176,7 @@ private class StepperImpl(
 
     override fun generate(time: MachineTime) {
         logger.debug  { "generate at time $time" }
-        if (externalKinematics != null) throw IllegalStateException("Stepper has external kinematics")
+        if (internalKinematics) throw IllegalStateException("generate: Stepper has external kinematics")
         chelper.itersolve_generate_steps(kinematics.ptr, time).let { ret ->
             if (ret != 0) throw RuntimeException("Internal error in stepcompress $ret")
         }
